@@ -1,17 +1,56 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft, Building2, Globe, MapPin, User, Phone, Image as ImageIcon } from 'lucide-react';
 import { SplitLayout } from '../components/SplitLayout';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { Button } from '../components/Button';
+import { useAuth } from '../context/AuthContext';
 
 export function CompanyStep2() {
   const navigate = useNavigate();
+  const { register } = useAuth();
+  const [formData, setFormData] = useState({
+    company_name: '',
+    industry: '',
+    website: '',
+    location: '',
+    contact_person: '',
+    contact_phone: '',
+    bio: ''
+  });
 
-  const handleNext = (e: React.FormEvent) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+
+  const handleNext = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Company Registration Complete!');
+    
+    // Get data from step 1
+    const step1Data = JSON.parse(localStorage.getItem('registrationStep1') || '{}');
+    
+    const completeData = {
+      ...step1Data,
+      ...formData
+    };
+
+    const result = await register(completeData, navigate);
+    
+    if (!result.success) {
+      alert('Registration failed: ' + result.error);
+    }
   };
 
   return (
@@ -52,53 +91,74 @@ export function CompanyStep2() {
 
         <Input
           label="Company Name"
+          name="company_name"
           placeholder="Acme Corp"
           icon={Building2}
+          value={formData.company_name}
+          onChange={handleChange}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Select
             label="Industry"
+            name="industry"
             options={[
               { value: '', label: 'Select Industry' },
               { value: 'tech', label: 'Technology' },
               { value: 'finance', label: 'Finance' },
               { value: 'healthcare', label: 'Healthcare' },
             ]}
+            value={formData.industry}
+            onChange={(e) => handleSelectChange('industry', e.target.value)}
           />
           <Input
             label="Website URL"
+            name="website"
             type="url"
             placeholder="https://..."
             icon={Globe}
+            value={formData.website}
+            onChange={handleChange}
           />
         </div>
 
         <Input
           label="Headquarters Location"
+          name="location"
           placeholder="City, Country"
           icon={MapPin}
+          value={formData.location}
+          onChange={handleChange}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Input
             label="Contact Person"
+            name="contact_person"
             placeholder="Jane Smith"
             icon={User}
+            value={formData.contact_person}
+            onChange={handleChange}
           />
           <Input
             label="Contact Phone"
+            name="contact_phone"
             type="tel"
             placeholder="+1 (555) 000-0000"
             icon={Phone}
+            value={formData.contact_phone}
+            onChange={handleChange}
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Company Bio</label>
           <textarea
+            name="bio"
             className="block w-full rounded-lg border-0 bg-white py-3 px-4 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#137fec] sm:text-sm sm:leading-6 transition-all min-h-[100px]"
             placeholder="Briefly describe your company, mission, and culture..."
+            value={formData.bio}
+            onChange={handleChange}
           ></textarea>
         </div>
 

@@ -1,11 +1,42 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Mail, EyeOff, Award, Grid } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Mail, EyeOff, Eye, Award, Grid, AlertCircle } from 'lucide-react';
 import { SplitLayout } from '../components/SplitLayout';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
+import { useAuth } from '../context/AuthContext';
 
 export function Login() {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const result = await login(formData.email, formData.password, navigate);
+    
+    if (!result.success) {
+      setError(result.error);
+    }
+    
+    setLoading(false);
+  };
   return (
     <SplitLayout
       layoutType="login"
@@ -31,24 +62,44 @@ export function Login() {
         <p className="mt-2 text-slate-500">Please enter your details to sign in.</p>
       </div>
 
-      <form className="flex flex-col gap-5">
-        <Input
-          label="Email Address"
-          type="email"
-          placeholder="name@company.com"
-          icon={Mail}
-        />
+      <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <span className="text-sm text-red-700">{error}</span>
+          </div>
+        )}
+        
+        <div>
+          <Input
+            label="Email Address"
+            type="email"
+            name="email"
+            placeholder="name@company.com"
+            icon={Mail}
+            value={formData.email}
+            onChange={handleChange}
+            required
+          />
+        </div>
         
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-slate-700">Password</label>
           <div className="relative">
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
+              name="password"
               className="block w-full rounded-lg border-0 bg-white py-3 pl-4 pr-10 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#137fec] sm:text-sm sm:leading-6 transition-all"
               placeholder="Enter your password"
+              value={formData.password}
+              onChange={handleChange}
+              required
             />
-            <div className="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-3 text-slate-400 hover:text-slate-600">
-              <EyeOff className="h-5 w-5" />
+            <div 
+              className="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-3 text-slate-400 hover:text-slate-600"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </div>
           </div>
         </div>
@@ -66,8 +117,12 @@ export function Login() {
           </a>
         </div>
 
-        <Button type="button" className="mt-2 w-full">
-          Sign In
+        <Button 
+          type="submit" 
+          className="mt-2 w-full"
+          disabled={loading}
+        >
+          {loading ? 'Signing In...' : 'Sign In'}
         </Button>
       </form>
 

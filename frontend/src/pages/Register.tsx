@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, User, Mail, Lock, Key } from 'lucide-react';
+import { ArrowRight, User, Mail, Lock, Key, Building2 } from 'lucide-react';
 import { SplitLayout } from '../components/SplitLayout';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
@@ -8,10 +8,33 @@ import { RoleSelector, Role } from '../components/RoleSelector';
 
 export function Register() {
   const [role, setRole] = useState<Role>('student');
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    company_name: '',
+    admin_code: ''
+  });
   const navigate = useNavigate();
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Store step 1 data
+    const step1Data = {
+      ...formData,
+      user_type: role
+    };
+    localStorage.setItem('registrationStep1', JSON.stringify(step1Data));
+    localStorage.setItem('registrationRole', role);
+    
     navigate(`/register/${role}/step-2`);
   };
 
@@ -44,43 +67,58 @@ export function Register() {
         {role === 'company' ? (
           <Input
             label="Company Name"
+            name="company_name"
             placeholder="Acme Inc."
             required
-            icon={BuildingIcon}
+            icon={Building2}
+            value={formData.company_name}
+            onChange={handleChange}
           />
         ) : null}
 
         <Input
           label={role === 'company' ? 'Contact Person Name' : 'Full Name'}
+          name="full_name"
           placeholder="John Doe"
           required
           icon={User}
+          value={formData.full_name}
+          onChange={handleChange}
         />
 
         <Input
           label={role === 'admin' ? 'Official Admin Email' : 'Email Address'}
+          name="email"
           type="email"
           placeholder={role === 'admin' ? 'admin@organization.com' : 'john@example.com'}
           required
           icon={Mail}
+          value={formData.email}
+          onChange={handleChange}
         />
 
         {role === 'admin' && (
           <Input
             label="Admin Access Code"
+            name="admin_code"
             placeholder="Enter organization code"
             required
             icon={Key}
+            value={formData.admin_code}
+            onChange={handleChange}
             helperText="Please enter the code provided by your organization."
           />
         )}
 
         <Input
           label="Password"
+          name="password"
           type="password"
-          placeholder="••••••••"
+          placeholder="••••••"
           required
           icon={Lock}
+          value={formData.password}
+          onChange={handleChange}
           helperText="Must be at least 8 characters"
         />
 
@@ -137,30 +175,3 @@ export function Register() {
     </SplitLayout>
   );
 }
-
-const BuildingIcon = (props: any) => (
-  <svg
-    {...props}
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect width="16" height="20" x="4" y="2" rx="2" ry="2" />
-    <path d="M9 22v-4h6v4" />
-    <path d="M8 6h.01" />
-    <path d="M16 6h.01" />
-    <path d="M12 6h.01" />
-    <path d="M12 10h.01" />
-    <path d="M12 14h.01" />
-    <path d="M16 10h.01" />
-    <path d="M16 14h.01" />
-    <path d="M8 10h.01" />
-    <path d="M8 14h.01" />
-  </svg>
-);

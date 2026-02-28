@@ -1,16 +1,36 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Search, Code, Palette, Plus, X } from 'lucide-react';
 import { SplitLayout } from '../components/SplitLayout';
 import { Button } from '../components/Button';
+import { useAuth } from '../context/AuthContext';
 
 export function StudentStep3() {
   const navigate = useNavigate();
+  const { register } = useAuth();
+  const [selectedSkills, setSelectedSkills] = useState([
+    { name: 'JavaScript', proficiency: 'intermediate' },
+    { name: 'Product Design', proficiency: 'advanced' }
+  ]);
 
-  const handleFinish = (e: React.FormEvent) => {
+  const handleFinish = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Navigate to dashboard or success page
-    alert('Registration Complete!');
+    
+    // Get data from previous steps (you might want to use localStorage or state management)
+    const step1Data = JSON.parse(localStorage.getItem('registrationStep1') || '{}');
+    const step2Data = JSON.parse(localStorage.getItem('registrationStep2') || '{}');
+    
+    const completeData = {
+      ...step1Data,
+      ...step2Data,
+      skills: selectedSkills
+    };
+
+    const result = await register(completeData, navigate);
+    
+    if (!result.success) {
+      alert('Registration failed: ' + result.error);
+    }
   };
 
   return (
@@ -89,10 +109,10 @@ export function StudentStep3() {
             <div className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-slate-200 group">
               <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">JavaScript</span>
               <div className="flex items-center gap-4">
-                <select className="block w-32 rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 bg-slate-50 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-[#137fec] sm:text-xs sm:leading-6">
-                  <option>Beginner</option>
-                  <option selected>Intermediate</option>
-                  <option>Advanced</option>
+                <select className="block w-32 rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 bg-slate-50 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-[#137fec] sm:text-xs sm:leading-6" value="intermediate">
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
                 </select>
                 <button type="button" className="text-slate-400 hover:text-red-500 transition-colors">
                   <X className="h-5 w-5" />
@@ -103,10 +123,10 @@ export function StudentStep3() {
             <div className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-slate-200 group">
               <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10">Product Design</span>
               <div className="flex items-center gap-4">
-                <select className="block w-32 rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 bg-slate-50 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-[#137fec] sm:text-xs sm:leading-6">
-                  <option>Beginner</option>
-                  <option>Intermediate</option>
-                  <option selected>Advanced</option>
+                <select className="block w-32 rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 bg-slate-50 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-[#137fec] sm:text-xs sm:leading-6" value="advanced">
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
                 </select>
                 <button type="button" className="text-slate-400 hover:text-red-500 transition-colors">
                   <X className="h-5 w-5" />

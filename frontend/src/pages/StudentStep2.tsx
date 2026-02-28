@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft, Phone, Calendar, MapPin, GraduationCap, Building2, UploadCloud } from 'lucide-react';
 import { SplitLayout } from '../components/SplitLayout';
@@ -8,9 +8,37 @@ import { Button } from '../components/Button';
 
 export function StudentStep2() {
   const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    phone: '',
+    dob: '',
+    address: '',
+    education: '',
+    university: '',
+    graduation_year: '',
+    bio: ''
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Store step 2 data
+    localStorage.setItem('registrationStep2', JSON.stringify(formData));
+    
     navigate('/register/student/step-3');
   };
 
@@ -36,21 +64,30 @@ export function StudentStep2() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Input
             label="Phone Number"
+            name="phone"
             type="tel"
             placeholder="+1 (555) 000-0000"
             icon={Phone}
+            value={formData.phone}
+            onChange={handleChange}
           />
           <Input
             label="Date of Birth"
+            name="dob"
             type="date"
             icon={Calendar}
+            value={formData.dob}
+            onChange={handleChange}
           />
         </div>
 
         <Input
           label="Address"
+          name="address"
           placeholder="123 Main St, City, Country"
           icon={MapPin}
+          value={formData.address}
+          onChange={handleChange}
         />
 
         <div className="border-t border-slate-200 pt-4">
@@ -61,6 +98,7 @@ export function StudentStep2() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
             <Select
               label="Education Level"
+              name="education"
               options={[
                 { value: '', label: 'Select Level' },
                 { value: 'high_school', label: 'High School' },
@@ -68,28 +106,39 @@ export function StudentStep2() {
                 { value: 'graduate', label: 'Graduate' },
                 { value: 'phd', label: 'PhD' },
               ]}
+              value={formData.education}
+              onChange={(e) => handleSelectChange('education', e.target.value)}
             />
             <Input
               label="Graduation Year"
+              name="graduation_year"
               type="number"
               placeholder="YYYY"
               min="2000"
               max="2100"
+              value={formData.graduation_year}
+              onChange={handleChange}
             />
           </div>
 
           <Input
             label="University / Institution Name"
+            name="university"
             placeholder="e.g. Stanford University"
             icon={Building2}
+            value={formData.university}
+            onChange={handleChange}
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Bio</label>
           <textarea
+            name="bio"
             className="block w-full rounded-lg border-0 bg-white py-3 px-4 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#137fec] sm:text-sm sm:leading-6 transition-all min-h-[100px]"
             placeholder="Tell us a bit about your interests, skills, and what kind of internships you're looking for..."
+            value={formData.bio}
+            onChange={handleChange}
           ></textarea>
         </div>
 

@@ -1,17 +1,54 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield, User, Mail, Key, Building2, Send } from 'lucide-react';
 import { SplitLayout } from '../components/SplitLayout';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { Button } from '../components/Button';
+import { useAuth } from '../context/AuthContext';
 
 export function AdminStep2() {
   const navigate = useNavigate();
+  const { register } = useAuth();
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    admin_code: '',
+    department: ''
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Admin Request Submitted!');
+    
+    // Get data from step 1
+    const step1Data = JSON.parse(localStorage.getItem('registrationStep1') || '{}');
+    
+    const completeData = {
+      ...step1Data,
+      ...formData
+    };
+
+    const result = await register(completeData, navigate);
+    
+    if (!result.success) {
+      alert('Admin registration failed: ' + result.error);
+    }
   };
 
   return (
@@ -43,21 +80,28 @@ export function AdminStep2() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Input
           label="Full Name"
+          name="full_name"
           placeholder="Name Administrator"
           icon={User}
+          value={formData.full_name}
+          onChange={handleChange}
         />
 
         <Input
           label="Official Admin Email"
+          name="email"
           type="email"
           placeholder="admin@organization.com"
           icon={Mail}
+          value={formData.email}
+          onChange={handleChange}
           helperText="Please use your organizational email address."
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Select
             label="Department"
+            name="department"
             icon={Building2}
             options={[
               { value: '', label: 'Select Dept' },
@@ -65,11 +109,16 @@ export function AdminStep2() {
               { value: 'it', label: 'IT & Security' },
               { value: 'ops', label: 'Operations' },
             ]}
+            value={formData.department}
+            onChange={(e) => handleSelectChange('department', e.target.value)}
           />
           <Input
             label="Access Code"
+            name="admin_code"
             placeholder="X8-9902"
             icon={Key}
+            value={formData.admin_code}
+            onChange={handleChange}
           />
         </div>
 

@@ -79,7 +79,7 @@ export function Register() {
         <Input
           label={role === 'company' ? 'Contact Person Name' : 'Full Name'}
           name="full_name"
-          placeholder="John Doe"
+          placeholder="your full name:"
           required
           icon={User}
           value={formData.full_name}

@@ -1,0 +1,25 @@
+-- Create students table
+CREATE TABLE IF NOT EXISTS students (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    date_of_birth DATE,
+    gender ENUM('male', 'female', 'other'),
+    nationality VARCHAR(100),
+    current_education_level ENUM('high_school', 'undergraduate', 'graduate', 'postgraduate'),
+    university VARCHAR(255),
+    major VARCHAR(255),
+    graduation_year INT,
+    gpa DECIMAL(3,2),
+    resume_url VARCHAR(255),
+    linkedin_url VARCHAR(255),
+    portfolio_url VARCHAR(255),
+    is_available BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_university (university),
+    INDEX idx_major (major),
+    INDEX idx_graduation_year (graduation_year),
+    INDEX idx_is_available (is_available)
+);

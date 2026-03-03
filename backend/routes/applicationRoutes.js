@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const applicationController = require('../controllers/applicationController');
+const { authenticate } = require('../middleware/auth');
 
-router.post('/apply', applicationController.applyForInternship);
-router.get('/student/:student_id', applicationController.getStudentApplications); // In real app, use token
-router.get('/internship/:internship_id', applicationController.getInternshipApplications);
-router.put('/:id/status', applicationController.updateApplicationStatus);
+router.post('/apply', authenticate, applicationController.applyForInternship);
+router.get('/student/:student_id', authenticate, applicationController.getStudentApplications);
+router.get('/internship/:internship_id', authenticate, applicationController.getInternshipApplications);
+router.put('/:id/status', authenticate, applicationController.updateApplicationStatus);
 
 module.exports = router;

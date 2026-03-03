@@ -12,13 +12,13 @@ export function RoleSelector({ selectedRole, onChange }: RoleSelectorProps) {
   const roles: { id: Role; label: string; icon: React.ElementType }[] = [
     { id: 'student', label: 'Student', icon: GraduationCap },
     { id: 'company', label: 'Company', icon: Building2 },
-    { id: 'admin', label: 'Admin', icon: Shield },
+    // { id: 'admin', label: 'Admin', icon: Shield },
   ];
 
   return (
     <div className="space-y-3">
       <label className="block text-sm font-semibold text-slate-700">I am a...</label>
-      <div className="grid grid-cols-3 gap-2 p-1 bg-slate-200/50 rounded-xl">
+      <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/50 rounded-xl">
         {roles.map((role) => {
           const isSelected = selectedRole === role.id;
           const Icon = role.icon;

@@ -1,7 +1,43 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import api, { authStorage } from '../api/axios';
 
 const AuthContext = createContext();
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+const USER_STORAGE_KEY = 'nissaet_auth_user';
+
+const normalizeUser = (rawUser) => {
+  if (!rawUser) return null;
+  const role = rawUser.role || rawUser.user_type || 'student';
+  return { ...rawUser, role, user_type: role };
+};
+
+const getStoredUser = () => {
+  const raw = localStorage.getItem(USER_STORAGE_KEY) || localStorage.getItem('user');
+  if (!raw) return null;
+
+  try {
+    return normalizeUser(JSON.parse(raw));
+  } catch (error) {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem('user');
+    return null;
+  }
+};
+
+const storeSession = (token, user) => {
+  const normalizedUser = normalizeUser(user);
+  authStorage.setToken(token);
+  localStorage.setItem('token', token); // backward compatibility for existing code
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(normalizedUser));
+  localStorage.setItem('user', JSON.stringify(normalizedUser));
+  return normalizedUser;
+};
+
+const clearSession = () => {
+  authStorage.clearToken();
+  localStorage.removeItem('token');
+  localStorage.removeItem(USER_STORAGE_KEY);
+  localStorage.removeItem('user');
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -15,133 +51,100 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const normalizeUser = (rawUser) => {
-    if (!rawUser) return null;
-    const role = rawUser.role || rawUser.user_type || null;
-    return { ...rawUser, role, user_type: role };
-  };
-
-  const redirectByRole = (role, navigate) => {
-    switch (role) {
-      case 'admin':
-        navigate('/admin/dashboard');
-        break;
-      case 'company':
-        navigate('/company/dashboard');
-        break;
-      case 'student':
-        navigate('/student/dashboard');
-        break;
-      default:
-        navigate('/login');
-    }
-  };
-
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    
-    if (token && userData) {
-      try {
-        const parsedUser = normalizeUser(JSON.parse(userData));
-        setUser(parsedUser);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+    const restoreSession = async () => {
+      const token = authStorage.getToken() || localStorage.getItem('token');
+      if (!token) {
+        clearSession();
+        setLoading(false);
+        return;
       }
-    }
-    setLoading(false);
+
+      const storedUser = getStoredUser();
+      if (storedUser) {
+        setUser(storedUser);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const data = await api.getCurrentUser();
+        const normalizedUser = storeSession(token, data.user || data);
+        setUser(normalizedUser);
+      } catch (error) {
+        clearSession();
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    restoreSession();
   }, []);
 
-  const login = async (email, password, navigate) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
-
-      const normalizedUser = normalizeUser(data.user);
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(normalizedUser));
-      setUser(normalizedUser);
-      redirectByRole(normalizedUser?.role, navigate);
-
-      return { success: true, user: normalizedUser };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+  const login = async (email, password) => {
+    const data = await api.login({ email, password });
+    const normalizedUser = storeSession(data.token, data.user);
+    setUser(normalizedUser);
+    return { user: normalizedUser, token: data.token };
   };
 
-  const register = async (userData, navigate) => {
-    try {
-      let endpoint = `${API_BASE_URL}/api/auth/register`;
-      const role = userData.role || userData.user_type;
-      
-      // Use specific endpoints based on user type
-      if (role === 'student' && userData.skills) {
-        endpoint = `${API_BASE_URL}/api/auth/register/student`;
-      } else if (role === 'company' && userData.company_name) {
-        endpoint = `${API_BASE_URL}/api/auth/register/company`;
-      } else if (role === 'admin' && userData.admin_code) {
-        endpoint = `${API_BASE_URL}/api/auth/register/admin`;
-      }
+  const register = async (payload) => {
+    const data = await api.register(payload);
+    const normalizedUser = storeSession(data.token, data.user);
+    setUser(normalizedUser);
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
+    localStorage.removeItem('registrationStep1');
+    localStorage.removeItem('registrationStep2');
+    localStorage.removeItem('registrationRole');
 
-      const data = await response.json();
+    return { user: normalizedUser, token: data.token };
+  };
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
-      }
+  const socialLogin = async (provider, payload) => {
+    const data = await api.socialLogin({ provider, ...payload });
+    const normalizedUser = storeSession(data.token, data.user);
+    setUser(normalizedUser);
+    return { user: normalizedUser, token: data.token };
+  };
 
-      const normalizedUser = normalizeUser(data.user);
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(normalizedUser));
-      setUser(normalizedUser);
+  const loginWithGoogle = async (payload) => socialLogin('google', payload);
+  const loginWithGithub = async (payload) => socialLogin('github', payload);
 
-      // Clear registration data from localStorage
-      localStorage.removeItem('registrationStep1');
-      localStorage.removeItem('registrationStep2');
-      localStorage.removeItem('registrationRole');
+  const forgotPassword = async (email) => {
+    return api.forgotPassword({ email });
+  };
 
-      redirectByRole(normalizedUser?.role, navigate);
-
-      return { success: true, user: normalizedUser };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+  const resetPassword = async (token, newPassword) => {
+    return api.resetPassword({ token, newPassword });
   };
 
   const logout = (navigate) => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearSession();
     setUser(null);
-    navigate('/login');
+    if (typeof navigate === 'function') {
+      navigate('/login');
+    }
   };
 
-  const isAuthenticated = () => {
-    return !!user && !!localStorage.getItem('token');
-  };
+  const isAuthenticated = !!user && !!(authStorage.getToken() || localStorage.getItem('token'));
 
-  const hasRole = (role) => {
-    return user && user.role === role;
-  };
+  const value = useMemo(
+    () => ({
+      user,
+      login,
+      register,
+      loginWithGoogle,
+      loginWithGithub,
+      forgotPassword,
+      resetPassword,
+      logout,
+      isAuthenticated,
+      hasRole: (role) => user?.role === role,
+      loading,
+    }),
+    [user, loading, isAuthenticated]
+  );
 
   if (loading) {
     return (
@@ -151,19 +154,5 @@ export const AuthProvider = ({ children }) => {
     );
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        login,
-        register,
-        logout,
-        isAuthenticated,
-        hasRole,
-        loading,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

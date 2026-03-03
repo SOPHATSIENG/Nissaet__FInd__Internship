@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS user_skills (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     skill_id INT NOT NULL,
-    skill_level ENUM('beginner', 'intermediate', 'advanced', 'expert') DEFAULT 'intermediate',
+    proficiency ENUM('beginner', 'intermediate', 'advanced', 'expert') DEFAULT 'intermediate',
     years_experience INT DEFAULT 0,
     is_primary BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -13,6 +13,6 @@ CREATE TABLE IF NOT EXISTS user_skills (
     UNIQUE KEY unique_user_skill (user_id, skill_id),
     INDEX idx_user_id (user_id),
     INDEX idx_skill_id (skill_id),
-    INDEX idx_skill_level (skill_level),
+    INDEX idx_proficiency (proficiency),
     INDEX idx_is_primary (is_primary)
 );

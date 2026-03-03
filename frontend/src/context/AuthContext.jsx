@@ -83,9 +83,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (userData, navigate) => {
+    console.log('Starting registration with data:', userData);
     try {
       let endpoint = `${API_BASE_URL}/api/auth/register`;
       const role = userData.role || userData.user_type;
+      
+      console.log('Determined role:', role);
       
       // Use specific endpoints based on user type
       if (role === 'student' && userData.skills) {
@@ -96,6 +99,8 @@ export const AuthProvider = ({ children }) => {
         endpoint = `${API_BASE_URL}/api/auth/register/admin`;
       }
 
+      console.log('Using endpoint:', endpoint);
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -105,6 +110,7 @@ export const AuthProvider = ({ children }) => {
       });
 
       const data = await response.json();
+      console.log('Response data:', data);
 
       if (!response.ok) {
         throw new Error(data.message || 'Registration failed');

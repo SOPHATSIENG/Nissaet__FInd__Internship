@@ -40,7 +40,7 @@ export function Login() {
   return (
     <SplitLayout
       layoutType="login"
-      imageSrc="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80"
+      imageSrc="../image/3.png"
       title="Unlock Your Potential"
       subtitle="Join a global network of professionals, students, and forward-thinking companies driving the future of work together."
       badge={
@@ -54,7 +54,7 @@ export function Login() {
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#137fec] text-white">
           <Grid className="h-6 w-6" />
         </div>
-        <span className="text-xl font-bold tracking-tight text-slate-900">UnifiedPortal</span>
+        <span className="text-xl font-bold tracking-tight text-slate-900">Nissaet Find Intership</span>
       </div>
 
       <div className="mb-8">

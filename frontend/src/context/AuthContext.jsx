@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import api, { authStorage } from '../api/axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+
 const AuthContext = createContext();
 const USER_STORAGE_KEY = 'nissaet_auth_user';
 
@@ -92,32 +94,22 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData, navigate) => {
     console.log('Starting registration with data:', userData);
     try {
-      let endpoint = `${API_BASE_URL}/api/auth/register`;
-      const role = userData.role || userData.user_type;
+      const data = await api.register(userData);
+      console.log('Registration response:', data);
       
-      console.log('Determined role:', role);
+      const normalizedUser = storeSession(data.token, data.user);
+      setUser(normalizedUser);
       
-      // Use specific endpoints based on user type
-      if (role === 'student' && userData.skills) {
-        endpoint = `${API_BASE_URL}/api/auth/register/student`;
-      } else if (role === 'company' && userData.company_name) {
-        endpoint = `${API_BASE_URL}/api/auth/register/company`;
-      } else if (role === 'admin' && userData.admin_code) {
-        endpoint = `${API_BASE_URL}/api/auth/register/admin`;
+      if (typeof navigate === 'function') {
+        navigate('/login');
       }
-
-      console.log('Using endpoint:', endpoint);
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
-
-      const data = await response.json();
-      console.log('Response data:', data);
+      
+      return { user: normalizedUser, token: data.token };
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
+  };
 
   const socialLogin = async (provider, payload) => {
     const data = await api.socialLogin({ provider, ...payload });

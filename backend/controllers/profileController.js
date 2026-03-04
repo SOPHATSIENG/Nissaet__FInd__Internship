@@ -1,0 +1,634 @@
+const bcrypt = require('bcryptjs');
+const db = require('../config/db');
+
+const VALID_SKILL_LEVELS = new Set(['beginner', 'intermediate', 'advanced', 'expert']);
+const VALID_NOTIFICATION_FREQUENCIES = new Set(['Instant', 'Daily', 'Weekly']);
+
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const toBoolean = (value, fallback = false) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+        if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    }
+    return fallback;
+};
+
+const toNullableString = (value) => {
+    if (value === null || value === undefined) return null;
+    const normalized = String(value).trim();
+    return normalized.length > 0 ? normalized : null;
+};
+
+const toDateInputValue = (value) => {
+    if (!value) return '';
+    if (typeof value === 'string') return value.slice(0, 10);
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
+};
+
+const normalizeSkillLevel = (value) => {
+    if (!value) return 'intermediate';
+    const normalized = String(value).trim().toLowerCase();
+    return VALID_SKILL_LEVELS.has(normalized) ? normalized : 'intermediate';
+};
+
+const getTableColumns = async (tableName, conn = null) => {
+    const sql = `SHOW COLUMNS FROM ${tableName}`;
+    const rows = conn ? (await conn.execute(sql))[0] : await db.query(sql);
+    return new Set(rows.map((row) => row.Field));
+};
+
+const buildUpdateStatement = (tableName, updates, whereColumn, whereValue) => {
+    const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) return null;
+
+    const setClause = entries.map(([column]) => `${column} = ?`).join(', ');
+    return {
+        sql: `UPDATE ${tableName} SET ${setClause} WHERE ${whereColumn} = ?`,
+        params: [...entries.map(([, value]) => value), whereValue]
+    };
+};
+
+const upsertStudentProfile = async (userId, updates, conn = null) => {
+    const executor = conn || db.pool;
+    const query = conn ? (sql, params) => conn.execute(sql, params) : (sql, params) => db.query(sql, params);
+    const studentColumns = await getTableColumns('students', conn);
+    const updateEntries = Object.entries(updates).filter(([column, value]) => studentColumns.has(column) && value !== undefined);
+
+    const [existingRows] = await executor.execute('SELECT id FROM students WHERE user_id = ? LIMIT 1', [userId]);
+
+    if (existingRows.length > 0) {
+        if (updateEntries.length === 0) {
+            return existingRows[0].id;
+        }
+
+        const sql = `UPDATE students SET ${updateEntries.map(([column]) => `${column} = ?`).join(', ')} WHERE user_id = ?`;
+        await query(
+            sql,
+            [...updateEntries.map(([, value]) => value), userId]
+        );
+        return existingRows[0].id;
+    }
+
+    const insertEntries = [['user_id', userId], ...updateEntries];
+    const insertSql = `INSERT INTO students (${insertEntries.map(([column]) => column).join(', ')}) VALUES (${insertEntries.map(() => '?').join(', ')})`;
+    const result = await query(insertSql, insertEntries.map(([, value]) => value));
+    return result.insertId || (result[0] && result[0].insertId) || null;
+};
+
+const getUserSkills = async (userId) => {
+    const userSkillColumns = await getTableColumns('user_skills');
+    const levelColumn = userSkillColumns.has('proficiency') ? 'proficiency' : 'skill_level';
+    const yearsExpr = userSkillColumns.has('years_experience') ? 'us.years_experience' : '0';
+    const primaryExpr = userSkillColumns.has('is_primary') ? 'us.is_primary' : '0';
+
+    const rows = await db.query(
+        `SELECT
+            us.skill_id AS id,
+            s.name,
+            s.category,
+            us.${levelColumn} AS proficiency,
+            ${yearsExpr} AS years_experience,
+            ${primaryExpr} AS is_primary
+         FROM user_skills us
+         JOIN skills s ON us.skill_id = s.id
+         WHERE us.user_id = ?
+         ORDER BY s.name ASC`,
+        [userId]
+    );
+
+    return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        category: row.category || '',
+        proficiency: normalizeSkillLevel(row.proficiency),
+        years_experience: Number(row.years_experience || 0),
+        is_primary: toBoolean(row.is_primary, false)
+    }));
+};
+
+const getProfileSettingsByUserId = async (userId) => {
+    const users = await db.query('SELECT * FROM users WHERE id = ? LIMIT 1', [userId]);
+    if (users.length === 0) return null;
+
+    const user = users[0];
+    const userColumns = await getTableColumns('users');
+    const students = await db.query('SELECT * FROM students WHERE user_id = ? LIMIT 1', [userId]);
+    const student = students[0] || null;
+    const skills = await getUserSkills(userId);
+
+    const fullName = user.full_name || user.name || '';
+    const [firstName = '', ...lastNameParts] = fullName.trim().split(/\s+/).filter(Boolean);
+
+    const personal = {
+        full_name: fullName,
+        first_name: firstName,
+        last_name: lastNameParts.join(' '),
+        email: user.email || '',
+        phone: user.phone || '',
+        dob: toDateInputValue(user.dob || (student && student.date_of_birth)),
+        address: user.address || '',
+        bio: user.bio || '',
+        // FIX MARK: support both profile_image and profile columns for stored avatar image.
+        profile_image:
+            (userColumns.has('profile_image') ? user.profile_image : null) ||
+            (userColumns.has('profile') ? user.profile : null) ||
+            '',
+        role: user.role || 'student'
+    };
+
+    const education = {
+        education: (student && student.current_education_level) || user.education || '',
+        university: (student && student.university) || user.university || '',
+        major: (student && student.major) || '',
+        graduation_year: (student && student.graduation_year) || user.graduation_year || '',
+        gpa: (student && student.gpa) || '',
+        resume_url: (student && student.resume_url) || user.cv_url || '',
+        linkedin_url: (student && student.linkedin_url) || '',
+        portfolio_url: (student && student.portfolio_url) || '',
+        is_available: student ? toBoolean(student.is_available, true) : true
+    };
+
+    const notifications = {
+        internship_matches_email: userColumns.has('notify_internship_matches_email')
+            ? toBoolean(user.notify_internship_matches_email, true)
+            : true,
+        internship_matches_in_app: userColumns.has('notify_internship_matches_in_app')
+            ? toBoolean(user.notify_internship_matches_in_app, true)
+            : true,
+        application_status_email: userColumns.has('notify_application_status_email')
+            ? toBoolean(user.notify_application_status_email, true)
+            : true,
+        application_status_in_app: userColumns.has('notify_application_status_in_app')
+            ? toBoolean(user.notify_application_status_in_app, true)
+            : true,
+        career_tips_email: userColumns.has('notify_career_tips_email')
+            ? toBoolean(user.notify_career_tips_email, false)
+            : false,
+        career_tips_in_app: userColumns.has('notify_career_tips_in_app')
+            ? toBoolean(user.notify_career_tips_in_app, false)
+            : false,
+        frequency: userColumns.has('notify_frequency') && VALID_NOTIFICATION_FREQUENCIES.has(user.notify_frequency)
+            ? user.notify_frequency
+            : 'Daily'
+    };
+
+    const security = {
+        two_factor_enabled: userColumns.has('two_factor_enabled')
+            ? toBoolean(user.two_factor_enabled, false)
+            : false
+    };
+
+    return {
+        personal,
+        education,
+        skills,
+        notifications,
+        security
+    };
+};
+
+const getAuthenticatedUserId = (req) => {
+    return req.user && req.user.userId ? Number(req.user.userId) : null;
+};
+
+const getSettings = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const settings = await getProfileSettingsByUserId(userId);
+        if (!settings) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        return res.json({ settings });
+    } catch (error) {
+        console.error('Get profile settings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updatePersonalSettings = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const userColumns = await getTableColumns('users');
+        const fullName = toNullableString(req.body.full_name);
+        const dob = toNullableString(req.body.dob);
+
+        const userUpdates = {};
+        if (fullName) {
+            // FIX MARK: support both full_name and legacy name columns so profile save works across schemas.
+            if (userColumns.has('full_name')) {
+                userUpdates.full_name = fullName;
+            } else if (userColumns.has('name')) {
+                userUpdates.name = fullName;
+            }
+        }
+        if (hasOwn(req.body, 'phone') && userColumns.has('phone')) userUpdates.phone = toNullableString(req.body.phone);
+        if (hasOwn(req.body, 'dob') && userColumns.has('dob')) userUpdates.dob = dob;
+        if (hasOwn(req.body, 'address') && userColumns.has('address')) userUpdates.address = toNullableString(req.body.address);
+        if (hasOwn(req.body, 'bio') && userColumns.has('bio')) userUpdates.bio = toNullableString(req.body.bio);
+        if (hasOwn(req.body, 'profile_image')) {
+            const normalizedProfileImage = toNullableString(req.body.profile_image);
+            // FIX MARK: write uploaded avatar into both profile_image and profile (if columns exist).
+            if (userColumns.has('profile_image')) {
+                userUpdates.profile_image = normalizedProfileImage;
+            }
+            if (userColumns.has('profile')) {
+                userUpdates.profile = normalizedProfileImage;
+            }
+        }
+
+        const userUpdateStatement = buildUpdateStatement('users', userUpdates, 'id', userId);
+        if (userUpdateStatement) {
+            await db.query(userUpdateStatement.sql, userUpdateStatement.params);
+        }
+
+        await upsertStudentProfile(userId, {
+            date_of_birth: dob
+        });
+
+        const settings = await getProfileSettingsByUserId(userId);
+        return res.json({
+            message: 'Personal settings updated successfully',
+            settings
+        });
+    } catch (error) {
+        console.error('Update personal settings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateEducationSettings = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const userColumns = await getTableColumns('users');
+        const education = toNullableString(req.body.education);
+        const university = toNullableString(req.body.university);
+        const major = toNullableString(req.body.major);
+        const resumeUrl = toNullableString(req.body.resume_url);
+        const linkedinUrl = toNullableString(req.body.linkedin_url);
+        const portfolioUrl = toNullableString(req.body.portfolio_url);
+
+        const graduationYear =
+            hasOwn(req.body, 'graduation_year') && String(req.body.graduation_year).trim() !== ''
+                ? Number.parseInt(req.body.graduation_year, 10)
+                : null;
+        const gpa =
+            hasOwn(req.body, 'gpa') && String(req.body.gpa).trim() !== ''
+                ? Number.parseFloat(req.body.gpa)
+                : null;
+
+        const userUpdates = {};
+        if (hasOwn(req.body, 'education') && userColumns.has('education')) userUpdates.education = education;
+        if (hasOwn(req.body, 'university') && userColumns.has('university')) userUpdates.university = university;
+        if (hasOwn(req.body, 'graduation_year') && userColumns.has('graduation_year')) {
+            userUpdates.graduation_year = Number.isNaN(graduationYear) ? null : graduationYear;
+        }
+        if (hasOwn(req.body, 'resume_url') && userColumns.has('cv_url')) userUpdates.cv_url = resumeUrl;
+
+        const userUpdateStatement = buildUpdateStatement('users', userUpdates, 'id', userId);
+        if (userUpdateStatement) {
+            await db.query(userUpdateStatement.sql, userUpdateStatement.params);
+        }
+
+        await upsertStudentProfile(userId, {
+            current_education_level: education,
+            university,
+            major,
+            graduation_year: Number.isNaN(graduationYear) ? null : graduationYear,
+            gpa: Number.isNaN(gpa) ? null : gpa,
+            resume_url: resumeUrl,
+            linkedin_url: linkedinUrl,
+            portfolio_url: portfolioUrl,
+            is_available: hasOwn(req.body, 'is_available') ? (toBoolean(req.body.is_available, true) ? 1 : 0) : undefined
+        });
+
+        const settings = await getProfileSettingsByUserId(userId);
+        return res.json({
+            message: 'Education settings updated successfully',
+            settings
+        });
+    } catch (error) {
+        console.error('Update education settings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateSkillsSettings = async (req, res) => {
+    let conn;
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const skills = Array.isArray(req.body.skills) ? req.body.skills : null;
+        if (!skills) {
+            return res.status(400).json({ message: 'skills must be an array' });
+        }
+
+        conn = await db.pool.getConnection();
+        await conn.beginTransaction();
+
+        const skillColumns = await getTableColumns('skills', conn);
+        const userSkillColumns = await getTableColumns('user_skills', conn);
+        const levelColumn = userSkillColumns.has('proficiency') ? 'proficiency' : 'skill_level';
+        const hasYearsExperience = userSkillColumns.has('years_experience');
+        const hasPrimaryFlag = userSkillColumns.has('is_primary');
+
+        await conn.execute('DELETE FROM user_skills WHERE user_id = ?', [userId]);
+
+        const insertedSkillKeys = new Set();
+        for (const skill of skills) {
+            if (!skill || typeof skill !== 'object') continue;
+
+            const providedName = toNullableString(skill.name);
+            const providedId = Number.parseInt(skill.id, 10);
+            const skillCategory = toNullableString(skill.category) || 'general';
+            const skillProficiency = normalizeSkillLevel(skill.proficiency);
+            const yearsExperience = Number.isFinite(Number(skill.years_experience))
+                ? Math.max(0, Number.parseInt(skill.years_experience, 10))
+                : 0;
+            const isPrimary = toBoolean(skill.is_primary, false);
+
+            let skillId = Number.isNaN(providedId) ? null : providedId;
+
+            if (!skillId && providedName) {
+                const [existingSkillRows] = await conn.execute(
+                    'SELECT id FROM skills WHERE LOWER(name) = LOWER(?) LIMIT 1',
+                    [providedName]
+                );
+                if (existingSkillRows.length > 0) {
+                    skillId = existingSkillRows[0].id;
+                } else if (skillColumns.has('category')) {
+                    const [insertSkillResult] = await conn.execute(
+                        'INSERT INTO skills (name, category) VALUES (?, ?)',
+                        [providedName, skillCategory]
+                    );
+                    skillId = insertSkillResult.insertId;
+                } else {
+                    const [insertSkillResult] = await conn.execute(
+                        'INSERT INTO skills (name) VALUES (?)',
+                        [providedName]
+                    );
+                    skillId = insertSkillResult.insertId;
+                }
+            }
+
+            if (!skillId) continue;
+
+            const dedupeKey = String(skillId);
+            if (insertedSkillKeys.has(dedupeKey)) continue;
+            insertedSkillKeys.add(dedupeKey);
+
+            const columns = ['user_id', 'skill_id', levelColumn];
+            const params = [userId, skillId, skillProficiency];
+
+            if (hasYearsExperience) {
+                columns.push('years_experience');
+                params.push(yearsExperience);
+            }
+            if (hasPrimaryFlag) {
+                columns.push('is_primary');
+                params.push(isPrimary ? 1 : 0);
+            }
+
+            await conn.execute(
+                `INSERT INTO user_skills (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+                params
+            );
+        }
+
+        await conn.commit();
+
+        const settings = await getProfileSettingsByUserId(userId);
+        return res.json({
+            message: 'Skills updated successfully',
+            settings
+        });
+    } catch (error) {
+        if (conn) {
+            await conn.rollback();
+        }
+        console.error('Update skills settings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    } finally {
+        if (conn) conn.release();
+    }
+};
+
+const updateNotificationSettings = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const userColumns = await getTableColumns('users');
+        const updates = {};
+
+        if (hasOwn(req.body, 'internship_matches_email') && userColumns.has('notify_internship_matches_email')) {
+            updates.notify_internship_matches_email = toBoolean(req.body.internship_matches_email, true) ? 1 : 0;
+        }
+        if (hasOwn(req.body, 'internship_matches_in_app') && userColumns.has('notify_internship_matches_in_app')) {
+            updates.notify_internship_matches_in_app = toBoolean(req.body.internship_matches_in_app, true) ? 1 : 0;
+        }
+        if (hasOwn(req.body, 'application_status_email') && userColumns.has('notify_application_status_email')) {
+            updates.notify_application_status_email = toBoolean(req.body.application_status_email, true) ? 1 : 0;
+        }
+        if (hasOwn(req.body, 'application_status_in_app') && userColumns.has('notify_application_status_in_app')) {
+            updates.notify_application_status_in_app = toBoolean(req.body.application_status_in_app, true) ? 1 : 0;
+        }
+        if (hasOwn(req.body, 'career_tips_email') && userColumns.has('notify_career_tips_email')) {
+            updates.notify_career_tips_email = toBoolean(req.body.career_tips_email, false) ? 1 : 0;
+        }
+        if (hasOwn(req.body, 'career_tips_in_app') && userColumns.has('notify_career_tips_in_app')) {
+            updates.notify_career_tips_in_app = toBoolean(req.body.career_tips_in_app, false) ? 1 : 0;
+        }
+        if (hasOwn(req.body, 'frequency') && userColumns.has('notify_frequency')) {
+            updates.notify_frequency = VALID_NOTIFICATION_FREQUENCIES.has(req.body.frequency)
+                ? req.body.frequency
+                : 'Daily';
+        }
+
+        const statement = buildUpdateStatement('users', updates, 'id', userId);
+        if (statement) {
+            await db.query(statement.sql, statement.params);
+        }
+
+        const settings = await getProfileSettingsByUserId(userId);
+        return res.json({
+            message: 'Notification settings updated successfully',
+            settings
+        });
+    } catch (error) {
+        console.error('Update notification settings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getNotificationCard = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        let rows = [];
+        try {
+            rows = await db.query(
+                `SELECT
+                    id,
+                    title,
+                    message,
+                    type,
+                    is_read,
+                    action_url,
+                    created_at
+                 FROM notifications
+                 WHERE user_id = ?
+                 ORDER BY created_at DESC
+                 LIMIT 10`,
+                [userId]
+            );
+        } catch (error) {
+            if (!error || error.code !== 'ER_BAD_FIELD_ERROR') throw error;
+            rows = await db.query(
+                `SELECT
+                    id,
+                    title,
+                    message,
+                    is_read,
+                    created_at
+                 FROM notifications
+                 WHERE user_id = ?
+                 ORDER BY created_at DESC
+                 LIMIT 10`,
+                [userId]
+            );
+        }
+
+        const unreadCount = rows.reduce((count, row) => count + (toBoolean(row.is_read, false) ? 0 : 1), 0);
+
+        return res.json({
+            notifications: rows.map((row) => ({
+                id: row.id,
+                title: row.title || 'Notification',
+                message: row.message || '',
+                type: row.type || 'system',
+                is_read: toBoolean(row.is_read, false),
+                action_url: row.action_url || null,
+                created_at: row.created_at
+            })),
+            unread_count: unreadCount
+        });
+    } catch (error) {
+        console.error('Get notification card error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateTwoFactorSettings = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const userColumns = await getTableColumns('users');
+        if (!userColumns.has('two_factor_enabled')) {
+            return res.status(400).json({ message: 'Two-factor settings are not available in current schema' });
+        }
+
+        const enabled = toBoolean(req.body.enabled, false);
+        await db.query('UPDATE users SET two_factor_enabled = ? WHERE id = ?', [enabled ? 1 : 0, userId]);
+
+        const settings = await getProfileSettingsByUserId(userId);
+        return res.json({
+            message: 'Two-factor settings updated successfully',
+            settings
+        });
+    } catch (error) {
+        console.error('Update two-factor settings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updatePassword = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const currentPassword = toNullableString(req.body.currentPassword);
+        const newPassword = toNullableString(req.body.newPassword);
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: 'Current password and new password are required' });
+        }
+
+        if (newPassword.length < 8) {
+            return res.status(400).json({ message: 'New password must be at least 8 characters' });
+        }
+
+        const users = await db.query('SELECT * FROM users WHERE id = ? LIMIT 1', [userId]);
+        if (users.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user = users[0];
+        const storedPasswordHash = user.password || user.password_hash;
+        if (!storedPasswordHash) {
+            return res.status(400).json({ message: 'Password login is not available for this account' });
+        }
+
+        const isValidCurrentPassword = await bcrypt.compare(currentPassword, storedPasswordHash);
+        if (!isValidCurrentPassword) {
+            return res.status(400).json({ message: 'Current password is incorrect' });
+        }
+
+        const newHash = await bcrypt.hash(newPassword, 10);
+        if (Object.prototype.hasOwnProperty.call(user, 'password')) {
+            await db.query('UPDATE users SET password = ? WHERE id = ?', [newHash, userId]);
+        } else if (Object.prototype.hasOwnProperty.call(user, 'password_hash')) {
+            await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, userId]);
+        } else {
+            return res.status(400).json({ message: 'Password column is not available in current schema' });
+        }
+
+        return res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Update password error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+module.exports = {
+    getSettings,
+    updatePersonalSettings,
+    updateEducationSettings,
+    updateSkillsSettings,
+    getNotificationCard,
+    updateNotificationSettings,
+    updateTwoFactorSettings,
+    updatePassword
+};

@@ -6,7 +6,7 @@ export default function Companies() {
     <div className="flex flex-col">
       {/* Header Section */}
       <section className="bg-white py-12 px-4 sm:px-6 lg:px-8 border-b border-gray-100">
-        <div className="max-w-[1440px] mx-auto">
+        <div className="max-w-[1440px] mx-auto text-center">
           <h1 className="text-4xl font-extrabold tracking-tight mb-4">
             Discover Top Companies
           </h1>
@@ -16,7 +16,7 @@ export default function Companies() {
           </p>
 
           {/* Search Bar */}
-          <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-2 max-w-4xl">
+          <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-2 max-w-4xl mx-auto text-left">
             <div className="flex-1 flex items-center px-4 py-2">
               <Building2 className="w-5 h-5 text-gray-400 mr-3" />
               <input
@@ -39,7 +39,7 @@ export default function Companies() {
             </button>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm">
             <span className="text-gray-500 font-medium uppercase text-xs tracking-wider">
               Top Industries:
             </span>

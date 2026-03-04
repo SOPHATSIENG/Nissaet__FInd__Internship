@@ -1,40 +1,99 @@
 import {Bell, Smartphone} from 'lucide-react';
 import {motion} from 'motion/react';
+import {useEffect, useState} from 'react';
+import api from '../../../api/axios';
+import {type ProfileNotificationSettings, type ProfileSettingsPayload} from '../types';
 import {SectionHeader} from '../shared/SectionHeader';
 
 const NOTIFICATION_SECTIONS = [
   {
     title: 'New Internship Matches',
     desc: 'Get notified when new internships match your profile and skills.',
-    email: true,
-    inApp: true,
+    emailKey: 'internship_matches_email',
+    inAppKey: 'internship_matches_in_app',
     hasFrequency: true,
   },
   {
     title: 'Application Status Changes',
     desc: 'Receive updates when an employer views your application or invites you for an interview.',
-    email: true,
-    inApp: true,
+    emailKey: 'application_status_email',
+    inAppKey: 'application_status_in_app',
     hasFrequency: false,
   },
   {
     title: 'Career Tips & Advice',
     desc: 'Weekly tips on resume writing, interview preparation, and career growth.',
-    email: false,
-    inApp: false,
+    emailKey: 'career_tips_email',
+    inAppKey: 'career_tips_in_app',
     hasFrequency: false,
   },
 ] as const;
 
 const FREQUENCIES = ['Instant', 'Daily', 'Weekly'] as const;
 
-export function NotificationsTab() {
+interface NotificationsTabProps {
+  data: ProfileNotificationSettings;
+  onSaved: (settings: ProfileSettingsPayload) => void;
+}
+
+const EMPTY_NOTIFICATIONS: ProfileNotificationSettings = {
+  internship_matches_email: true,
+  internship_matches_in_app: true,
+  application_status_email: true,
+  application_status_in_app: true,
+  career_tips_email: false,
+  career_tips_in_app: false,
+  frequency: 'Daily',
+};
+
+type NotificationBooleanKey =
+  | 'internship_matches_email'
+  | 'internship_matches_in_app'
+  | 'application_status_email'
+  | 'application_status_in_app'
+  | 'career_tips_email'
+  | 'career_tips_in_app';
+
+export function NotificationsTab({data, onSaved}: NotificationsTabProps) {
+  // FIX MARK: notification preferences are now persisted in DB columns.
+  const [form, setForm] = useState<ProfileNotificationSettings>(data || EMPTY_NOTIFICATIONS);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setForm(data || EMPTY_NOTIFICATIONS);
+    setStatus('');
+    setError('');
+  }, [data]);
+
+  const toggleValue = (key: NotificationBooleanKey) => {
+    setForm((previous) => ({...previous, [key]: !previous[key]}));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setStatus('');
+    setError('');
+    try {
+      const response = await api.updateNotificationSettings(form);
+      if (response?.settings) {
+        onSaved(response.settings);
+      }
+      setStatus('Notification preferences saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save notification preferences.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} className="space-y-8">
       <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
         <SectionHeader
           title="Notification Preferences"
-          description="Control how and when you receive updates."
+          description="Control how and when you receive updates. Values are loaded from DB."
         />
 
         <div className="space-y-12">
@@ -55,12 +114,14 @@ export function NotificationsTab() {
                   </div>
                   <button
                     className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
-                      section.email ? 'bg-emerald-500' : 'bg-slate-200'
+                      form[section.emailKey] ? 'bg-emerald-500' : 'bg-slate-200'
                     }`}
+                    onClick={() => toggleValue(section.emailKey)}
+                    type="button"
                   >
                     <span
                       className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                        section.email ? 'translate-x-6' : 'translate-x-1'
+                        form[section.emailKey] ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
                   </button>
@@ -74,12 +135,14 @@ export function NotificationsTab() {
                   </div>
                   <button
                     className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
-                      section.inApp ? 'bg-emerald-500' : 'bg-slate-200'
+                      form[section.inAppKey] ? 'bg-emerald-500' : 'bg-slate-200'
                     }`}
+                    onClick={() => toggleValue(section.inAppKey)}
+                    type="button"
                   >
                     <span
                       className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                        section.inApp ? 'translate-x-6' : 'translate-x-1'
+                        form[section.inAppKey] ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
                   </button>
@@ -95,8 +158,10 @@ export function NotificationsTab() {
                     {FREQUENCIES.map((frequency) => (
                       <button
                         key={frequency}
+                        type="button"
+                        onClick={() => setForm((previous) => ({...previous, frequency}))}
                         className={`px-8 py-2 text-sm font-medium rounded-lg transition-all ${
-                          frequency === 'Daily'
+                          frequency === form.frequency
                             ? 'bg-white text-emerald-600 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
                         }`}
@@ -111,9 +176,18 @@ export function NotificationsTab() {
           ))}
         </div>
 
+        {(status || error) && (
+          <p className={`text-sm mt-8 ${error ? 'text-red-600' : 'text-emerald-600'}`}>{error || status}</p>
+        )}
+
         <div className="flex justify-end mt-12">
-          <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-emerald-500/20">
-            Save Preferences
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-emerald-500 disabled:opacity-70 hover:bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-emerald-500/20"
+          >
+            {saving ? 'Saving...' : 'Save Preferences'}
           </button>
         </div>
       </div>

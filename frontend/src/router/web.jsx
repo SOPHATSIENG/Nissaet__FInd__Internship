@@ -1,10 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Login } from '../pages/auth/Login';
 import { ForgotPassword } from '../pages/auth/ForgotPassword';
 import { Register } from '../pages/auth/Register';
 import { StudentStep2 } from '../pages/auth/StudentStep2';
 import { StudentStep3 } from '../pages/auth/StudentStep3';
 import { CompanyStep2 } from '../pages/auth/CompanyStep2';
+import { CompanyStep3 } from '../pages/auth/CompanyStep3';
 import { AdminStep2 } from '../pages/auth/AdminStep2';
 import Layout from '../components/Layout';
 import Home from '../pages/student/Home';
@@ -13,7 +14,20 @@ import InternshipDetails from '../pages/student/InternshipDetails';
 import Companies from '../pages/student/Companies';
 import CareerAdvice from '../pages/student/CareerAdvice';
 import AccountSettings from '../pages/account/AccountSettings';
-import Applicants from '../pages/student/Applicants';
+import { useAuth } from '../context/AuthContext';
+// import Applicants from '../pages/student/Applicants';
+
+function RequireAuth({ children }) {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    // FIX MARK: block account settings route for logged-out users.
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  return children;
+}
 
 export default function WebRouter() {
   return (
@@ -25,6 +39,7 @@ export default function WebRouter() {
         <Route path="/register/student/step-2" element={<StudentStep2 />} />
         <Route path="/register/student/step-3" element={<StudentStep3 />} />
         <Route path="/register/company/step-2" element={<CompanyStep2 />} />
+        <Route path="/register/company/step-3" element={<CompanyStep3 />} />
         <Route path="/admin/step-2" element={<AdminStep2 />} />
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
@@ -33,8 +48,15 @@ export default function WebRouter() {
           <Route path="companies" element={<Companies />} />
           <Route path="companies/:id" element={<Companies />} />
           <Route path="career-advice" element={<CareerAdvice />} />
-          <Route path="applicants" element={<Applicants />} />
-          <Route path="account-settings" element={<AccountSettings />} />
+          {/* <Route path="applicants" element={<Applicants />} /> */}
+          <Route
+            path="account-settings"
+            element={(
+              <RequireAuth>
+                <AccountSettings />
+              </RequireAuth>
+            )}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

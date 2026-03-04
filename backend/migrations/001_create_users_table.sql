@@ -27,6 +27,6 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_role (role),
     INDEX idx_university (university),
     INDEX idx_industry (industry),
-    INDEX idx_location (location),
+    INDEX idx_location (location),  
     INDEX idx_graduation_year (graduation_year)
 );

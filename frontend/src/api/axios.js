@@ -97,6 +97,40 @@ export const api = {
     return request('/auth/me', { auth: true });
   },
 
+  // FIX MARK: profile settings API used by dynamic account settings page.
+  getProfileSettings() {
+    return request('/profile/settings', { auth: true });
+  },
+
+  updatePersonalSettings(payload) {
+    return request('/profile/personal', { method: 'PUT', auth: true, body: payload });
+  },
+
+  updateEducationSettings(payload) {
+    return request('/profile/education', { method: 'PUT', auth: true, body: payload });
+  },
+
+  updateSkillSettings(payload) {
+    return request('/profile/skills', { method: 'PUT', auth: true, body: payload });
+  },
+
+  updateNotificationSettings(payload) {
+    return request('/profile/notifications', { method: 'PUT', auth: true, body: payload });
+  },
+
+  // FIX MARK: notification card API for header bell dropdown.
+  getNotificationCard() {
+    return request('/profile/notifications/card', { auth: true });
+  },
+
+  updatePassword(payload) {
+    return request('/profile/security/password', { method: 'PUT', auth: true, body: payload });
+  },
+
+  updateTwoFactorSettings(payload) {
+    return request('/profile/security/two-factor', { method: 'PUT', auth: true, body: payload });
+  },
+
   getInternships(params = {}) {
     const query = new URLSearchParams(
       Object.entries(params)
@@ -116,6 +150,22 @@ export const api = {
     return request(`/internships/featured-companies?limit=${limit}`).then((data) => {
       if (Array.isArray(data)) {
         return { companies: data };
+      }
+      return data;
+    });
+  },
+
+  // FIXED: dynamic skill lookup for registration step 3.
+  getSkills(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/auth/skills${query ? `?${query}` : ''}`).then((data) => {
+      if (Array.isArray(data)) {
+        return { skills: data };
       }
       return data;
     });

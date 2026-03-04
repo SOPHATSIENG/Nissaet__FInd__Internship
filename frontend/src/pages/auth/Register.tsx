@@ -6,6 +6,7 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { RoleSelector, Role } from '../../components/RoleSelector';
 import { useAuth } from '../../context/AuthContext';
+import { registrationStorage } from '../../utils/registrationStorage';
 
 export function Register() {
   const [role, setRole] = useState<Role>('student');
@@ -16,11 +17,10 @@ export function Register() {
   const [companyLocation, setCompanyLocation] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
 
-  const { register, loginWithGoogle, loginWithGithub } = useAuth();
+  const { loginWithGoogle, loginWithGithub } = useAuth();
   const navigate = useNavigate();
 
   const inferredName = useMemo(() => {
@@ -64,23 +64,21 @@ export function Register() {
       return;
     }
 
-    try {
-      setError('');
-      setIsLoading(true);
-      await register({
-        full_name: fullName.trim(),
-        email: email.trim(),
-        password,
-        role,
-        company_name: role === 'company' ? companyName.trim() : undefined,
-        location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
-      });
-      navigate('/');
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Registration failed.');
-    } finally {
-      setIsLoading(false);
-    }
+    const step1Payload = {
+      full_name: fullName.trim(),
+      email: email.trim(),
+      password,
+      role,
+      company_name: role === 'company' ? companyName.trim() : undefined,
+      location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
+    };
+
+    registrationStorage.setStep1(step1Payload);
+    registrationStorage.setRole(role);
+    registrationStorage.clearStep2();
+
+    setError('');
+    navigate(role === 'company' ? '/register/company/step-2' : '/register/student/step-2');
   };
 
   const handleGoogleRegister = async () => {
@@ -237,8 +235,8 @@ export function Register() {
           </p>
         )}
 
-        <Button type="submit" className="w-full" icon={ArrowRight} disabled={isLoading}>
-          {isLoading ? 'Creating...' : 'Create Account'}
+        <Button type="submit" className="w-full" icon={ArrowRight}>
+          Continue to Step 2
         </Button>
       </form>
 

@@ -6,12 +6,10 @@ import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 
 export function Login() {
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-
   return (
     <SplitLayout
       layoutType="login"
-      imageSrc="../image/3.png"
+      imageSrc="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80"
       title="Unlock Your Potential"
       subtitle="Join a global network of professionals, students, and forward-thinking companies driving the future of work together."
       badge={
@@ -25,7 +23,7 @@ export function Login() {
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#137fec] text-white">
           <Grid className="h-6 w-6" />
         </div>
-        <span className="text-xl font-bold tracking-tight text-slate-900">Nissaet Find Intership</span>
+        <span className="text-xl font-bold tracking-tight text-slate-900">UnifiedPortal</span>
       </div>
 
       <div className="mb-8">
@@ -87,9 +85,7 @@ export function Login() {
 
       <button
         type="button"
-        onClick={() => {
-          window.location.href = `${backendUrl}/api/auth/google`;
-        }}
+        onClick={() => window.location.href = 'http://localhost:5000/api/auth/google'}
         className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -111,19 +107,6 @@ export function Login() {
           />
         </svg>
         <span className="truncate">Continue with Google</span>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => {
-          window.location.href = `${backendUrl}/api/auth/github`;
-        }}
-        className="mt-3 flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
-      >
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.85 10.91.57.11.78-.25.78-.55 0-.27-.01-.99-.02-1.94-3.19.69-3.86-1.54-3.86-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.33.95.1-.74.4-1.24.72-1.52-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.09-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11.03 11.03 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.83 1.18 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.08.78 2.18 0 1.57-.01 2.84-.01 3.23 0 .3.2.66.79.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z" />
-        </svg>
-        <span className="truncate">Continue with GitHub</span>
       </button>
 
       <p className="mt-8 text-center text-sm text-slate-500">

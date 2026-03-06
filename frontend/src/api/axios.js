@@ -118,6 +118,10 @@ export const api = {
     return request('/profile/notifications', { method: 'PUT', auth: true, body: payload });
   },
 
+  updateCompanySettings(payload) {
+    return request('/profile/company', { method: 'PUT', auth: true, body: payload });
+  },
+
   // FIX MARK: notification card API for header bell dropdown.
   getNotificationCard() {
     return request('/profile/notifications/card', { auth: true });

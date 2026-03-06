@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, User, Mail, Lock, Building2, MapPin } from 'lucide-react';
 import { SplitLayout } from '../../components/SplitLayout';
 import { Input } from '../../components/Input';
@@ -22,6 +22,7 @@ export function Register() {
 
   const { loginWithGoogle, loginWithGithub } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const inferredName = useMemo(() => {
     if (fullName.trim()) {
@@ -41,8 +42,8 @@ export function Register() {
     if (!fullName.trim()) {
       return 'Full name is required.';
     }
-    if (!email.includes('@')) {
-      return 'Please enter a valid email.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return 'Please enter a valid email address.';
     }
     if (password.length < 8) {
       return 'Password must be at least 8 characters.';
@@ -82,7 +83,7 @@ export function Register() {
   };
 
   const handleGoogleRegister = async () => {
-    if (!email.includes('@')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError('Enter your email first to continue with Google.');
       return;
     }
@@ -94,14 +95,26 @@ export function Register() {
     try {
       setError('');
       setIsGoogleLoading(true);
-      await loginWithGoogle({
+      const session = await loginWithGoogle({
         email: email.trim(),
         fullName: inferredName,
         role,
         companyName: role === 'company' ? companyName.trim() : undefined,
         location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
       });
-      navigate('/');
+
+      const target = typeof location.state?.from === 'string' ? location.state.from : '';
+      const resolvedRole = session?.user?.role;
+      if (target.startsWith('/company') && resolvedRole !== 'company') {
+        setError('This account is not a company account.');
+        navigate('/', { replace: true });
+        return;
+      }
+      if (target) {
+        navigate(target);
+        return;
+      }
+      navigate(resolvedRole === 'company' ? '/company' : '/');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Google registration failed.');
     } finally {
@@ -110,7 +123,7 @@ export function Register() {
   };
 
   const handleGithubRegister = async () => {
-    if (!email.includes('@')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError('Enter your email first to continue with GitHub.');
       return;
     }
@@ -122,14 +135,26 @@ export function Register() {
     try {
       setError('');
       setIsGithubLoading(true);
-      await loginWithGithub({
+      const session = await loginWithGithub({
         email: email.trim(),
         fullName: inferredName,
         role,
         companyName: role === 'company' ? companyName.trim() : undefined,
         location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
       });
-      navigate('/');
+
+      const target = typeof location.state?.from === 'string' ? location.state.from : '';
+      const resolvedRole = session?.user?.role;
+      if (target.startsWith('/company') && resolvedRole !== 'company') {
+        setError('This account is not a company account.');
+        navigate('/', { replace: true });
+        return;
+      }
+      if (target) {
+        navigate(target);
+        return;
+      }
+      navigate(resolvedRole === 'company' ? '/company' : '/');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'GitHub registration failed.');
     } finally {

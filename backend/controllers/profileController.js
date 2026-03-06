@@ -17,6 +17,23 @@ const toBoolean = (value, fallback = false) => {
     return fallback;
 };
 
+const updateCompanyProfile = async (userId, updates) => {
+    const companyColumns = await getTableColumns('companies');
+    const entries = Object.entries(updates).filter(([column, value]) => companyColumns.has(column) && value !== undefined);
+    if (entries.length === 0) return;
+
+    const existing = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+    if (existing.length === 0) {
+        const insertEntries = [['user_id', userId], ...entries];
+        const insertSql = `INSERT INTO companies (${insertEntries.map(([column]) => column).join(', ')}) VALUES (${insertEntries.map(() => '?').join(', ')})`;
+        await db.query(insertSql, insertEntries.map(([, value]) => value));
+        return;
+    }
+
+    const sql = `UPDATE companies SET ${entries.map(([column]) => `${column} = ?`).join(', ')} WHERE user_id = ?`;
+    await db.query(sql, [...entries.map(([, value]) => value), userId]);
+};
+
 const toNullableString = (value) => {
     if (value === null || value === undefined) return null;
     const normalized = String(value).trim();
@@ -622,9 +639,68 @@ const updatePassword = async (req, res) => {
     }
 };
 
+const updateCompanySettings = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const users = await db.query('SELECT id, role FROM users WHERE id = ? LIMIT 1', [userId]);
+        if (users.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (users[0].role !== 'company') {
+            return res.status(403).json({ message: 'Company access required' });
+        }
+
+        const name = toNullableString(req.body.company_name || req.body.name);
+        const description = toNullableString(req.body.description);
+        const industry = toNullableString(req.body.industry);
+        const website = toNullableString(req.body.website);
+        const location = toNullableString(req.body.location);
+
+        await updateCompanyProfile(userId, {
+            name,
+            description,
+            industry,
+            website,
+            headquarters: location,
+        });
+
+        const refreshed = await db.query(
+            `SELECT
+                id,
+                name AS company_name,
+                logo,
+                description,
+                industry,
+                headquarters AS location,
+                website,
+                company_size,
+                founded_year,
+                is_verified
+             FROM companies
+             WHERE user_id = ?
+             LIMIT 1`,
+            [userId]
+        );
+
+        return res.json({
+            message: 'Company settings updated successfully',
+            company_profile: refreshed[0] || null,
+        });
+    } catch (error) {
+        console.error('Update company settings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     getSettings,
     updatePersonalSettings,
+    updateCompanySettings,
     updateEducationSettings,
     updateSkillsSettings,
     getNotificationCard,

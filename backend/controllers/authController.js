@@ -54,6 +54,46 @@ const buildAuthResponse = (userId, email, fullName, role) => {
     };
 };
 
+const ensureRoleProfile = async (role, userId, payload = {}) => {
+    const normalizedRole = normalizeRole(role);
+    if (normalizedRole === 'company') {
+        const companies = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+        if (companies.length > 0) return;
+
+        let conn;
+        try {
+            conn = await db.pool.getConnection();
+            await conn.beginTransaction();
+            await createCompanyProfile(conn, userId, payload);
+            await conn.commit();
+        } catch (error) {
+            if (conn) await conn.rollback();
+            throw error;
+        } finally {
+            if (conn) conn.release();
+        }
+        return;
+    }
+
+    if (normalizedRole === 'student') {
+        const students = await db.query('SELECT id FROM students WHERE user_id = ? LIMIT 1', [userId]);
+        if (students.length > 0) return;
+
+        let conn;
+        try {
+            conn = await db.pool.getConnection();
+            await conn.beginTransaction();
+            await createStudentProfile(conn, userId, payload);
+            await conn.commit();
+        } catch (error) {
+            if (conn) await conn.rollback();
+            throw error;
+        } finally {
+            if (conn) conn.release();
+        }
+    }
+};
+
 const getUserByEmail = async (email) => {
     const users = await db.query('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
     return normalizeUserRecord(users[0]);
@@ -477,6 +517,13 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
+        try {
+            await ensureRoleProfile(user.role, user.id, user);
+        } catch (error) {
+            console.error('Login role/profile validation error:', error);
+            return res.status(403).json({ message: 'Account role is not properly configured.' });
+        }
+
         const response = buildAuthResponse(user.id, user.email, user.full_name, user.role);
         return res.json({
             message: 'Login successful',
@@ -506,6 +553,18 @@ const socialLogin = async (req, res) => {
 
         const existingUser = await getUserByEmail(email);
         if (existingUser) {
+            try {
+                await ensureRoleProfile(existingUser.role, existingUser.id, {
+                    ...req.body,
+                    full_name: existingUser.full_name,
+                    company_name: companyName || req.body.company_name,
+                    location
+                });
+            } catch (error) {
+                console.error('Social login role/profile validation error:', error);
+                return res.status(403).json({ message: 'Account role is not properly configured.' });
+            }
+
             const response = buildAuthResponse(
                 existingUser.id,
                 existingUser.email,

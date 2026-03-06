@@ -11,11 +11,19 @@ import {
   MessageSquare,
   Settings as SettingsIcon
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import ApplicationNotificationCard from '@/components/company-components/ApplicationNotificationCard';
 
 export default function Notifications() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'activity' | 'settings'>('activity');
+
+  const navItems = [
+    { name: 'Company Profile', icon: Building2, path: '/company/settings' },
+    { name: 'Security & Login', icon: Lock, path: '/company/security' },
+    { name: 'Notifications', icon: Bell, path: '/company/notifications' },
+    { name: 'Billing', icon: CreditCard, path: '/company/billing' },
+  ];
 
   const [notifications, setNotifications] = useState([
     { 
@@ -110,25 +118,23 @@ export default function Notifications() {
       <div className="flex flex-col lg:flex-row gap-8">
         <aside className="lg:w-64 flex-shrink-0">
           <nav className="flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-            {[
-              { name: 'Company Profile', icon: Building2, path: '/settings' },
-              { name: 'Security & Login', icon: Lock, path: '/security' },
-              { name: 'Notifications', icon: Bell, path: '/notifications', active: true },
-              { name: 'Billing', icon: CreditCard, path: '/billing' },
-            ].map((item) => (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
-                  item.active 
-                    ? 'bg-white text-primary shadow-sm border border-slate-200' 
-                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                }`}
-              >
-                <item.icon size={20} />
-                {item.name}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+              return (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
+                    isActive 
+                      ? 'bg-white text-primary shadow-sm border border-slate-200' 
+                      : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                  }`}
+                >
+                  <item.icon size={20} />
+                  {item.name}
+                </Link>
+              );
+            })}
           </nav>
         </aside>
 

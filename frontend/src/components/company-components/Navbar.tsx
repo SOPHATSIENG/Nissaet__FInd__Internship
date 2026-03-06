@@ -3,12 +3,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../api/axios';
 
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notificationCard, setNotificationCard] = useState<{ unreadCount: number; items: any[] } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const companyName =
@@ -25,11 +28,40 @@ export default function Navbar() {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
+        setIsNotificationsOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadNotificationCard = async () => {
+      try {
+        if (!user) {
+          if (mounted) setNotificationCard(null);
+          return;
+        }
+        const data = await api.getNotificationCard();
+        const unreadCount = Number(data?.unread_count ?? data?.unreadCount ?? 0) || 0;
+        const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.notifications) ? data.notifications : [];
+        if (mounted) {
+          setNotificationCard({ unreadCount, items });
+        }
+      } catch (error) {
+        if (mounted) setNotificationCard(null);
+      }
+    };
+
+    loadNotificationCard();
+    const id = window.setInterval(loadNotificationCard, 30000);
+    return () => {
+      mounted = false;
+      window.clearInterval(id);
+    };
+  }, [user]);
 
   const navLinks = [
     { name: 'Dashboard', path: '/company', icon: LayoutDashboard },
@@ -79,10 +111,73 @@ export default function Navbar() {
             ))}
           </nav>
           <div className="flex items-center gap-3 pl-6 border-l border-slate-200 relative" ref={dropdownRef}>
-            <button className="relative p-2 text-slate-400 hover:text-slate-600">
+            <button
+              type="button"
+              onClick={() => {
+                setIsNotificationsOpen((current) => !current);
+                setIsProfileOpen(false);
+              }}
+              className="relative p-2 text-slate-400 hover:text-slate-600"
+            >
               <Bell size={24} />
-              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500"></span>
+              {(notificationCard?.unreadCount || 0) > 0 ? (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {notificationCard.unreadCount > 99 ? '99+' : notificationCard.unreadCount}
+                </span>
+              ) : null}
             </button>
+
+            <AnimatePresence>
+              {isNotificationsOpen ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-[60]"
+                >
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                    <p className="text-sm font-semibold text-slate-900">Notifications</p>
+                    <p className="text-xs text-slate-500">
+                      {(notificationCard?.unreadCount || 0) > 0
+                        ? `${notificationCard?.unreadCount || 0} unread`
+                        : 'No unread notifications'}
+                    </p>
+                  </div>
+                  <div className="max-h-80 overflow-auto">
+                    {(notificationCard?.items || []).length > 0 ? (
+                      (notificationCard?.items || []).slice(0, 8).map((item: any, index: number) => (
+                        <div
+                          key={item?.id || index}
+                          className="px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                        >
+                          <p className="text-sm font-medium text-slate-900">
+                            {item?.title || 'Notification'}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                            {item?.message || ''}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-8 text-center">
+                        <p className="text-sm font-medium text-slate-700">All caught up</p>
+                        <p className="text-xs text-slate-500 mt-1">No new notifications.</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 bg-white">
+                    <Link
+                      to="/company/notifications"
+                      onClick={() => setIsNotificationsOpen(false)}
+                      className="block w-full text-center text-sm font-semibold text-primary hover:underline"
+                    >
+                      View all notifications
+                    </Link>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
             <button 
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className="flex items-center gap-2 p-1 rounded-full hover:bg-slate-50 transition-colors"

@@ -8,6 +8,7 @@ import {
   BookmarkCheck,
   Building2,
 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 type InternshipCard = {
@@ -93,9 +94,85 @@ const internshipJobs: InternshipCard[] = [
     saved: false,
     logo: "https://picsum.photos/seed/kpmg/48/48",
   },
+  {
+    id: 5,
+    title: "Mobile App Intern",
+    company: "Cellcard",
+    location: "Phnom Penh",
+    pay: "$250 - $400/mo",
+    tags: ["Flutter", "Android", "iOS"],
+    isNew: true,
+    saved: false,
+    logo: "https://picsum.photos/seed/cellcard/48/48",
+  },
+  {
+    id: 6,
+    title: "Data Analyst Intern",
+    company: "ACLEDA Bank",
+    location: "Phnom Penh",
+    pay: "$300 - $500/mo",
+    tags: ["SQL", "Power BI", "Excel"],
+    isNew: false,
+    saved: false,
+    logo: "https://picsum.photos/seed/acleda/48/48",
+  },
+  {
+    id: 7,
+    title: "QA Tester Intern",
+    company: "Sokha Tech",
+    location: "Remote",
+    pay: "Competitive",
+    tags: ["Manual Testing", "API Testing"],
+    isNew: false,
+    saved: false,
+    logo: "https://picsum.photos/seed/sokhaqa/48/48",
+  },
+  {
+    id: 8,
+    title: "HR Intern",
+    company: "Prince Group",
+    location: "Phnom Penh",
+    pay: "$180 - $300/mo",
+    tags: ["Recruitment", "Communication"],
+    isNew: false,
+    saved: false,
+    logo: "https://picsum.photos/seed/princehr/48/48",
+  },
 ];
 
 export default function Internships() {
+  const pageSize = 3;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(internshipJobs.length / pageSize));
+
+  const paginatedInternships = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return internshipJobs.slice(start, start + pageSize);
+  }, [currentPage]);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.min(Math.max(page, 1), totalPages));
+  };
+
+  const visiblePages = useMemo(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const pages: Array<number | string> = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    if (start > 2) pages.push("ellipsis-left");
+    for (let page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+    if (end < totalPages - 1) pages.push("ellipsis-right");
+
+    pages.push(totalPages);
+    return pages;
+  }, [currentPage, totalPages]);
+
   return (
     <div className="flex flex-col">
       <section className="bg-white py-12 px-4 sm:px-6 lg:px-8 border-b border-gray-100">
@@ -153,8 +230,8 @@ export default function Internships() {
                   { name: "Backend Dev", count: 8, checked: false },
                   { name: "UI/UX Design", count: 5, checked: true },
                   { name: "Data Science", count: 3, checked: false },
-                ].map((item, i) => (
-                  <label key={i} className="flex items-center justify-between cursor-pointer group">
+                ].map((item) => (
+                  <label key={item.name} className="flex items-center justify-between cursor-pointer group">
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
@@ -179,8 +256,8 @@ export default function Internships() {
                   { name: "Phnom Penh", checked: false },
                   { name: "Siem Reap", checked: false },
                   { name: "Remote", checked: false },
-                ].map((item, i) => (
-                  <label key={i} className="flex items-center gap-3 cursor-pointer group">
+                ].map((item) => (
+                  <label key={item.name} className="flex items-center gap-3 cursor-pointer group">
                     <input
                       type="radio"
                       name="location"
@@ -200,7 +277,7 @@ export default function Internships() {
               <div className="flex gap-2">
                 {["All", "Paid", "Unpaid"].map((item, i) => (
                   <button
-                    key={i}
+                    key={item}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                       i === 0
                         ? "bg-[#3b82f6]/10 text-[#2563eb] border border-[#3b82f6]/30"
@@ -219,7 +296,7 @@ export default function Internships() {
               <div className="flex justify-between items-end mb-6">
                 <h2 className="text-2xl font-bold">Recommended for you</h2>
                 <Link to="/internships" className="text-[#3b82f6] font-bold hover:underline">
-                  View All →
+                  View All -&gt;
                 </Link>
               </div>
 
@@ -281,7 +358,7 @@ export default function Internships() {
               </div>
 
               <div className="space-y-4">
-                {internshipJobs.map((job) => (
+                {paginatedInternships.map((job) => (
                   <div
                     key={job.id}
                     className={`bg-white p-6 rounded-2xl border ${
@@ -356,26 +433,47 @@ export default function Internships() {
               </div>
 
               <div className="flex justify-center items-center gap-2 mt-12">
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <span className="sr-only">Previous</span>
-                  &lt;
+                  <span aria-hidden="true">&lt;</span>
                 </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#3b82f6] text-[#111816] font-bold">
-                  1
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  2
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  3
-                </button>
-                <span className="text-gray-400">...</span>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  8
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+                {visiblePages.map((page) => {
+                  if (typeof page !== "number") {
+                    return (
+                      <span key={page} className="px-1 text-gray-400 select-none">
+                        ...
+                      </span>
+                    );
+                  }
+                  const isActive = page === currentPage;
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => goToPage(page)}
+                      className={`w-10 h-10 flex items-center justify-center rounded-lg font-medium transition-colors ${
+                        isActive
+                          ? "bg-[#3b82f6] text-[#111816] font-bold"
+                          : "hover:bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <span className="sr-only">Next</span>
-                  &gt;
+                  <span aria-hidden="true">&gt;</span>
                 </button>
               </div>
             </div>

@@ -16,10 +16,21 @@ const getCompanyUserIdByInternshipId = async (internshipId) => {
     return rows.length > 0 ? rows[0].user_id : null;
 };
 
+const parsePagination = (query = {}) => {
+    const parsedPage = Number.parseInt(query.page, 10);
+    const parsedLimit = Number.parseInt(query.limit, 10);
+
+    const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 10;
+    const offset = (page - 1) * limit;
+
+    return { page, limit, offset };
+};
+
 const applyForInternship = async (req, res) => {
     try {
         const { internship_id, cover_letter } = req.body;
-        const userId = req.user && req.user.role === 'student' ? req.user.userId : null;
+        const userId = req.user?.role === 'student' ? req.user.userId : null;
         const studentId = userId ? await getStudentIdByUserId(userId) : null;
 
         if (!studentId || !internship_id) {
@@ -58,11 +69,12 @@ const applyForInternship = async (req, res) => {
 const getStudentApplications = async (req, res) => {
     try {
         const requestedStudentId = Number(req.params.student_id);
-        const isAdmin = req.user && req.user.role === 'admin';
+        const { page, limit, offset } = parsePagination(req.query);
+        const isAdmin = req.user?.role === 'admin';
 
         let targetStudentId = requestedStudentId;
         if (!isAdmin) {
-            if (!req.user || req.user.role !== 'student') {
+            if (req.user?.role !== 'student') {
                 return res.status(403).json({ message: 'Forbidden' });
             }
 
@@ -98,11 +110,29 @@ const getStudentApplications = async (req, res) => {
              JOIN internships i ON a.internship_id = i.id
              JOIN companies c ON i.company_id = c.id
              WHERE a.student_id = ?
-             ORDER BY a.created_at DESC`,
-            [targetStudentId]
+             ORDER BY a.created_at DESC
+             LIMIT ? OFFSET ?`,
+            [targetStudentId, limit, offset]
         );
 
-        return res.json({ applications });
+        const countRows = await db.query(
+            'SELECT COUNT(*) AS total FROM applications WHERE student_id = ?',
+            [targetStudentId]
+        );
+        const total = Number(countRows[0]?.total || 0);
+        const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+        return res.json({
+            applications,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+                hasNext: page < totalPages,
+                hasPrev: page > 1
+            }
+        });
     } catch (error) {
         console.error('Error fetching student applications:', error);
         return res.status(500).json({ message: 'Server error' });
@@ -112,14 +142,15 @@ const getStudentApplications = async (req, res) => {
 const getInternshipApplications = async (req, res) => {
     try {
         const internshipId = Number(req.params.internship_id);
+        const { page, limit, offset } = parsePagination(req.query);
         const companyOwnerUserId = await getCompanyUserIdByInternshipId(internshipId);
 
         if (!companyOwnerUserId) {
             return res.status(404).json({ message: 'Internship not found' });
         }
 
-        const isAdmin = req.user && req.user.role === 'admin';
-        const isOwnerCompany = req.user && req.user.role === 'company' && Number(req.user.userId) === Number(companyOwnerUserId);
+        const isAdmin = req.user?.role === 'admin';
+        const isOwnerCompany = req.user?.role === 'company' && Number(req.user.userId) === Number(companyOwnerUserId);
 
         if (!isAdmin && !isOwnerCompany) {
             return res.status(403).json({ message: 'Forbidden' });
@@ -144,11 +175,29 @@ const getInternshipApplications = async (req, res) => {
              JOIN students s ON a.student_id = s.id
              JOIN users u ON s.user_id = u.id
              WHERE a.internship_id = ?
-             ORDER BY a.created_at DESC`,
-            [internshipId]
+             ORDER BY a.created_at DESC
+             LIMIT ? OFFSET ?`,
+            [internshipId, limit, offset]
         );
 
-        return res.json({ applications });
+        const countRows = await db.query(
+            'SELECT COUNT(*) AS total FROM applications WHERE internship_id = ?',
+            [internshipId]
+        );
+        const total = Number(countRows[0]?.total || 0);
+        const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+        return res.json({
+            applications,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+                hasNext: page < totalPages,
+                hasPrev: page > 1
+            }
+        });
     } catch (error) {
         console.error('Error fetching internship applications:', error);
         return res.status(500).json({ message: 'Server error' });
@@ -179,8 +228,8 @@ const updateApplicationStatus = async (req, res) => {
         const application = appRows[0];
         const companyOwnerUserId = await getCompanyUserIdByInternshipId(application.internship_id);
 
-        const isAdmin = req.user && req.user.role === 'admin';
-        const isOwnerCompany = req.user && req.user.role === 'company' && Number(req.user.userId) === Number(companyOwnerUserId);
+        const isAdmin = req.user?.role === 'admin';
+        const isOwnerCompany = req.user?.role === 'company' && Number(req.user.userId) === Number(companyOwnerUserId);
 
         if (!isAdmin && !isOwnerCompany) {
             return res.status(403).json({ message: 'Forbidden' });
@@ -201,3 +250,5 @@ module.exports = {
     getInternshipApplications,
     updateApplicationStatus
 };
+
+

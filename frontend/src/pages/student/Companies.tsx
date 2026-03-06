@@ -1,10 +1,135 @@
 import { Search, MapPin, Building2, Map, Users } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+const allCompanies = [
+  {
+    name: "Chip Mong Group",
+    industry: "CONGLOMERATE",
+    location: "Phnom Penh",
+    desc: "Diversified business portfolio including construction, consumer...",
+    openings: 8,
+    rating: 4.5,
+    tags: ["Construction", "Retail"],
+    logo: "https://picsum.photos/seed/chipmong/40/40",
+  },
+  {
+    name: "Sabay Digital",
+    industry: "TECHNOLOGY / MEDIA",
+    location: "Phnom Penh",
+    desc: "Pioneering digital entertainment and content platform in the...",
+    openings: 4,
+    rating: 4.2,
+    tags: ["Digital Media", "Gaming"],
+    logo: "https://picsum.photos/seed/sabay/40/40",
+  },
+  {
+    name: "Mango Tango Asia",
+    industry: "CREATIVE AGENCY",
+    location: "Siem Reap",
+    desc: "Innovative advertising and marketing agency specializing in...",
+    openings: 2,
+    rating: 4.9,
+    tags: ["Advertising", "Design"],
+    logo: "https://picsum.photos/seed/mango/40/40",
+  },
+  {
+    name: "KPMG Cambodia",
+    industry: "ACCOUNTING / AUDIT",
+    location: "Phnom Penh",
+    desc: "Global network of professional firms providing Audit, Tax and Advisory...",
+    openings: 12,
+    rating: 4.7,
+    tags: ["Finance", "Audit"],
+    logo: "https://picsum.photos/seed/kpmg/40/40",
+  },
+  {
+    name: "Khmer Beverages",
+    industry: "MANUFACTURING",
+    location: "Phnom Penh",
+    desc: "Leading brewery and beverage manufacturer committed to qualit...",
+    openings: 0,
+    rating: null,
+    tags: ["FMCG"],
+    logo: "https://picsum.photos/seed/khmerbev/40/40",
+  },
+  {
+    name: "Vattanac Bank",
+    industry: "BANKING",
+    location: "Phnom Penh",
+    desc: "Modern banking services with strong focus on digital customer experience.",
+    openings: 6,
+    rating: 4.4,
+    tags: ["Finance", "Operations"],
+    logo: "https://picsum.photos/seed/vattanac/40/40",
+  },
+  {
+    name: "Wing Bank",
+    industry: "FINTECH",
+    location: "Phnom Penh",
+    desc: "Digital financial services and payments platform used nationwide.",
+    openings: 7,
+    rating: 4.3,
+    tags: ["Fintech", "Payments"],
+    logo: "https://picsum.photos/seed/wing/40/40",
+  },
+  {
+    name: "KOOMPI",
+    industry: "TECHNOLOGY",
+    location: "Phnom Penh",
+    desc: "Local hardware and software innovation company building digital tools.",
+    openings: 3,
+    rating: 4.6,
+    tags: ["Hardware", "Software"],
+    logo: "https://picsum.photos/seed/koompi/40/40",
+  },
+  {
+    name: "CamboJob",
+    industry: "HR TECH",
+    location: "Phnom Penh",
+    desc: "Career and recruitment platform connecting students with employers.",
+    openings: 5,
+    rating: 4.1,
+    tags: ["HR", "Recruitment"],
+    logo: "https://picsum.photos/seed/cambojob/40/40",
+  },
+];
+
 export default function Companies() {
+  const pageSize = 3;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(allCompanies.length / pageSize));
+
+  const paginatedCompanies = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return allCompanies.slice(start, start + pageSize);
+  }, [currentPage]);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.min(Math.max(page, 1), totalPages));
+  };
+
+  const visiblePages = useMemo(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const pages: Array<number | string> = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    if (start > 2) pages.push("ellipsis-left");
+    for (let page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+    if (end < totalPages - 1) pages.push("ellipsis-right");
+
+    pages.push(totalPages);
+    return pages;
+  }, [currentPage, totalPages]);
+
   return (
     <div className="flex flex-col">
-      {/* Header Section */}
       <section className="bg-white py-12 px-4 sm:px-6 lg:px-8 border-b border-gray-100">
         <div className="max-w-[1440px] mx-auto text-center">
           <h1 className="text-4xl font-extrabold tracking-tight mb-4">
@@ -15,7 +140,6 @@ export default function Companies() {
             internship match.
           </p>
 
-          {/* Search Bar */}
           <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-2 max-w-4xl mx-auto text-left">
             <div className="flex-1 flex items-center px-4 py-2">
               <Building2 className="w-5 h-5 text-gray-400 mr-3" />
@@ -60,10 +184,8 @@ export default function Companies() {
         </div>
       </section>
 
-      {/* Main Content */}
       <section className="py-12 px-4 sm:px-6 lg:px-8 bg-[#f6f8f7] flex-grow">
         <div className="max-w-[1440px] mx-auto flex flex-col lg:flex-row gap-8">
-          {/* Sidebar Filters */}
           <aside className="w-full lg:w-64 flex-shrink-0 space-y-6">
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <h3 className="font-bold flex items-center gap-2 mb-4">
@@ -76,9 +198,9 @@ export default function Companies() {
                   { name: "Marketing & Media", count: 12 },
                   { name: "Education", count: 8 },
                   { name: "Architecture", count: 5 },
-                ].map((item, i) => (
+                ].map((item) => (
                   <label
-                    key={i}
+                    key={item.name}
                     className="flex items-center justify-between cursor-pointer group"
                   >
                     <div className="flex items-center gap-3">
@@ -108,9 +230,9 @@ export default function Companies() {
                   { name: "Phnom Penh", checked: false },
                   { name: "Siem Reap", checked: false },
                   { name: "Battambang", checked: false },
-                ].map((item, i) => (
+                ].map((item) => (
                   <label
-                    key={i}
+                    key={item.name}
                     className="flex items-center gap-3 cursor-pointer group"
                   >
                     <input
@@ -137,9 +259,9 @@ export default function Companies() {
                   "Small (11-50)",
                   "Medium (51-200)",
                   "Large (200+)",
-                ].map((item, i) => (
+                ].map((item) => (
                   <label
-                    key={i}
+                    key={item}
                     className="flex items-center gap-3 cursor-pointer group"
                   >
                     <input
@@ -155,9 +277,7 @@ export default function Companies() {
             </div>
           </aside>
 
-          {/* Results Area */}
           <div className="flex-1">
-            {/* Featured Employers */}
             <div className="mb-12">
               <div className="flex justify-between items-end mb-6">
                 <h2 className="text-2xl font-bold">Featured Employers</h2>
@@ -165,7 +285,7 @@ export default function Companies() {
                   to="#"
                   className="text-[#3b82f6] font-bold hover:underline"
                 >
-                  View All →
+                  View All -&gt;
                 </Link>
               </div>
               <div className="grid md:grid-cols-2 gap-6">
@@ -188,13 +308,13 @@ export default function Companies() {
                     rating: 4.6,
                     logo: "https://picsum.photos/seed/smart/48/48",
                   },
-                ].map((company, i) => (
+                ].map((company) => (
                   <div
-                    key={i}
+                    key={company.name}
                     className="bg-white p-6 rounded-2xl border border-[#3b82f6]/30 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
                   >
                     <div className="absolute top-0 right-0 bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-bl-lg flex items-center gap-1">
-                      ★ {company.rating}
+                      ? {company.rating}
                     </div>
                     <img
                       src={company.logo}
@@ -226,7 +346,6 @@ export default function Companies() {
               </div>
             </div>
 
-            {/* All Companies List */}
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">84 Companies found</h2>
@@ -241,60 +360,9 @@ export default function Companies() {
               </div>
 
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[
-                  {
-                    name: "Chip Mong Group",
-                    industry: "CONGLOMERATE",
-                    location: "Phnom Penh",
-                    desc: "Diversified business portfolio including construction, consumer...",
-                    openings: 8,
-                    rating: 4.5,
-                    tags: ["Construction", "Retail"],
-                    logo: "https://picsum.photos/seed/chipmong/40/40",
-                  },
-                  {
-                    name: "Sabay Digital",
-                    industry: "TECHNOLOGY / MEDIA",
-                    location: "Phnom Penh",
-                    desc: "Pioneering digital entertainment and content platform in the...",
-                    openings: 4,
-                    rating: 4.2,
-                    tags: ["Digital Media", "Gaming"],
-                    logo: "https://picsum.photos/seed/sabay/40/40",
-                  },
-                  {
-                    name: "Mango Tango Asia",
-                    industry: "CREATIVE AGENCY",
-                    location: "Siem Reap",
-                    desc: "Innovative advertising and marketing agency specializing in...",
-                    openings: 2,
-                    rating: 4.9,
-                    tags: ["Advertising", "Design"],
-                    logo: "https://picsum.photos/seed/mango/40/40",
-                  },
-                  {
-                    name: "KPMG Cambodia",
-                    industry: "ACCOUNTING / AUDIT",
-                    location: "Phnom Penh",
-                    desc: "Global network of professional firms providing Audit, Tax and Advisory...",
-                    openings: 12,
-                    rating: 4.7,
-                    tags: ["Finance", "Audit"],
-                    logo: "https://picsum.photos/seed/kpmg/40/40",
-                  },
-                  {
-                    name: "Khmer Beverages",
-                    industry: "MANUFACTURING",
-                    location: "Phnom Penh",
-                    desc: "Leading brewery and beverage manufacturer committed to qualit...",
-                    openings: 0,
-                    rating: null,
-                    tags: ["FMCG"],
-                    logo: "https://picsum.photos/seed/khmerbev/40/40",
-                  },
-                ].map((company, i) => (
+                {paginatedCompanies.map((company) => (
                   <div
-                    key={i}
+                    key={company.name}
                     className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full"
                   >
                     <div className="flex justify-between items-start mb-4">
@@ -305,11 +373,11 @@ export default function Companies() {
                       />
                       {company.rating ? (
                         <div className="bg-yellow-50 text-yellow-700 text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                          ★ {company.rating}
+                          ? {company.rating}
                         </div>
                       ) : (
                         <div className="bg-gray-100 text-gray-500 text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                          ★ -
+                          ? -
                         </div>
                       )}
                     </div>
@@ -346,28 +414,48 @@ export default function Companies() {
                 ))}
               </div>
 
-              {/* Pagination */}
               <div className="flex justify-center items-center gap-2 mt-12">
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <span className="sr-only">Previous</span>
-                  &lt;
+                  <span aria-hidden="true">&lt;</span>
                 </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#3b82f6] text-[#111816] font-bold">
-                  1
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  2
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  3
-                </button>
-                <span className="text-gray-400">...</span>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  8
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+                {visiblePages.map((page) => {
+                  if (typeof page !== "number") {
+                    return (
+                      <span key={page} className="px-1 text-gray-400 select-none">
+                        ...
+                      </span>
+                    );
+                  }
+                  const isActive = page === currentPage;
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => goToPage(page)}
+                      className={`w-10 h-10 flex items-center justify-center rounded-lg font-medium transition-colors ${
+                        isActive
+                          ? "bg-[#3b82f6] text-[#111816] font-bold"
+                          : "hover:bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <span className="sr-only">Next</span>
-                  &gt;
+                  <span aria-hidden="true">&gt;</span>
                 </button>
               </div>
             </div>

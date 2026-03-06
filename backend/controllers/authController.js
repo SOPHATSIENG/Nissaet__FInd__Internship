@@ -778,3 +778,4 @@ module.exports = {
     getCurrentUser,
     getSkills
 };
+

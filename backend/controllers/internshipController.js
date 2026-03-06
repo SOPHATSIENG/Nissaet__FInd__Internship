@@ -37,6 +37,86 @@ const getAllInternships = async (req, res) => {
             sort = 'recent'
         } = req.query;
 
+        let whereClause = "WHERE i.status = 'active'";
+        const params = [];
+
+        // Keyword Search
+        if (search) {
+            whereClause += ` AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)`;
+            const searchVal = `%${search}%`;
+            params.push(searchVal, searchVal, searchVal);
+        }
+
+        // Location Filter
+        if (location) {
+            whereClause += ` AND (i.location LIKE ? OR c.headquarters LIKE ?)`;
+            const locVal = `%${location}%`;
+            params.push(locVal, locVal);
+        }
+
+        // Type Filter
+        if (type && type !== 'all') {
+            whereClause += ` AND i.type = ?`;
+            params.push(type);
+        }
+
+        // Work Mode Filters
+        if (remote === 'true' || remote === '1') {
+            whereClause += ` AND i.is_remote = 1`;
+        }
+        if (hybrid === 'true' || hybrid === '1') {
+            whereClause += ` AND i.is_hybrid = 1`;
+        }
+
+        // Stipend / Salary Filters
+        if (min_stipend) {
+            whereClause += ` AND i.stipend >= ?`;
+            params.push(Number(min_stipend));
+        }
+        if (max_stipend) {
+            whereClause += ` AND i.stipend <= ?`;
+            params.push(Number(max_stipend));
+        }
+
+        // Skill Filters
+        if (skills) {
+            const skillIds = String(skills).split(',').map(id => Number(id)).filter(id => !isNaN(id));
+            if (skillIds.length > 0) {
+                whereClause += ` AND i.id IN (
+                    SELECT internship_id FROM internship_skills 
+                    WHERE skill_id IN (${skillIds.map(() => '?').join(',')})
+                )`;
+                params.push(...skillIds);
+            }
+        }
+
+        // Get total count first
+        const countSql = `
+            SELECT COUNT(*) as total 
+            FROM internships i
+            JOIN companies c ON i.company_id = c.id
+            ${whereClause}
+        `;
+        const countResult = await db.query(countSql, params);
+        const total = countResult[0].total;
+
+        // Sorting
+        let orderBy = "ORDER BY i.created_at DESC";
+        switch (sort) {
+            case 'salary_desc':
+                orderBy = ` ORDER BY i.stipend DESC, i.created_at DESC`;
+                break;
+            case 'salary_asc':
+                orderBy = ` ORDER BY i.stipend ASC, i.created_at DESC`;
+                break;
+            case 'popular':
+                orderBy = ` ORDER BY i.applications_count DESC, i.created_at DESC`;
+                break;
+            case 'recent':
+            default:
+                orderBy = ` ORDER BY i.created_at DESC`;
+        }
+
         let sql = `
             SELECT
                 i.*,
@@ -51,84 +131,16 @@ const getAllInternships = async (req, res) => {
                 END AS work_mode
             FROM internships i
             JOIN companies c ON i.company_id = c.id
-            WHERE i.status = 'active'
+            ${whereClause}
+            ${orderBy}
+            LIMIT ? OFFSET ?
         `;
         
-        const params = [];
-
-        // Keyword Search
-        if (search) {
-            sql += ` AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)`;
-            const searchVal = `%${search}%`;
-            params.push(searchVal, searchVal, searchVal);
-        }
-
-        // Location Filter
-        if (location) {
-            sql += ` AND (i.location LIKE ? OR c.headquarters LIKE ?)`;
-            const locVal = `%${location}%`;
-            params.push(locVal, locVal);
-        }
-
-        // Type Filter
-        if (type) {
-            sql += ` AND i.type = ?`;
-            params.push(type);
-        }
-
-        // Work Mode Filters
-        if (remote === 'true' || remote === '1') {
-            sql += ` AND i.is_remote = 1`;
-        }
-        if (hybrid === 'true' || hybrid === '1') {
-            sql += ` AND i.is_hybrid = 1`;
-        }
-
-        // Stipend / Salary Filters
-        if (min_stipend) {
-            sql += ` AND i.stipend >= ?`;
-            params.push(Number(min_stipend));
-        }
-        if (max_stipend) {
-            sql += ` AND i.stipend <= ?`;
-            params.push(Number(max_stipend));
-        }
-
-        // Skill Filters (Join with internship_skills)
-        if (skills) {
-            const skillIds = String(skills).split(',').map(id => Number(id)).filter(id => !isNaN(id));
-            if (skillIds.length > 0) {
-                sql += ` AND i.id IN (
-                    SELECT internship_id FROM internship_skills 
-                    WHERE skill_id IN (${skillIds.map(() => '?').join(',')})
-                )`;
-                params.push(...skillIds);
-            }
-        }
-
-        // Sorting
-        switch (sort) {
-            case 'salary_desc':
-                sql += ` ORDER BY i.stipend DESC, i.created_at DESC`;
-                break;
-            case 'salary_asc':
-                sql += ` ORDER BY i.stipend ASC, i.created_at DESC`;
-                break;
-            case 'popular':
-                sql += ` ORDER BY i.applications_count DESC, i.created_at DESC`;
-                break;
-            case 'recent':
-            default:
-                sql += ` ORDER BY i.created_at DESC`;
-        }
-
-        // Pagination
-        sql += ` LIMIT ? OFFSET ?`;
-        params.push(Number.parseInt(limit, 10), Number.parseInt(offset, 10));
+        const queryParams = [...params, Number.parseInt(limit, 10), Number.parseInt(offset, 10)];
 
         let internships;
         try {
-            internships = await db.query(sql, params);
+            internships = await db.query(sql, queryParams);
         } catch (error) {
             if (!isBadFieldError(error)) throw error;
             
@@ -143,20 +155,14 @@ const getAllInternships = async (req, res) => {
                 FROM internships i
                 JOIN companies c ON i.company_id = c.id
                 WHERE (i.is_active = 1 OR i.status = 'active')
+                ORDER BY i.created_at DESC LIMIT ?
             `;
-            const fallbackParams = [];
-            if (search) {
-                fallbackSql += ` AND (i.title LIKE ? OR c.company_name LIKE ?)`;
-                fallbackParams.push(`%${search}%`, `%${search}%`);
-            }
-            fallbackSql += ` ORDER BY i.created_at DESC LIMIT ?`;
-            fallbackParams.push(Number.parseInt(limit, 10));
-            
-            internships = await db.query(fallbackSql, fallbackParams);
+            internships = await db.query(fallbackSql, [Number.parseInt(limit, 10)]);
         }
 
         return res.json({ 
             success: true,
+            total,
             count: internships.length,
             internships 
         });
@@ -504,7 +510,31 @@ const getAllCompanies = async (req, res) => {
             offset = 0
         } = req.query;
 
-        let sql = `
+        let whereClause = "WHERE 1=1";
+        const params = [];
+
+        if (search) {
+            whereClause += ` AND (c.name LIKE ? OR c.description LIKE ? OR c.industry LIKE ?)`;
+            const searchVal = `%${search}%`;
+            params.push(searchVal, searchVal, searchVal);
+        }
+
+        if (location) {
+            whereClause += ` AND c.headquarters LIKE ?`;
+            params.push(`%${location}%`);
+        }
+
+        if (industry && industry !== 'all') {
+            whereClause += ` AND c.industry = ?`;
+            params.push(industry);
+        }
+
+        // Get total count
+        const countSql = `SELECT COUNT(*) as total FROM companies c ${whereClause}`;
+        const countResult = await db.query(countSql, params);
+        const total = countResult[0].total;
+
+        const sql = `
             SELECT
                 c.id,
                 c.name AS company_name,
@@ -517,33 +547,21 @@ const getAllCompanies = async (req, res) => {
                 COUNT(i.id) AS open_positions
             FROM companies c
             LEFT JOIN internships i ON i.company_id = c.id AND i.status = 'active'
-            WHERE 1=1
+            ${whereClause}
+            GROUP BY c.id 
+            ORDER BY c.is_verified DESC, c.name ASC 
+            LIMIT ? OFFSET ?
         `;
         
-        const params = [];
+        const queryParams = [...params, Number.parseInt(limit, 10), Number.parseInt(offset, 10)];
+        const companies = await db.query(sql, queryParams);
 
-        if (search) {
-            sql += ` AND (c.name LIKE ? OR c.description LIKE ? OR c.industry LIKE ?)`;
-            const searchVal = `%${search}%`;
-            params.push(searchVal, searchVal, searchVal);
-        }
-
-        if (location) {
-            sql += ` AND c.headquarters LIKE ?`;
-            params.push(`%${location}%`);
-        }
-
-        if (industry) {
-            sql += ` AND c.industry = ?`;
-            params.push(industry);
-        }
-
-        sql += ` GROUP BY c.id ORDER BY c.is_verified DESC, c.name ASC LIMIT ? OFFSET ?`;
-        params.push(Number.parseInt(limit, 10), Number.parseInt(offset, 10));
-
-        const companies = await db.query(sql, params);
-
-        return res.json({ success: true, companies });
+        return res.json({ 
+            success: true, 
+            total,
+            count: companies.length,
+            companies 
+        });
     } catch (error) {
         console.error('Error fetching companies:', error);
         return res.status(500).json({ success: false, message: 'Server error' });

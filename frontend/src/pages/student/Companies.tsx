@@ -1,6 +1,6 @@
-import { Search, MapPin, Building2, Map, Users, Loader2, AlertCircle } from "lucide-react";
+import { Search, MapPin, Building2, Map, Users, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 
 interface Company {
@@ -16,35 +16,51 @@ interface Company {
 }
 
 export default function Companies() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [featuredCompanies, setFeaturedCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  
-  // Filters
-  const [searchTerm, setSearchTerm] = useState("");
-  const [locationTerm, setLocationTerm] = useState("");
-  const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState("All Locations");
-  
+  const [totalFound, setTotalFound] = useState(0);
+
+  // Filter values from URL
+  const query = searchParams.get("search") || "";
+  const location = searchParams.get("location") || "";
+  const industry = searchParams.get("industry") || "all";
+  const page = parseInt(searchParams.get("page") || "1", 10);
+
+  // Local input state
+  const [searchInput, setSearchInput] = useState(query);
+  const [locationInput, setLocationInput] = useState(location);
+
+  // Sync inputs when URL changes
+  useEffect(() => {
+    setSearchInput(query);
+    setLocationInput(location);
+  }, [query, location]);
+
   const fetchCompanies = useCallback(async () => {
     try {
       setLoading(true);
+      setError("");
+      
       const params: any = {
         limit: 12,
-        search: searchTerm || undefined,
-        location: (selectedLocation !== "All Locations" ? selectedLocation : locationTerm) || undefined,
-        industry: selectedIndustry || undefined,
+        offset: (page - 1) * 12,
+        search: query || undefined,
+        location: location || undefined,
+        industry: industry !== 'all' ? industry : undefined,
       };
 
-      const response = await api.request(`/internships/companies?${new URLSearchParams(params).toString()}`);
+      const response = await api.getCompanies(params);
       setCompanies(response.companies || []);
+      setTotalFound(response.total || response.count || 0);
     } catch (err) {
       setError("Failed to fetch companies. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, locationTerm, selectedLocation, selectedIndustry]);
+  }, [query, location, industry, page]);
 
   useEffect(() => {
     fetchCompanies();
@@ -62,9 +78,24 @@ export default function Companies() {
     fetchFeatured();
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const updateFilters = (updates: Record<string, string | number | null>) => {
+    const newParams = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === "" || value === "all") {
+        newParams.delete(key);
+      } else {
+        newParams.set(key, String(value));
+      }
+    });
+    if (!updates.page) {
+      newParams.delete("page");
+    }
+    setSearchParams(newParams);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchCompanies();
+    updateFilters({ search: searchInput, location: locationInput });
   };
 
   const industries = [
@@ -90,15 +121,15 @@ export default function Companies() {
           </p>
 
           {/* Search Bar */}
-          <form onSubmit={handleSearch} className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-2 max-w-4xl mx-auto text-left">
+          <form onSubmit={handleSearchSubmit} className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-2 max-w-4xl mx-auto text-left">
             <div className="flex-1 flex items-center px-4 py-2">
               <Building2 className="w-5 h-5 text-gray-400 mr-3" />
               <input
                 type="text"
                 placeholder="Search by company name..."
                 className="w-full outline-none text-gray-700 bg-transparent"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
               />
             </div>
             <div className="hidden md:block w-px bg-gray-200 my-2"></div>
@@ -108,8 +139,8 @@ export default function Companies() {
                 type="text"
                 placeholder="Location"
                 className="w-full outline-none text-gray-700 bg-transparent"
-                value={locationTerm}
-                onChange={(e) => setLocationTerm(e.target.value)}
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
               />
             </div>
             <button type="submit" className="bg-[#111816] hover:bg-gray-800 text-white font-bold px-8 py-3 rounded-lg transition-colors w-full md:w-auto">
@@ -124,9 +155,9 @@ export default function Companies() {
             {industries.slice(0, 4).map((ind) => (
               <span
                 key={ind}
-                onClick={() => setSelectedIndustry(ind)}
+                onClick={() => updateFilters({ industry: ind })}
                 className={`px-4 py-1.5 border rounded-full cursor-pointer transition-colors ${
-                  selectedIndustry === ind
+                  industry === ind
                     ? "bg-[#3b82f6] text-white border-[#3b82f6]"
                     : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
                 }`}
@@ -134,8 +165,8 @@ export default function Companies() {
                 {ind}
               </span>
             ))}
-            {selectedIndustry && (
-               <button onClick={() => setSelectedIndustry(null)} className="text-[#3b82f6] text-xs font-bold ml-2">Clear Filter</button>
+            {industry !== 'all' && (
+               <button onClick={() => updateFilters({ industry: 'all' })} className="text-[#3b82f6] text-xs font-bold ml-2 underline">Clear Filter</button>
             )}
           </div>
         </div>
@@ -151,6 +182,16 @@ export default function Companies() {
                 <Building2 className="w-5 h-5 text-[#3b82f6]" /> Industry
               </h3>
               <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="industry-filter"
+                    checked={industry === 'all'}
+                    onChange={() => updateFilters({ industry: 'all' })}
+                    className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
+                  />
+                  <span className="text-gray-600 group-hover:text-gray-900">All Industries</span>
+                </label>
                 {industries.map((ind) => (
                   <label
                     key={ind}
@@ -158,9 +199,9 @@ export default function Companies() {
                   >
                     <input
                       type="radio"
-                      name="industry"
-                      checked={selectedIndustry === ind}
-                      onChange={() => setSelectedIndustry(ind)}
+                      name="industry-filter"
+                      checked={industry === ind}
+                      onChange={() => updateFilters({ industry: ind })}
                       className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
                     <span className="text-gray-600 group-hover:text-gray-900">
@@ -183,9 +224,9 @@ export default function Companies() {
                   >
                     <input
                       type="radio"
-                      name="location"
-                      checked={selectedLocation === loc}
-                      onChange={() => setSelectedLocation(loc)}
+                      name="location-filter"
+                      checked={(location === "" && loc === "All Locations") || location === loc}
+                      onChange={() => updateFilters({ location: loc === "All Locations" ? "" : loc })}
                       className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
                     <span className="text-gray-600 group-hover:text-gray-900">
@@ -200,7 +241,7 @@ export default function Companies() {
           {/* Results Area */}
           <div className="flex-1">
             {/* Featured Employers */}
-            {featuredCompanies.length > 0 && (
+            {featuredCompanies.length > 0 && !query && !location && industry === 'all' && page === 1 && (
               <div className="mb-12">
                 <div className="flex justify-between items-end mb-6">
                   <h2 className="text-2xl font-bold">Featured Employers</h2>
@@ -251,7 +292,7 @@ export default function Companies() {
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
-                   {loading ? "Searching..." : `${companies.length} Companies found`}
+                   {loading ? "Searching..." : `${totalFound} Companies found`}
                 </h2>
               </div>
 
@@ -268,54 +309,79 @@ export default function Companies() {
                    <p>Loading companies...</p>
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {companies.map((company) => (
-                    <div
-                      key={company.id}
-                      className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full"
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <img
-                          src={company.logo || `https://picsum.photos/seed/logo-${company.id}/40/40`}
-                          alt={company.company_name}
-                          className="w-10 h-10 rounded-lg object-cover"
-                        />
-                        {company.is_verified && (
-                          <div className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-1 rounded">
-                            VERIFIED
-                          </div>
+                <>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {companies.map((company) => (
+                      <div
+                        key={company.id}
+                        className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full"
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <img
+                            src={company.logo || `https://picsum.photos/seed/logo-${company.id}/40/40`}
+                            alt={company.company_name}
+                            className="w-10 h-10 rounded-lg object-cover"
+                          />
+                          {company.is_verified && (
+                            <div className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-1 rounded">
+                              VERIFIED
+                            </div>
+                          )}
+                        </div>
+                        <h3 className="font-bold text-lg mb-1">{company.company_name}</h3>
+                        <p className="text-xs text-gray-400 font-bold tracking-wider mb-2 uppercase">
+                          {company.industry || 'General'}
+                        </p>
+                        <div className="flex items-center gap-1 text-sm text-gray-500 mb-3">
+                          <MapPin className="w-3.5 h-3.5" /> {company.location || 'Cambodia'}
+                        </div>
+                        <p className="text-gray-600 text-sm mb-4 line-clamp-2 flex-grow">
+                          {company.description || "Leading company in Cambodia offering internship opportunities."}
+                        </p>
+                        
+                        {company.open_positions > 0 ? (
+                          <Link to={`/internships?search=${encodeURIComponent(company.company_name)}`} className="w-full text-center bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#2563eb] font-bold py-2.5 rounded-xl text-sm transition-colors">
+                            View {company.open_positions} Openings
+                          </Link>
+                        ) : (
+                          <button className="w-full bg-gray-50 text-gray-400 font-bold py-2.5 rounded-xl text-sm cursor-not-allowed">
+                            No Current Openings
+                          </button>
                         )}
                       </div>
-                      <h3 className="font-bold text-lg mb-1">{company.company_name}</h3>
-                      <p className="text-xs text-gray-400 font-bold tracking-wider mb-2 uppercase">
-                        {company.industry || 'General'}
-                      </p>
-                      <div className="flex items-center gap-1 text-sm text-gray-500 mb-3">
-                        <MapPin className="w-3.5 h-3.5" /> {company.location || 'Cambodia'}
-                      </div>
-                      <p className="text-gray-600 text-sm mb-4 line-clamp-2 flex-grow">
-                        {company.description || "Leading company in Cambodia offering internship opportunities."}
-                      </p>
-                      
-                      {company.open_positions > 0 ? (
-                        <Link to={`/internships?search=${company.company_name}`} className="w-full text-center bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#2563eb] font-bold py-2.5 rounded-xl text-sm transition-colors">
-                          View {company.open_positions} Openings
-                        </Link>
-                      ) : (
-                        <button className="w-full bg-gray-50 text-gray-400 font-bold py-2.5 rounded-xl text-sm cursor-not-allowed">
-                          No Current Openings
-                        </button>
-                      )}
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalFound > 12 && (
+                    <div className="flex justify-center items-center gap-2 mt-12">
+                      <button 
+                        disabled={page === 1}
+                        onClick={() => updateFilters({ page: page - 1 })}
+                        className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <span className="text-gray-600 font-medium px-4">
+                        Page {page} of {Math.ceil(totalFound / 12)}
+                      </span>
+                      <button 
+                        disabled={page >= Math.ceil(totalFound / 12)}
+                        onClick={() => updateFilters({ page: page + 1 })}
+                        className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
 
               {!loading && !companies.length && (
                 <div className="bg-white p-12 rounded-2xl border border-dashed border-gray-200 text-center">
                   <p className="text-gray-500">No companies found matching your criteria.</p>
                   <button 
-                    onClick={() => { setSearchTerm(""); setLocationTerm(""); setSelectedLocation("All Locations"); setSelectedIndustry(null); }}
+                    onClick={() => setSearchParams({})}
                     className="mt-4 text-[#3b82f6] font-bold hover:underline"
                   >
                     Clear all filters

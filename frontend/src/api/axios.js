@@ -135,6 +135,27 @@ export const api = {
     return request('/profile/security/two-factor', { method: 'PUT', auth: true, body: payload });
   },
 
+  getInternshipById(id) {
+    return request(`/internships/${id}`).then((data) => {
+      return data;
+    });
+  },
+
+  getCompanies(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/internships/companies${query ? `?${query}` : ''}`).then((data) => {
+      if (Array.isArray(data)) {
+        return { companies: data };
+      }
+      return data;
+    });
+  },
+
   getInternships(params = {}) {
     const query = new URLSearchParams(
       Object.entries(params)

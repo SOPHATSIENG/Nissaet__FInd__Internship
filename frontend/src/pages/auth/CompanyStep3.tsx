@@ -59,7 +59,7 @@ export function CompanyStep3() {
         role: 'company',
         company_name: step2.company_name || step1.company_name,
       });
-      navigate('/');
+      navigate('/company');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Registration failed.');
     } finally {

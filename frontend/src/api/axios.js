@@ -155,6 +155,15 @@ export const api = {
     });
   },
 
+  getRecommendedInternships() {
+    return request('/internships/student/recommended', { auth: true }).then((data) => {
+      if (Array.isArray(data)) {
+        return { internships: data };
+      }
+      return data;
+    });
+  },
+
   // FIXED: dynamic skill lookup for registration step 3.
   getSkills(params = {}) {
     const query = new URLSearchParams(

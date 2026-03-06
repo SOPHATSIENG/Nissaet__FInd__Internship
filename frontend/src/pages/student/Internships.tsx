@@ -45,6 +45,16 @@ export default function Internships() {
   const [internships, setInternships] = useState<InternshipApiItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const goToPage = (page: number) => {
+    const totalPages = Math.ceil(filteredCards.length / itemsPerPage);
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -116,6 +126,45 @@ export default function Internships() {
   }, [cards, query, locationQuery]);
 
   const recommendedInternships = filteredCards.slice(0, 2);
+
+  const totalPages = Math.ceil(filteredCards.length / itemsPerPage);
+
+  const paginatedCards = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredCards.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredCards, currentPage, itemsPerPage]);
+
+  const visiblePages = useMemo(() => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    if (start > 1) {
+      pages.push(1);
+      if (start > 2) pages.push("...");
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+
+    if (end < totalPages) {
+      if (end < totalPages - 1) pages.push("...");
+      pages.push(totalPages);
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, locationQuery]);
 
   return (
     <div className="flex flex-col">
@@ -319,7 +368,7 @@ export default function Internships() {
                     No internships found.
                   </div>
                 ) : (
-                  filteredCards.map((job) => (
+                  paginatedCards.map((job) => (
                     <div
                       key={job.id}
                       className={`bg-white p-6 rounded-2xl border ${

@@ -18,24 +18,27 @@ const getAllInternships = async (req, res) => {
                 i.description,
                 i.requirements,
                 i.location,
-                i.work_mode,
-                i.duration,
-                i.salary_type,
-                i.salary_min,
-                i.salary_max,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary_min,
+                i.stipend AS salary_max,
+                CASE 
+                    WHEN i.stipend > 0 THEN 'paid'
+                    ELSE 'unpaid'
+                END AS salary_type,
                 i.positions,
-                i.deadline,
-                i.is_active,
-                i.views,
+                i.application_deadline AS deadline,
+                i.status AS is_active,
+                i.views_count AS views,
                 i.applications_count,
                 i.created_at,
                 i.updated_at,
-                c.company_name,
-                c.location AS company_location,
+                c.name AS company_name,
+                c.headquarters AS company_location,
                 c.logo AS company_logo
              FROM internships i
              JOIN companies c ON i.company_id = c.id
-             WHERE i.is_active = 1
+             WHERE i.status = 'active'
              ORDER BY i.created_at DESC
              ${limit ? `LIMIT ${limit}` : ''}`
         );
@@ -55,18 +58,17 @@ const getFeaturedCompanies = async (req, res) => {
         const companies = await db.query(
             `SELECT
                 c.id,
-                c.company_name,
+                c.name AS company_name,
                 c.description,
                 c.logo,
-                c.location,
-                c.rating,
+                c.headquarters AS location,
                 COUNT(i.id) AS open_positions
              FROM companies c
              LEFT JOIN internships i
                 ON i.company_id = c.id
-                AND i.is_active = 1
-             GROUP BY c.id, c.company_name, c.description, c.logo, c.location, c.rating
-             ORDER BY open_positions DESC, c.rating DESC, c.company_name ASC
+                AND i.status = 'active'
+             GROUP BY c.id, c.name, c.description, c.logo, c.headquarters
+             ORDER BY open_positions DESC, c.name ASC
              LIMIT ${limit}`
         );
 
@@ -83,15 +85,36 @@ const getInternshipById = async (req, res) => {
 
         const internships = await db.query(
             `SELECT
-                i.*,
-                c.company_name,
-                c.location AS company_location,
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.responsibilities,
+                i.benefits,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend,
+                i.stipend_currency,
+                i.application_deadline AS deadline,
+                i.start_date,
+                i.end_date,
+                i.status,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
                 c.description AS company_description,
                 c.logo AS company_logo,
-                c.website AS company_website
+                c.website AS company_website,
+                c.industry AS company_industry,
+                c.company_size
              FROM internships i
              JOIN companies c ON i.company_id = c.id
-             WHERE i.id = ? AND i.is_active = 1`,
+             WHERE i.id = ? AND i.status = 'active'`,
             [id]
         );
 
@@ -113,13 +136,14 @@ const createInternship = async (req, res) => {
             description,
             requirements,
             location,
-            work_mode = 'On-site',
-            duration,
-            salary_type = 'unpaid',
-            salary_min,
-            salary_max,
+            type = 'full-time',
+            duration_months,
+            stipend = 0,
+            stipend_currency = 'USD',
             positions = 1,
-            deadline
+            application_deadline,
+            start_date,
+            end_date
         } = req.body;
 
         let companyId = req.body.company_id;
@@ -128,29 +152,30 @@ const createInternship = async (req, res) => {
             companyId = await getCompanyIdByUserId(req.user.userId);
         }
 
-        if (!companyId || !title || !description || !location || !duration || !deadline) {
+        if (!companyId || !title || !description || !location || !duration_months || !application_deadline) {
             return res.status(400).json({ message: 'Required fields are missing' });
         }
 
         const result = await db.query(
             `INSERT INTO internships (
                 company_id, title, description, requirements, location,
-                work_mode, duration, salary_type, salary_min, salary_max,
-                positions, deadline
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                type, duration_months, stipend, stipend_currency,
+                positions, application_deadline, start_date, end_date, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
             [
                 companyId,
                 title,
                 description,
                 requirements || null,
                 location,
-                work_mode,
-                duration,
-                salary_type,
-                salary_min || null,
-                salary_max || null,
+                type,
+                duration_months,
+                stipend,
+                stipend_currency,
                 positions,
-                deadline
+                application_deadline,
+                start_date || null,
+                end_date || null
             ]
         );
 

@@ -97,6 +97,24 @@ export function PersonalTab({data, onSaved}: PersonalTabProps) {
     setStatus('');
     setError('');
     try {
+      if (dob) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+          setError('Date of birth must be a valid date.');
+          return;
+        }
+        const parsed = new Date(`${dob}T00:00:00`);
+        if (Number.isNaN(parsed.getTime())) {
+          setError('Date of birth must be a valid date.');
+          return;
+        }
+        const today = new Date();
+        const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        if (parsed > todayMidnight) {
+          setError('Date of birth cannot be in the future.');
+          return;
+        }
+      }
+
       const fullName = `${firstName} ${lastName}`.trim();
       const response = await api.updatePersonalSettings({
         full_name: fullName,

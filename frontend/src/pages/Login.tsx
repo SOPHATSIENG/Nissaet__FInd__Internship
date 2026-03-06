@@ -6,6 +6,8 @@ import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 
 export function Login() {
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+
   return (
     <SplitLayout
       layoutType="login"
@@ -40,9 +42,10 @@ export function Login() {
         />
         
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-slate-700">Password</label>
+          <label htmlFor="password" className="text-sm font-medium text-slate-700">Password</label>
           <div className="relative">
             <input
+              id="password"
               type="password"
               className="block w-full rounded-lg border-0 bg-white py-3 pl-4 pr-10 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#137fec] sm:text-sm sm:leading-6 transition-all"
               placeholder="Enter your password"
@@ -61,9 +64,9 @@ export function Login() {
             />
             <span className="text-sm text-slate-600">Remember me</span>
           </label>
-          <a href="#" className="text-sm font-medium text-[#137fec] hover:text-[#137fec]/80 hover:underline">
+          <Link to="/forgot-password" className="text-sm font-medium text-[#137fec] hover:text-[#137fec]/80 hover:underline">
             Forgot Password?
-          </a>
+          </Link>
         </div>
 
         <Button type="button" className="mt-2 w-full">
@@ -84,6 +87,9 @@ export function Login() {
 
       <button
         type="button"
+        onClick={() => {
+          window.location.href = `${backendUrl}/api/auth/google`;
+        }}
         className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -107,6 +113,19 @@ export function Login() {
         <span className="truncate">Continue with Google</span>
       </button>
 
+      <button
+        type="button"
+        onClick={() => {
+          window.location.href = `${backendUrl}/api/auth/github`;
+        }}
+        className="mt-3 flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
+      >
+        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.85 10.91.57.11.78-.25.78-.55 0-.27-.01-.99-.02-1.94-3.19.69-3.86-1.54-3.86-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.33.95.1-.74.4-1.24.72-1.52-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.09-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11.03 11.03 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.83 1.18 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.08.78 2.18 0 1.57-.01 2.84-.01 3.23 0 .3.2.66.79.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z" />
+        </svg>
+        <span className="truncate">Continue with GitHub</span>
+      </button>
+
       <p className="mt-8 text-center text-sm text-slate-500">
         Don't have an account?{' '}
         <Link to="/register" className="font-semibold text-[#137fec] transition-colors hover:text-[#137fec]/80 hover:underline">
@@ -115,9 +134,9 @@ export function Login() {
       </p>
 
       <div className="mt-12 flex items-center justify-center gap-6 text-xs text-slate-400">
-        <a href="#" className="hover:text-slate-600">Privacy Policy</a>
-        <a href="#" className="hover:text-slate-600">Terms of Service</a>
-        <a href="#" className="hover:text-slate-600">Help Center</a>
+        <Link to="/privacy-policy" className="hover:text-slate-600">Privacy Policy</Link>
+        <Link to="/terms" className="hover:text-slate-600">Terms of Service</Link>
+        <Link to="/help-center" className="hover:text-slate-600">Help Center</Link>
       </div>
     </SplitLayout>
   );

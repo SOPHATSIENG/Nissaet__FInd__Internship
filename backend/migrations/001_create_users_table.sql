@@ -1,0 +1,25 @@
+-- Create users table
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255),
+    phone VARCHAR(20),
+    dob DATE,
+    address TEXT,
+    education VARCHAR(100),
+    university VARCHAR(255),
+    graduation_year INT,
+    bio TEXT,
+    cv_url VARCHAR(255),
+    company_name VARCHAR(255),
+    industry VARCHAR(100),
+    location VARCHAR(255),
+    website VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_email (email),
+    INDEX idx_university (university),
+    INDEX idx_industry (industry),
+    INDEX idx_location (location),
+    INDEX idx_graduation_year (graduation_year)
+);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, User, Mail, Lock, Key } from 'lucide-react';
+import { ArrowRight, User, Mail, Lock, Key, Building2 } from 'lucide-react';
 import { SplitLayout } from '../components/SplitLayout';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
@@ -9,8 +9,9 @@ import { RoleSelector, Role } from '../components/RoleSelector';
 export function Register() {
   const [role, setRole] = useState<Role>('student');
   const navigate = useNavigate();
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-  const handleNext = (e: React.FormEvent) => {
+  const handleNext = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     navigate(`/register/${role}/step-2`);
   };
@@ -46,7 +47,7 @@ export function Register() {
             label="Company Name"
             placeholder="Acme Inc."
             required
-            icon={BuildingIcon}
+            icon={Building2}
           />
         ) : null}
 
@@ -96,7 +97,7 @@ export function Register() {
           </div>
           <div className="ml-3 text-sm leading-6">
             <label htmlFor="terms" className="font-medium text-slate-700">
-              I agree to the <a href="#" className="font-bold text-[#137fec] hover:text-[#137fec]/80">Terms of Service</a> and <a href="#" className="font-bold text-[#137fec] hover:text-[#137fec]/80">Privacy Policy</a>.
+              I agree to the <a href="/terms" className="font-bold text-[#137fec] hover:text-[#137fec]/80">Terms of Service</a> and <a href="/privacy-policy" className="font-bold text-[#137fec] hover:text-[#137fec]/80">Privacy Policy</a>.
             </label>
           </div>
         </div>
@@ -118,7 +119,13 @@ export function Register() {
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4">
-        <button className="flex w-full items-center justify-center gap-3 rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 transition-all">
+        <button 
+          type="button"
+          onClick={() => {
+            window.location.href = `${backendUrl}/api/auth/google`;
+          }}
+          className="flex w-full items-center justify-center gap-3 rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 transition-all"
+        >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
@@ -127,7 +134,13 @@ export function Register() {
           </svg>
           Google
         </button>
-        <button className="flex w-full items-center justify-center gap-3 rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 transition-all">
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = `${backendUrl}/api/auth/github`;
+          }}
+          className="flex w-full items-center justify-center gap-3 rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 transition-all"
+        >
           <svg className="h-5 w-5 fill-[#24292F]" viewBox="0 0 24 24">
             <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
           </svg>
@@ -138,29 +151,3 @@ export function Register() {
   );
 }
 
-const BuildingIcon = (props: any) => (
-  <svg
-    {...props}
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect width="16" height="20" x="4" y="2" rx="2" ry="2" />
-    <path d="M9 22v-4h6v4" />
-    <path d="M8 6h.01" />
-    <path d="M16 6h.01" />
-    <path d="M12 6h.01" />
-    <path d="M12 10h.01" />
-    <path d="M12 14h.01" />
-    <path d="M16 10h.01" />
-    <path d="M16 14h.01" />
-    <path d="M8 10h.01" />
-    <path d="M8 14h.01" />
-  </svg>
-);

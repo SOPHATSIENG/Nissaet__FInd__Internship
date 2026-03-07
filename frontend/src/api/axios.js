@@ -174,6 +174,10 @@ export const api = {
       return data;
     });
   },
+
+  createInternship(payload) {
+    return request('/internships', { method: 'POST', auth: true, body: payload });
+  },
 };
 
 export default api;

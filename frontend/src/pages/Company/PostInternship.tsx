@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
+import api from '../../api/axios';
 
 export default function PostInternship() {
   const { id } = useParams();
@@ -36,6 +37,7 @@ export default function PostInternship() {
     deadline: ''
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   useEffect(() => {
@@ -62,6 +64,72 @@ export default function PostInternship() {
     console.log(`Deleting internship post with ID: ${id}`);
     setIsDeleteModalOpen(false);
     navigate('/company');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Validation
+      if (!formData.title.trim()) {
+        alert('Please enter an internship title');
+        return;
+      }
+      if (!formData.description.trim()) {
+        alert('Please enter a job description');
+        return;
+      }
+      if (!formData.duration) {
+        alert('Please enter the duration');
+        return;
+      }
+      if (!formData.deadline) {
+        alert('Please select an application deadline');
+        return;
+      }
+      if (formData.salaryType === 'paid') {
+        const minSalary = parseFloat(formData.minSalary) || 0;
+        const maxSalary = parseFloat(formData.maxSalary) || 0;
+        if (minSalary > 0 && maxSalary > 0 && minSalary > maxSalary) {
+          alert('Minimum salary cannot be greater than maximum salary');
+          return;
+        }
+      }
+
+      // Map form data to backend API format
+      const payload = {
+        title: formData.title,
+        description: formData.description,
+        requirements: formData.requirements,
+        location: formData.location,
+        type: 'full-time',
+        duration_months: parseInt(formData.duration),
+        stipend: formData.salaryType === 'paid' ? parseFloat(formData.minSalary) || 0 : 0,
+        stipend_currency: 'USD',
+        positions: formData.positions,
+        application_deadline: formData.deadline,
+        skills: formData.skills
+      };
+
+      console.log('Submitting payload:', payload);
+
+      if (isEditMode) {
+        // TODO: Implement update functionality
+        console.log('Update internship:', payload);
+        // await api.updateInternship(id, payload);
+      } else {
+        const response = await api.createInternship(payload);
+        console.log('Create response:', response);
+      }
+
+      navigate('/company');
+    } catch (error) {
+      console.error('Error creating internship:', error);
+      alert(`Failed to create internship: ${error.message || 'Please try again.'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -98,7 +166,7 @@ export default function PostInternship() {
         </div>
       </div>
 
-      <form className="flex flex-col gap-6" onSubmit={(e) => e.preventDefault()}>
+      <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 md:p-8">
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
             <Info size={20} className="text-primary" />
@@ -348,9 +416,13 @@ export default function PostInternship() {
           >
             Cancel
           </button>
-          <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all" type="submit">
+          <button 
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed" 
+            type="submit"
+            disabled={isSubmitting}
+          >
             <Send size={20} />
-            {isEditMode ? 'Update Internship' : 'Publish Internship'}
+            {isSubmitting ? 'Publishing...' : (isEditMode ? 'Update Internship' : 'Publish Internship')}
           </button>
         </div>
       </form>

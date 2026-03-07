@@ -131,6 +131,9 @@ const getInternshipById = async (req, res) => {
 
 const createInternship = async (req, res) => {
     try {
+        console.log('Create internship request received:', req.body);
+        console.log('User from token:', req.user);
+
         const {
             title,
             description,
@@ -143,49 +146,104 @@ const createInternship = async (req, res) => {
             positions = 1,
             application_deadline,
             start_date,
-            end_date
+            end_date,
+            skills = []
         } = req.body;
 
         let companyId = req.body.company_id;
 
         if (req.user && req.user.role === 'company') {
+            console.log('Getting company ID for user:', req.user.userId);
             companyId = await getCompanyIdByUserId(req.user.userId);
+            console.log('Company ID found:', companyId);
         }
 
         if (!companyId || !title || !description || !location || !duration_months || !application_deadline) {
+            console.log('Validation failed:', { companyId, title: !!title, description: !!description, location: !!location, duration_months: !!duration_months, application_deadline: !!application_deadline });
             return res.status(400).json({ message: 'Required fields are missing' });
         }
 
-        const result = await db.query(
-            `INSERT INTO internships (
-                company_id, title, description, requirements, location,
-                type, duration_months, stipend, stipend_currency,
-                positions, application_deadline, start_date, end_date, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-            [
-                companyId,
-                title,
-                description,
-                requirements || null,
-                location,
-                type,
-                duration_months,
-                stipend,
-                stipend_currency,
-                positions,
-                application_deadline,
-                start_date || null,
-                end_date || null
-            ]
-        );
+        const connection = await db.connection();
+        
+        try {
+            await connection.beginTransaction();
 
-        return res.status(201).json({
-            message: 'Internship created successfully',
-            internshipId: result.insertId
-        });
+            // Insert internship
+            const [result] = await connection.execute(
+                `INSERT INTO internships (
+                    company_id, title, description, requirements, location,
+                    type, duration_months, stipend, stipend_currency,
+                    positions, application_deadline, start_date, end_date, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+                [
+                    companyId,
+                    title,
+                    description,
+                    requirements || null,
+                    location,
+                    type,
+                    duration_months,
+                    stipend,
+                    stipend_currency,
+                    positions,
+                    application_deadline,
+                    start_date || null,
+                    end_date || null
+                ]
+            );
+
+            const internshipId = result.insertId;
+            console.log('Internship created with ID:', internshipId);
+
+            // Handle skills if provided
+            if (skills && skills.length > 0) {
+                console.log('Processing skills:', skills);
+                for (const skillName of skills) {
+                    // Check if skill exists, if not create it
+                    const [existingSkills] = await connection.execute(
+                        'SELECT id FROM skills WHERE name = ?',
+                        [skillName]
+                    );
+
+                    let skillId;
+                    if (existingSkills.length === 0) {
+                        // Create new skill
+                        const [newSkill] = await connection.execute(
+                            'INSERT INTO skills (name) VALUES (?)',
+                            [skillName]
+                        );
+                        skillId = newSkill.insertId;
+                        console.log('Created new skill:', skillName, 'with ID:', skillId);
+                    } else {
+                        skillId = existingSkills[0].id;
+                        console.log('Found existing skill:', skillName, 'with ID:', skillId);
+                    }
+
+                    // Link skill to internship
+                    await connection.execute(
+                        'INSERT INTO internship_skills (internship_id, skill_id) VALUES (?, ?)',
+                        [internshipId, skillId]
+                    );
+                }
+            }
+
+            await connection.commit();
+            console.log('Transaction committed successfully');
+
+            return res.status(201).json({
+                message: 'Internship created successfully',
+                internshipId: internshipId
+            });
+        } catch (error) {
+            await connection.rollback();
+            console.error('Transaction rolled back due to error:', error);
+            throw error;
+        } finally {
+            connection.release();
+        }
     } catch (error) {
         console.error('Error creating internship:', error);
-        return res.status(500).json({ message: 'Server error' });
+        return res.status(500).json({ message: 'Server error: ' + error.message });
     }
 };
 

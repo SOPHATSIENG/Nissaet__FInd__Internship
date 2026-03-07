@@ -61,7 +61,7 @@ export default function PostInternship() {
     // In a real application, this would call an API to delete the post
     console.log(`Deleting internship post with ID: ${id}`);
     setIsDeleteModalOpen(false);
-    navigate('/dashboard');
+    navigate('/company');
   };
 
   return (

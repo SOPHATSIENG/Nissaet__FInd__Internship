@@ -13,18 +13,14 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../api/axios';
-import { useAuth } from '../../context/company-contexts/AuthContext';
-import { useNotifications } from '../../context/company-contexts/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Internships() {
-  const { user, profile } = useAuth();
-  const { sendNotification } = useNotifications();
+  const { user } = useAuth();
   const [internships, setInternships] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
-  const [applyingId, setApplyingId] = useState<string | null>(null);
-  const [myApplications, setMyApplications] = useState<string[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -55,43 +51,7 @@ export default function Internships() {
     };
   }, []);
 
-  useEffect(() => {
-    // DB mode: applications list is not wired yet.
-    // Keep the UI working without Firebase.
-    void user;
-    setMyApplications([]);
-  }, [user]);
-
-  const handleApply = async (internship: any) => {
-    if (!user || !profile) {
-      alert('Please sign in to apply.');
-      return;
-    }
-
-    if (profile.role !== 'student') {
-      alert('Only students can apply for internships.');
-      return;
-    }
-
-    setApplyingId(internship.id);
-    try {
-      setMyApplications(prev => [...prev, internship.id]);
-
-      await sendNotification(
-        String(internship.company_id || internship.companyId || ''),
-        'New Application Received',
-        `${user?.full_name || user?.name || 'A student'} has applied for your "${internship.title}" position.`,
-        'info'
-      );
-
-      alert('Application saved locally (DB apply endpoint not implemented yet).');
-    } catch (error) {
-      console.error("Error applying:", error);
-      alert('Failed to submit application. Please try again.');
-    } finally {
-      setApplyingId(null);
-    }
-  };
+  void user;
 
   const filteredInternships = internships.filter(job => {
     const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -180,29 +140,9 @@ export default function Internships() {
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row md:flex-col justify-center gap-3">
-                    {myApplications.includes(job.id) ? (
-                      <div className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-100">
-                        <CheckCircle2 size={20} />
-                        Applied
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => handleApply(job)}
-                        disabled={applyingId === job.id}
-                        className="inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg bg-primary text-background-dark font-bold hover:bg-primary-dark transition-all disabled:opacity-50"
-                      >
-                        {applyingId === job.id ? (
-                          <Loader2 className="animate-spin" size={20} />
-                        ) : (
-                          <>
-                            Apply Now
-                            <ChevronRight size={20} />
-                          </>
-                        )}
-                      </button>
-                    )}
-                    <button className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-slate-50 text-slate-700 font-semibold hover:bg-slate-100 transition-all border border-slate-200">
+                    <button className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-background-dark font-bold hover:bg-primary-dark transition-all">
                       View Details
+                      <ChevronRight size={20} />
                     </button>
                   </div>
                 </div>

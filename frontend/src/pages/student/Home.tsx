@@ -25,6 +25,8 @@ interface Internship {
   title: string;
   company_name: string;
   location: string;
+  description?: string;
+  requirements?: string;
   salary_type: string;
   salary_min: number | null;
   salary_max: number | null;
@@ -34,11 +36,36 @@ interface Internship {
   company_logo: string | null;
 }
 
+const normalizeText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const SKILL_ALIASES: Record<string, string[]> = {
+  frontend: ["frontend", "front end", "react", "javascript", "typescript", "html", "css", "ui", "ux"],
+  python: ["python", "django", "flask", "fastapi", "pandas"],
+};
+
+const hasPhrase = (target: string, phrase: string) =>
+  ` ${target} `.includes(` ${normalizeText(phrase)} `);
+
+const matchesSkill = (target: string, skill: string) => {
+  const normalizedSkill = normalizeText(skill);
+  const aliases = SKILL_ALIASES[normalizedSkill] || [normalizedSkill];
+  return aliases.some((alias) => hasPhrase(target, alias));
+};
+
 export default function Home() {
   const navigate = useNavigate();
   const [featuredCompanies, setFeaturedCompanies] = useState<FeaturedCompany[]>([]);
   const [latestInternships, setLatestInternships] = useState<Internship[]>([]);
+<<<<<<< HEAD
   const [recommendedInternships, setRecommendedInternships] = useState<Internship[]>([]);
+=======
+  const [profileSkills, setProfileSkills] = useState<string[]>([]);
+>>>>>>> feature/phat
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
@@ -53,6 +80,7 @@ export default function Home() {
       try {
         setLoading(true);
         setError("");
+<<<<<<< HEAD
         
         // Fetch featured companies, latest internships and recommended if logged in
         const requests: Promise<any>[] = [
@@ -69,6 +97,13 @@ export default function Home() {
         } catch (e) {
           // Ignore if not logged in or fails
         }
+=======
+        const [companiesRes, internshipsRes, profileRes] = await Promise.all([
+          api.getFeaturedCompanies(4),
+          api.getInternships({ limit: 100 }),
+          api.getProfileSettings().catch(() => null),
+        ]);
+>>>>>>> feature/phat
 
         if (!isMounted) {
           return;
@@ -76,7 +111,17 @@ export default function Home() {
 
         setFeaturedCompanies(companiesRes.companies || []);
         setLatestInternships(internshipsRes.internships || []);
+<<<<<<< HEAD
         setRecommendedInternships(recommendedRes.internships || []);
+=======
+        setProfileSkills(
+          Array.isArray(profileRes?.settings?.skills)
+            ? profileRes.settings.skills
+                .map((skill: { name?: string }) => (skill?.name || "").trim().toLowerCase())
+                .filter(Boolean)
+            : []
+        );
+>>>>>>> feature/phat
       } catch (requestError) {
         if (!isMounted) {
           return;
@@ -99,6 +144,7 @@ export default function Home() {
     };
   }, []);
 
+<<<<<<< HEAD
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const params = new URLSearchParams();
@@ -106,6 +152,23 @@ export default function Home() {
     if (locationTerm) params.append("location", locationTerm);
     navigate(`/internships?${params.toString()}`);
   };
+=======
+  const companiesForDisplay = useMemo(() => featuredCompanies.slice(0, 4), [featuredCompanies]);
+  const internshipsForDisplay = useMemo(() => {
+    if (!profileSkills.length) {
+      return [];
+    }
+
+    return latestInternships
+      .filter((job) => {
+        const target = normalizeText(
+          `${job.title} ${job.description || ""} ${job.requirements || ""}`
+        );
+        return profileSkills.some((skill) => matchesSkill(target, skill));
+      })
+      .slice(0, 4);
+  }, [latestInternships, profileSkills]);
+>>>>>>> feature/phat
 
   const salaryText = (item: Internship) => {
     if (item.salary_type === "unpaid" || (item.stipend === 0)) {
@@ -317,7 +380,7 @@ export default function Home() {
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#f6f8f7]">
         <div className="max-w-[1440px] mx-auto">
           <div className="flex justify-between items-center mb-10">
-            <h2 className="text-3xl font-bold">Latest Internships</h2>
+            <h2 className="text-3xl font-bold">Find Matching Internships</h2>
             <Link
               to="/internships"
               className="text-[#3b82f6] font-bold hover:underline"
@@ -361,6 +424,7 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
+<<<<<<< HEAD
                   <ArrowRight className="text-gray-300 group-hover:text-[#3b82f6] transition-colors" />
                 </Link>
               ))}
@@ -368,6 +432,19 @@ export default function Home() {
           )}
           {!loading && !latestInternships.length && (
             <p className="text-sm text-gray-500 mt-4">No internships available yet.</p>
+=======
+                </div>
+                <ArrowRight className="text-gray-300 group-hover:text-[#3b82f6] transition-colors" />
+              </Link>
+            ))}
+          </div>
+          {!loading && !internshipsForDisplay.length && (
+            <p className="text-sm text-gray-500 mt-4">
+              {profileSkills.length
+                ? "No internships match this student's registered skills yet."
+                : "No registered skills found for this student. Add skills in Student Settings to get matching internships."}
+            </p>
+>>>>>>> feature/phat
           )}
         </div>
       </section>

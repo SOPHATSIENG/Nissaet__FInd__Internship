@@ -773,6 +773,9 @@ const getCurrentUser = async (req, res) => {
             }
             if (companies.length > 0) {
                 user.company_profile = companies[0];
+                if (!user.profile_image && user.company_profile.logo) {
+                    user.profile_image = user.company_profile.logo;
+                }
             }
         }
 
@@ -837,3 +840,4 @@ module.exports = {
     getCurrentUser,
     getSkills
 };
+

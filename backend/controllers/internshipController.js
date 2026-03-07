@@ -37,8 +37,43 @@ const getAllInternships = async (req, res) => {
             sort = 'recent'
         } = req.query;
 
+<<<<<<< HEAD
         let whereClause = "WHERE i.status = 'active'";
         const params = [];
+=======
+        const internships = await db.query(
+            `SELECT
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary_min,
+                i.stipend AS salary_max,
+                CASE 
+                    WHEN i.stipend > 0 THEN 'paid'
+                    ELSE 'unpaid'
+                END AS salary_type,
+                i.positions,
+                i.application_deadline AS deadline,
+                i.status AS is_active,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
+                c.logo AS company_logo
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+             WHERE i.status = 'active'
+             ORDER BY i.created_at DESC
+             ${limit ? `LIMIT ${limit}` : ''}`
+        );
+>>>>>>> feature/phat
 
         // Keyword Search
         if (search) {
@@ -185,6 +220,7 @@ const getFeaturedCompanies = async (req, res) => {
                 c.name AS company_name,
                 c.description,
                 c.logo,
+<<<<<<< HEAD
                 c.industry,
                 c.headquarters AS location,
                 c.is_verified,
@@ -195,6 +231,18 @@ const getFeaturedCompanies = async (req, res) => {
             ORDER BY open_positions DESC, c.is_verified DESC
             LIMIT ?
         `;
+=======
+                c.headquarters AS location,
+                COUNT(i.id) AS open_positions
+             FROM companies c
+             LEFT JOIN internships i
+                ON i.company_id = c.id
+                AND i.status = 'active'
+             GROUP BY c.id, c.name, c.description, c.logo, c.headquarters
+             ORDER BY open_positions DESC, c.name ASC
+             LIMIT ${limit}`
+        );
+>>>>>>> feature/phat
 
         let companies;
         try {
@@ -233,14 +281,42 @@ const getInternshipById = async (req, res) => {
     try {
         const { id } = req.params;
 
+<<<<<<< HEAD
         let sql = `
             SELECT
                 i.*,
                 c.name AS company_name,
+=======
+        const internships = await db.query(
+            `SELECT
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.responsibilities,
+                i.benefits,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend,
+                i.stipend_currency,
+                i.application_deadline AS deadline,
+                i.start_date,
+                i.end_date,
+                i.status,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
+>>>>>>> feature/phat
                 c.description AS company_description,
                 c.logo AS company_logo,
                 c.website AS company_website,
                 c.industry AS company_industry,
+<<<<<<< HEAD
                 c.headquarters AS company_location,
                 CASE 
                     WHEN i.is_remote = 1 THEN 'Remote'
@@ -251,6 +327,14 @@ const getInternshipById = async (req, res) => {
             JOIN companies c ON i.company_id = c.id
             WHERE i.id = ?
         `;
+=======
+                c.company_size
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+             WHERE i.id = ? AND i.status = 'active'`,
+            [id]
+        );
+>>>>>>> feature/phat
 
         let results;
         try {
@@ -306,10 +390,25 @@ const getInternshipById = async (req, res) => {
 const createInternship = async (req, res) => {
     try {
         const {
+<<<<<<< HEAD
             title, description, requirements, responsibilities, benefits,
             location, is_remote, is_hybrid, type, duration_months,
             stipend, stipend_currency = 'USD', application_deadline,
             start_date, end_date, skills
+=======
+            title,
+            description,
+            requirements,
+            location,
+            type = 'full-time',
+            duration_months,
+            stipend = 0,
+            stipend_currency = 'USD',
+            positions = 1,
+            application_deadline,
+            start_date,
+            end_date
+>>>>>>> feature/phat
         } = req.body;
 
         let companyId = req.body.company_id;
@@ -317,6 +416,7 @@ const createInternship = async (req, res) => {
             companyId = await getCompanyIdByUserId(req.user.userId);
         }
 
+<<<<<<< HEAD
         if (!companyId || !title || !description) {
             return res.status(400).json({ success: false, message: 'Required fields missing' });
         }
@@ -329,6 +429,34 @@ const createInternship = async (req, res) => {
                 start_date, end_date, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
         `;
+=======
+        if (!companyId || !title || !description || !location || !duration_months || !application_deadline) {
+            return res.status(400).json({ message: 'Required fields are missing' });
+        }
+
+        const result = await db.query(
+            `INSERT INTO internships (
+                company_id, title, description, requirements, location,
+                type, duration_months, stipend, stipend_currency,
+                positions, application_deadline, start_date, end_date, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            [
+                companyId,
+                title,
+                description,
+                requirements || null,
+                location,
+                type,
+                duration_months,
+                stipend,
+                stipend_currency,
+                positions,
+                application_deadline,
+                start_date || null,
+                end_date || null
+            ]
+        );
+>>>>>>> feature/phat
 
         const params = [
             companyId, title, description, requirements || null, responsibilities || null,

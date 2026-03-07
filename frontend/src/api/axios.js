@@ -99,7 +99,7 @@ export const api = {
 
   // FIX MARK: profile settings API used by dynamic account settings page.
   getProfileSettings() {
-    return request('/profile/settings', { auth: true });
+    return request(`/profile/settings?ts=${Date.now()}`, { auth: true });
   },
 
   updatePersonalSettings(payload) {

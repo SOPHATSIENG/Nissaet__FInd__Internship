@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Mail, Eye, EyeOff, Award, Grid } from 'lucide-react';
 import { SplitLayout } from '../../components/SplitLayout';
 import { Input } from '../../components/Input';
@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, loginWithGoogle, loginWithGithub } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,8 +31,13 @@ export function Login() {
       .join(' ');
   }, [email]);
 
+  const isValidEmail = (value: string) => {
+    const normalized = String(value || '').trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+  };
+
   const validateLogin = () => {
-    if (!email || !email.includes('@')) {
+    if (!isValidEmail(email)) {
       return 'Please enter a valid email address.';
     }
     if (!password) {
@@ -51,11 +57,26 @@ export function Login() {
     try {
       setError('');
       setIsLoading(true);
-      await login(email.trim(), password);
+      const session = await login(email.trim(), password);
       if (!rememberMe) {
         sessionStorage.setItem('nissaet_session', 'active');
       }
-      navigate('/');
+
+      const target = typeof location.state?.from === 'string' ? location.state.from : '';
+      const role = session?.user?.role;
+
+      if (target.startsWith('/company') && role !== 'company') {
+        setError('This account is not a company account.');
+        navigate('/', { replace: true });
+        return;
+      }
+
+      if (target) {
+        navigate(target);
+        return;
+      }
+
+      navigate(role === 'company' ? '/company' : '/');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Login failed.');
     } finally {
@@ -64,7 +85,7 @@ export function Login() {
   };
 
   const handleGoogleLogin = async () => {
-    if (!email || !email.includes('@')) {
+    if (!isValidEmail(email)) {
       setError('Enter your Google email first, then click Google login.');
       return;
     }
@@ -72,11 +93,25 @@ export function Login() {
     try {
       setError('');
       setIsGoogleLoading(true);
-      await loginWithGoogle({
+      const session = await loginWithGoogle({
         email: email.trim(),
         fullName: inferredGoogleName,
       });
-      navigate('/');
+      const target = typeof location.state?.from === 'string' ? location.state.from : '';
+      const role = session?.user?.role;
+
+      if (target.startsWith('/company') && role !== 'company') {
+        setError('This account is not a company account.');
+        navigate('/', { replace: true });
+        return;
+      }
+
+      if (target) {
+        navigate(target);
+        return;
+      }
+
+      navigate(role === 'company' ? '/company' : '/');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Google login failed.');
     } finally {
@@ -85,7 +120,7 @@ export function Login() {
   };
 
   const handleGithubLogin = async () => {
-    if (!email || !email.includes('@')) {
+    if (!isValidEmail(email)) {
       setError('Enter your GitHub email first, then click GitHub login.');
       return;
     }
@@ -93,11 +128,25 @@ export function Login() {
     try {
       setError('');
       setIsGithubLoading(true);
-      await loginWithGithub({
+      const session = await loginWithGithub({
         email: email.trim(),
         fullName: inferredGoogleName,
       });
-      navigate('/');
+      const target = typeof location.state?.from === 'string' ? location.state.from : '';
+      const role = session?.user?.role;
+
+      if (target.startsWith('/company') && role !== 'company') {
+        setError('This account is not a company account.');
+        navigate('/', { replace: true });
+        return;
+      }
+
+      if (target) {
+        navigate(target);
+        return;
+      }
+
+      navigate(role === 'company' ? '/company' : '/');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'GitHub login failed.');
     } finally {

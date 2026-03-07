@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight, User, Mail, Lock, Building2, MapPin } from 'lucide-react';
 import { SplitLayout } from '../../components/SplitLayout';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { RoleSelector, Role } from '../../components/RoleSelector';
 import { useAuth } from '../../context/AuthContext';
+import { registrationStorage } from '../../utils/registrationStorage';
 
 export function Register() {
   const [role, setRole] = useState<Role>('student');
@@ -16,12 +17,12 @@ export function Register() {
   const [companyLocation, setCompanyLocation] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
 
-  const { register, loginWithGoogle, loginWithGithub } = useAuth();
+  const { loginWithGoogle, loginWithGithub } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const inferredName = useMemo(() => {
     if (fullName.trim()) {
@@ -41,8 +42,8 @@ export function Register() {
     if (!fullName.trim()) {
       return 'Full name is required.';
     }
-    if (!email.includes('@')) {
-      return 'Please enter a valid email.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return 'Please enter a valid email address.';
     }
     if (password.length < 8) {
       return 'Password must be at least 8 characters.';
@@ -64,27 +65,25 @@ export function Register() {
       return;
     }
 
-    try {
-      setError('');
-      setIsLoading(true);
-      await register({
-        full_name: fullName.trim(),
-        email: email.trim(),
-        password,
-        role,
-        company_name: role === 'company' ? companyName.trim() : undefined,
-        location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
-      });
-      navigate('/');
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Registration failed.');
-    } finally {
-      setIsLoading(false);
-    }
+    const step1Payload = {
+      full_name: fullName.trim(),
+      email: email.trim(),
+      password,
+      role,
+      company_name: role === 'company' ? companyName.trim() : undefined,
+      location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
+    };
+
+    registrationStorage.setStep1(step1Payload);
+    registrationStorage.setRole(role);
+    registrationStorage.clearStep2();
+
+    setError('');
+    navigate(role === 'company' ? '/register/company/step-2' : '/register/student/step-2');
   };
 
   const handleGoogleRegister = async () => {
-    if (!email.includes('@')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError('Enter your email first to continue with Google.');
       return;
     }
@@ -96,14 +95,26 @@ export function Register() {
     try {
       setError('');
       setIsGoogleLoading(true);
-      await loginWithGoogle({
+      const session = await loginWithGoogle({
         email: email.trim(),
         fullName: inferredName,
         role,
         companyName: role === 'company' ? companyName.trim() : undefined,
         location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
       });
-      navigate('/');
+
+      const target = typeof location.state?.from === 'string' ? location.state.from : '';
+      const resolvedRole = session?.user?.role;
+      if (target.startsWith('/company') && resolvedRole !== 'company') {
+        setError('This account is not a company account.');
+        navigate('/', { replace: true });
+        return;
+      }
+      if (target) {
+        navigate(target);
+        return;
+      }
+      navigate(resolvedRole === 'company' ? '/company' : '/');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Google registration failed.');
     } finally {
@@ -112,7 +123,7 @@ export function Register() {
   };
 
   const handleGithubRegister = async () => {
-    if (!email.includes('@')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError('Enter your email first to continue with GitHub.');
       return;
     }
@@ -124,14 +135,26 @@ export function Register() {
     try {
       setError('');
       setIsGithubLoading(true);
-      await loginWithGithub({
+      const session = await loginWithGithub({
         email: email.trim(),
         fullName: inferredName,
         role,
         companyName: role === 'company' ? companyName.trim() : undefined,
         location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
       });
-      navigate('/');
+
+      const target = typeof location.state?.from === 'string' ? location.state.from : '';
+      const resolvedRole = session?.user?.role;
+      if (target.startsWith('/company') && resolvedRole !== 'company') {
+        setError('This account is not a company account.');
+        navigate('/', { replace: true });
+        return;
+      }
+      if (target) {
+        navigate(target);
+        return;
+      }
+      navigate(resolvedRole === 'company' ? '/company' : '/');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'GitHub registration failed.');
     } finally {
@@ -237,8 +260,8 @@ export function Register() {
           </p>
         )}
 
-        <Button type="submit" className="w-full" icon={ArrowRight} disabled={isLoading}>
-          {isLoading ? 'Creating...' : 'Create Account'}
+        <Button type="submit" className="w-full" icon={ArrowRight}>
+          Continue to Step 2
         </Button>
       </form>
 

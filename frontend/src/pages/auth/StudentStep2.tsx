@@ -1,16 +1,78 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft, Phone, Calendar, MapPin, GraduationCap, Building2, UploadCloud } from 'lucide-react';
 import { SplitLayout } from '../../components/SplitLayout';
 import { Input } from '../../components/Input';
 import { Select } from '../../components/Select';
 import { Button } from '../../components/Button';
+import { registrationStorage } from '../../utils/registrationStorage';
 
 export function StudentStep2() {
   const navigate = useNavigate();
+  const [phone, setPhone] = useState('');
+  const [dob, setDob] = useState('');
+  const [address, setAddress] = useState('');
+  const [education, setEducation] = useState('');
+  const [graduationYear, setGraduationYear] = useState('');
+  const [university, setUniversity] = useState('');
+  const [bio, setBio] = useState('');
+  const [cvUrl, setCvUrl] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const step1 = registrationStorage.getStep1();
+    const role = registrationStorage.getRole();
+
+    if (!step1 || role !== 'student') {
+      navigate('/register', { replace: true });
+      return;
+    }
+
+    const step2 = registrationStorage.getStep2();
+    if (!step2) return;
+
+    setPhone(step2.phone || '');
+    setDob(step2.dob || '');
+    setAddress(step2.address || '');
+    setEducation(step2.education || '');
+    setGraduationYear(step2.graduation_year ? String(step2.graduation_year) : '');
+    setUniversity(step2.university || '');
+    setBio(step2.bio || '');
+    setCvUrl(step2.cv_url || '');
+  }, [navigate]);
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (dob) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+        setError('Date of birth must be a valid date.');
+        return;
+      }
+      const parsed = new Date(`${dob}T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) {
+        setError('Date of birth must be a valid date.');
+        return;
+      }
+      const today = new Date();
+      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (parsed > todayMidnight) {
+        setError('Date of birth cannot be in the future.');
+        return;
+      }
+    }
+
+    setError('');
+    registrationStorage.setStep2({
+      phone: phone.trim() || null,
+      dob: dob || null,
+      address: address.trim() || null,
+      education: education || null,
+      graduation_year: graduationYear ? Number(graduationYear) : null,
+      university: university.trim() || null,
+      bio: bio.trim() || null,
+      cv_url: cvUrl || null,
+    });
     navigate('/register/student/step-3');
   };
 
@@ -39,11 +101,15 @@ export function StudentStep2() {
             type="tel"
             placeholder="+1 (555) 000-0000"
             icon={Phone}
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
           />
           <Input
             label="Date of Birth"
             type="date"
             icon={Calendar}
+            value={dob}
+            onChange={(event) => setDob(event.target.value)}
           />
         </div>
 
@@ -51,6 +117,8 @@ export function StudentStep2() {
           label="Address"
           placeholder="123 Main St, City, Country"
           icon={MapPin}
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
         />
 
         <div className="border-t border-slate-200 pt-4">
@@ -61,6 +129,8 @@ export function StudentStep2() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
             <Select
               label="Education Level"
+              value={education}
+              onChange={(event) => setEducation(event.target.value)}
               options={[
                 { value: '', label: 'Select Level' },
                 { value: 'high_school', label: 'High School' },
@@ -75,6 +145,8 @@ export function StudentStep2() {
               placeholder="YYYY"
               min="2000"
               max="2100"
+              value={graduationYear}
+              onChange={(event) => setGraduationYear(event.target.value)}
             />
           </div>
 
@@ -82,6 +154,8 @@ export function StudentStep2() {
             label="University / Institution Name"
             placeholder="e.g. Stanford University"
             icon={Building2}
+            value={university}
+            onChange={(event) => setUniversity(event.target.value)}
           />
         </div>
 
@@ -90,6 +164,8 @@ export function StudentStep2() {
           <textarea
             className="block w-full rounded-lg border-0 bg-white py-3 px-4 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#137fec] sm:text-sm sm:leading-6 transition-all min-h-[100px]"
             placeholder="Tell us a bit about your interests, skills, and what kind of internships you're looking for..."
+            value={bio}
+            onChange={(event) => setBio(event.target.value)}
           ></textarea>
         </div>
 
@@ -101,11 +177,21 @@ export function StudentStep2() {
               <div className="mt-4 flex text-sm leading-6 text-slate-600 justify-center">
                 <label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-semibold text-[#137fec] focus-within:outline-none focus-within:ring-2 focus-within:ring-[#137fec] focus-within:ring-offset-2 hover:text-[#137fec]/80">
                   <span>Upload a file</span>
-                  <input id="file-upload" name="file-upload" type="file" className="sr-only" />
+                  <input
+                    id="file-upload"
+                    name="file-upload"
+                    type="file"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      setCvUrl(file ? file.name : '');
+                    }}
+                  />
                 </label>
                 <p className="pl-1">or drag and drop</p>
               </div>
               <p className="text-xs leading-5 text-slate-500">PDF, DOC up to 10MB</p>
+              {cvUrl ? <p className="mt-2 text-xs font-medium text-slate-600">{cvUrl}</p> : null}
             </div>
           </div>
         </div>
@@ -125,6 +211,12 @@ export function StudentStep2() {
             Continue to Step 3
           </Button>
         </div>
+
+        {error ? (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+            {error}
+          </p>
+        ) : null}
       </form>
     </SplitLayout>
   );

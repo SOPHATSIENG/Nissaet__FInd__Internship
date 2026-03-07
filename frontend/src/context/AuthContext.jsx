@@ -32,6 +32,13 @@ const storeSession = (token, user) => {
   return normalizedUser;
 };
 
+const persistUser = (user) => {
+  const normalizedUser = normalizeUser(user);
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(normalizedUser));
+  localStorage.setItem('user', JSON.stringify(normalizedUser));
+  return normalizedUser;
+};
+
 const clearSession = () => {
   authStorage.clearToken();
   localStorage.removeItem('token');
@@ -111,6 +118,14 @@ export const AuthProvider = ({ children }) => {
   const loginWithGoogle = async (payload) => socialLogin('google', payload);
   const loginWithGithub = async (payload) => socialLogin('github', payload);
 
+  const updateUser = (updates) => {
+    setUser((previousUser) => {
+      if (!previousUser) return previousUser;
+      const nextUser = persistUser({ ...previousUser, ...updates });
+      return nextUser;
+    });
+  };
+
   const forgotPassword = async (email) => {
     return api.forgotPassword({ email });
   };
@@ -127,6 +142,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  useEffect(() => {
+    // FIX MARK: keep auth session user in sync when profile settings (including image) are updated.
+    const handleProfileUpdated = (event) => {
+      const personal = event?.detail?.personal;
+      if (!personal) return;
+
+      updateUser({
+        full_name: personal.full_name,
+        name: personal.full_name,
+        profile_image: personal.profile_image,
+      });
+    };
+
+    window.addEventListener('profile-settings-updated', handleProfileUpdated);
+    return () => {
+      window.removeEventListener('profile-settings-updated', handleProfileUpdated);
+    };
+  }, []);
+
   const isAuthenticated = !!user && !!(authStorage.getToken() || localStorage.getItem('token'));
 
   const value = useMemo(
@@ -139,6 +173,7 @@ export const AuthProvider = ({ children }) => {
       forgotPassword,
       resetPassword,
       logout,
+      updateUser,
       isAuthenticated,
       hasRole: (role) => user?.role === role,
       loading,

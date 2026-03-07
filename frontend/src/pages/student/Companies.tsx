@@ -1,109 +1,59 @@
 import { Search, MapPin, Building2, Map, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import api from "../../api/axios";
 
-const allCompanies = [
-  {
-    name: "Chip Mong Group",
-    industry: "CONGLOMERATE",
-    location: "Phnom Penh",
-    desc: "Diversified business portfolio including construction, consumer...",
-    openings: 8,
-    rating: 4.5,
-    tags: ["Construction", "Retail"],
-    logo: "https://picsum.photos/seed/chipmong/40/40",
-  },
-  {
-    name: "Sabay Digital",
-    industry: "TECHNOLOGY / MEDIA",
-    location: "Phnom Penh",
-    desc: "Pioneering digital entertainment and content platform in the...",
-    openings: 4,
-    rating: 4.2,
-    tags: ["Digital Media", "Gaming"],
-    logo: "https://picsum.photos/seed/sabay/40/40",
-  },
-  {
-    name: "Mango Tango Asia",
-    industry: "CREATIVE AGENCY",
-    location: "Siem Reap",
-    desc: "Innovative advertising and marketing agency specializing in...",
-    openings: 2,
-    rating: 4.9,
-    tags: ["Advertising", "Design"],
-    logo: "https://picsum.photos/seed/mango/40/40",
-  },
-  {
-    name: "KPMG Cambodia",
-    industry: "ACCOUNTING / AUDIT",
-    location: "Phnom Penh",
-    desc: "Global network of professional firms providing Audit, Tax and Advisory...",
-    openings: 12,
-    rating: 4.7,
-    tags: ["Finance", "Audit"],
-    logo: "https://picsum.photos/seed/kpmg/40/40",
-  },
-  {
-    name: "Khmer Beverages",
-    industry: "MANUFACTURING",
-    location: "Phnom Penh",
-    desc: "Leading brewery and beverage manufacturer committed to qualit...",
-    openings: 0,
-    rating: null,
-    tags: ["FMCG"],
-    logo: "https://picsum.photos/seed/khmerbev/40/40",
-  },
-  {
-    name: "Vattanac Bank",
-    industry: "BANKING",
-    location: "Phnom Penh",
-    desc: "Modern banking services with strong focus on digital customer experience.",
-    openings: 6,
-    rating: 4.4,
-    tags: ["Finance", "Operations"],
-    logo: "https://picsum.photos/seed/vattanac/40/40",
-  },
-  {
-    name: "Wing Bank",
-    industry: "FINTECH",
-    location: "Phnom Penh",
-    desc: "Digital financial services and payments platform used nationwide.",
-    openings: 7,
-    rating: 4.3,
-    tags: ["Fintech", "Payments"],
-    logo: "https://picsum.photos/seed/wing/40/40",
-  },
-  {
-    name: "KOOMPI",
-    industry: "TECHNOLOGY",
-    location: "Phnom Penh",
-    desc: "Local hardware and software innovation company building digital tools.",
-    openings: 3,
-    rating: 4.6,
-    tags: ["Hardware", "Software"],
-    logo: "https://picsum.photos/seed/koompi/40/40",
-  },
-  {
-    name: "CamboJob",
-    industry: "HR TECH",
-    location: "Phnom Penh",
-    desc: "Career and recruitment platform connecting students with employers.",
-    openings: 5,
-    rating: 4.1,
-    tags: ["HR", "Recruitment"],
-    logo: "https://picsum.photos/seed/cambojob/40/40",
-  },
-];
+type CompanyApiItem = {
+  id: number;
+  company_name: string;
+  description: string;
+  logo: string | null;
+  location: string;
+  open_positions: number;
+};
 
 export default function Companies() {
   const pageSize = 3;
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(allCompanies.length / pageSize));
+  const [companies, setCompanies] = useState<CompanyApiItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  
+  const totalPages = Math.max(1, Math.ceil(companies.length / pageSize));
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCompanies = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const res = await api.getFeaturedCompanies(50); // Get more companies for pagination
+        const items = Array.isArray(res?.companies) ? res.companies : [];
+        if (mounted) {
+          setCompanies(items);
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : "Failed to load companies");
+        setCompanies([]);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadCompanies();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const paginatedCompanies = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return allCompanies.slice(start, start + pageSize);
-  }, [currentPage]);
+    return companies.slice(start, start + pageSize);
+  }, [companies, currentPage]);
 
   const goToPage = (page: number) => {
     setCurrentPage(Math.min(Math.max(page, 1), totalPages));
@@ -289,53 +239,31 @@ export default function Companies() {
                 </Link>
               </div>
               <div className="grid md:grid-cols-2 gap-6">
-                {[
-                  {
-                    name: "ABA Bank",
-                    industry: "Banking",
-                    location: "Phnom Penh",
-                    desc: "Leading financial institution in Cambodia focused on digital innovation and modern banking solutions.",
-                    openings: 5,
-                    rating: 4.8,
-                    logo: "https://picsum.photos/seed/aba/48/48",
-                  },
-                  {
-                    name: "Smart Axiata",
-                    industry: "Telecommunications",
-                    location: "Phnom Penh",
-                    desc: "Connecting people and businesses across Cambodia with advanced mobile technology.",
-                    openings: 3,
-                    rating: 4.6,
-                    logo: "https://picsum.photos/seed/smart/48/48",
-                  },
-                ].map((company) => (
+                {companies.slice(0, 2).map((company) => (
                   <div
-                    key={company.name}
+                    key={company.id}
                     className="bg-white p-6 rounded-2xl border border-[#3b82f6]/30 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
                   >
                     <div className="absolute top-0 right-0 bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-bl-lg flex items-center gap-1">
-                      ? {company.rating}
+                      ? {company.open_positions} Openings
                     </div>
                     <img
-                      src={company.logo}
-                      alt={company.name}
+                      src={company.logo || `https://picsum.photos/seed/company-${company.id}/48/48`}
+                      alt={company.company_name}
                       className="w-12 h-12 rounded-xl object-cover mb-4"
                     />
-                    <h3 className="font-bold text-xl mb-1">{company.name}</h3>
+                    <h3 className="font-bold text-xl mb-1">{company.company_name}</h3>
                     <div className="flex items-center gap-3 text-sm text-gray-500 mb-4">
                       <span className="flex items-center gap-1">
-                        <Building2 className="w-4 h-4" /> {company.industry}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" /> {company.location}
+                        <Building2 className="w-4 h-4" /> {company.location}
                       </span>
                     </div>
                     <p className="text-gray-600 text-sm mb-6 line-clamp-2">
-                      {company.desc}
+                      {company.description}
                     </p>
                     <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                       <span className="text-[#3b82f6] font-bold text-sm">
-                        {company.openings} Open Positions
+                        {company.open_positions} Internship Positions
                       </span>
                       <button className="border border-gray-200 hover:border-[#3b82f6] text-gray-700 hover:text-[#3b82f6] font-bold px-4 py-2 rounded-lg text-sm transition-colors">
                         View Profile
@@ -348,70 +276,70 @@ export default function Companies() {
 
             <div>
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">84 Companies found</h2>
+                <h2 className="text-2xl font-bold">
+                  {loading ? "Loading companies..." : `${companies.length} Companies found`}
+                </h2>
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <span>Sort by:</span>
                   <select className="bg-transparent font-medium text-gray-900 outline-none cursor-pointer">
-                    <option>Highest Rated</option>
                     <option>Most Openings</option>
+                    <option>Name A-Z</option>
                     <option>Newest</option>
                   </select>
                 </div>
               </div>
 
+              {error && (
+                <div className="mb-8 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {paginatedCompanies.map((company) => (
-                  <div
-                    key={company.name}
-                    className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full"
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <img
-                        src={company.logo}
-                        alt={company.name}
-                        className="w-10 h-10 rounded-lg object-cover"
-                      />
-                      {company.rating ? (
+                {!loading && companies.length === 0 ? (
+                  <div className="col-span-full bg-white p-10 rounded-2xl border border-dashed border-gray-200 text-center text-gray-500">
+                    No companies found.
+                  </div>
+                ) : (
+                  paginatedCompanies.map((company) => (
+                    <div
+                      key={company.id}
+                      className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full"
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <img
+                          src={company.logo || `https://picsum.photos/seed/company-${company.id}/40/40`}
+                          alt={company.company_name}
+                          className="w-10 h-10 rounded-lg object-cover"
+                        />
                         <div className="bg-yellow-50 text-yellow-700 text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                          ? {company.rating}
+                          ? {company.open_positions}
                         </div>
+                      </div>
+                      <h3 className="font-bold text-lg mb-1">{company.company_name}</h3>
+                      <div className="flex items-center gap-1 text-sm text-gray-500 mb-3">
+                        <MapPin className="w-3.5 h-3.5" /> {company.location}
+                      </div>
+                      <p className="text-gray-600 text-sm mb-4 line-clamp-2 flex-grow">
+                        {company.description}
+                      </p>
+                      <div className="flex flex-wrap gap-2 mb-6">
+                        <span className="bg-gray-50 border border-gray-100 text-gray-500 text-xs px-2 py-1 rounded-md">
+                          {company.open_positions} Internship Positions
+                        </span>
+                      </div>
+                      {company.open_positions > 0 ? (
+                        <button className="w-full bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#2563eb] font-bold py-2.5 rounded-xl text-sm transition-colors">
+                          View {company.open_positions} Openings
+                        </button>
                       ) : (
-                        <div className="bg-gray-100 text-gray-500 text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                          ? -
-                        </div>
+                        <button className="w-full bg-gray-50 text-gray-400 font-bold py-2.5 rounded-xl text-sm cursor-not-allowed">
+                          No Current Openings
+                        </button>
                       )}
                     </div>
-                    <h3 className="font-bold text-lg mb-1">{company.name}</h3>
-                    <p className="text-xs text-gray-400 font-bold tracking-wider mb-2">
-                      {company.industry}
-                    </p>
-                    <div className="flex items-center gap-1 text-sm text-gray-500 mb-3">
-                      <MapPin className="w-3.5 h-3.5" /> {company.location}
-                    </div>
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-2 flex-grow">
-                      {company.desc}
-                    </p>
-                    <div className="flex flex-wrap gap-2 mb-6">
-                      {company.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="bg-gray-50 border border-gray-100 text-gray-500 text-xs px-2 py-1 rounded-md"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                    {company.openings > 0 ? (
-                      <button className="w-full bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#2563eb] font-bold py-2.5 rounded-xl text-sm transition-colors">
-                        View {company.openings} Openings
-                      </button>
-                    ) : (
-                      <button className="w-full bg-gray-50 text-gray-400 font-bold py-2.5 rounded-xl text-sm cursor-not-allowed">
-                        No Current Openings
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
 
               <div className="flex justify-center items-center gap-2 mt-12">

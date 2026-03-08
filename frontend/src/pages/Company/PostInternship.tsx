@@ -12,7 +12,8 @@ import {
   Underline,
   List,
   ListOrdered,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
@@ -21,7 +22,7 @@ import api from '../../api/axios';
 export default function PostInternship() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const isEditMode = !!id;
+  const isEditMode = !!id && id !== 'undefined' && id !== 'null';
 
   const [formData, setFormData] = useState({
     title: '',
@@ -39,31 +40,61 @@ export default function PostInternship() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isEditMode) {
-      // Mock fetching data for the internship
-      setFormData({
-        title: 'Marketing Intern',
-        location: 'Phnom Penh',
-        duration: '3',
-        description: 'We are looking for a creative Marketing Intern to join our team...',
-        requirements: 'Currently enrolled in a Marketing or related degree...',
-        salaryType: 'paid',
-        minSalary: '150',
-        maxSalary: '300',
-        skills: ['Social Media', 'Copywriting', 'Content Strategy'],
-        positions: 2,
-        deadline: '2023-12-31'
-      });
-    }
-  }, [id, isEditMode]);
+    if (isEditMode && id) {
+      const fetchInternship = async () => {
+        try {
+          setLoading(true);
+          const response = await api.getInternshipById(id);
+          const internship = response.internship;
+          
+          if (internship) {
+            setFormData({
+              title: internship.title || '',
+              location: internship.location || 'Phnom Penh',
+              duration: internship.duration?.toString() || '',
+              description: internship.description || '',
+              requirements: internship.requirements || '',
+              salaryType: internship.stipend > 0 ? 'paid' : 'unpaid',
+              minSalary: internship.stipend?.toString() || '',
+              maxSalary: internship.stipend?.toString() || '',
+              skills: [], // Will be populated separately if needed
+              positions: internship.positions || 1,
+              deadline: internship.deadline || ''
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching internship:', error);
+          alert('Failed to load internship data. Please try again.');
+          navigate('/company');
+        } finally {
+          setLoading(false);
+        }
+      };
 
-  const handleDelete = () => {
-    // In a real application, this would call an API to delete the post
-    console.log(`Deleting internship post with ID: ${id}`);
-    setIsDeleteModalOpen(false);
-    navigate('/company');
+      fetchInternship();
+    }
+  }, [id, isEditMode, navigate]);
+
+  if (loading && isEditMode) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-primary" size={40} />
+      </div>
+    );
+  }
+
+  const handleDelete = async () => {
+    try {
+      await api.deleteInternship(id);
+      setIsDeleteModalOpen(false);
+      navigate('/company');
+    } catch (error) {
+      console.error('Error deleting internship:', error);
+      alert(`Failed to delete internship: ${error.message || 'Please try again.'}`);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -113,20 +144,23 @@ export default function PostInternship() {
       };
 
       console.log('Submitting payload:', payload);
+      console.log('isEditMode:', isEditMode, 'id:', id);
 
       if (isEditMode) {
-        // TODO: Implement update functionality
-        console.log('Update internship:', payload);
-        // await api.updateInternship(id, payload);
+        console.log('Calling updateInternship with ID:', id);
+        const response = await api.updateInternship(id, payload);
+        console.log('Update response:', response);
       } else {
+        console.log('Calling createInternship');
         const response = await api.createInternship(payload);
         console.log('Create response:', response);
       }
 
       navigate('/company');
     } catch (error) {
-      console.error('Error creating internship:', error);
-      alert(`Failed to create internship: ${error.message || 'Please try again.'}`);
+      const action = isEditMode ? 'updating' : 'creating';
+      console.error(`Error ${action} internship:`, error);
+      alert(`Failed to ${action.replace('ing', '')} internship: ${error.message || 'Please try again.'}`);
     } finally {
       setIsSubmitting(false);
     }

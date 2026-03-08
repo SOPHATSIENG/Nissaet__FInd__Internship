@@ -131,8 +131,17 @@ const getInternshipById = async (req, res) => {
 
 const createInternship = async (req, res) => {
     try {
+        console.log('=== CREATE INTERNSHIP FUNCTION CALLED ===');
+        console.log('Request method:', req.method);
+        console.log('Request URL:', req.originalUrl);
         console.log('Create internship request received:', req.body);
         console.log('User from token:', req.user);
+
+        // Ensure this is not being called with an ID parameter (which would indicate routing issue)
+        if (req.params.id) {
+            console.error('ERROR: createInternship called with ID parameter:', req.params.id);
+            return res.status(400).json({ message: 'Invalid request: createInternship should not be called with an ID' });
+        }
 
         const {
             title,
@@ -316,10 +325,207 @@ const getMatchingInternships = async (req, res) => {
     }
 };
 
+const updateInternship = async (req, res) => {
+    try {
+        console.log('=== UPDATE INTERNSHIP FUNCTION CALLED ===');
+        console.log('Request method:', req.method);
+        console.log('Request URL:', req.originalUrl);
+        console.log('Update internship request received:', req.body);
+        console.log('Internship ID:', req.params.id);
+        console.log('User from token:', req.user);
+
+        const { id } = req.params;
+        const {
+            title,
+            description,
+            requirements,
+            location,
+            type = 'full-time',
+            duration_months,
+            stipend = 0,
+            stipend_currency = 'USD',
+            positions = 1,
+            application_deadline,
+            start_date,
+            end_date,
+            skills = []
+        } = req.body;
+
+        if (!title || !description || !location || !duration_months || !application_deadline) {
+            return res.status(400).json({ message: 'Required fields are missing' });
+        }
+
+        // Check if internship exists and belongs to the company
+        const existingInternship = await db.query(
+            'SELECT company_id FROM internships WHERE id = ? AND status = "active"',
+            [id]
+        );
+
+        if (existingInternship.length === 0) {
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+
+        let companyId = existingInternship[0].company_id;
+
+        // If user is a company, verify ownership
+        if (req.user && req.user.role === 'company') {
+            const userCompanyId = await getCompanyIdByUserId(req.user.userId);
+            if (companyId !== userCompanyId) {
+                return res.status(403).json({ message: 'You can only update your own internships' });
+            }
+        }
+
+        const connection = await db.connection();
+        
+        try {
+            await connection.beginTransaction();
+
+            // Update internship
+            await connection.execute(
+                `UPDATE internships SET 
+                    title = ?, description = ?, requirements = ?, location = ?,
+                    type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
+                    positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [
+                    title,
+                    description,
+                    requirements || null,
+                    location,
+                    type,
+                    duration_months,
+                    stipend,
+                    stipend_currency,
+                    positions,
+                    application_deadline,
+                    start_date || null,
+                    end_date || null,
+                    id
+                ]
+            );
+
+            // Update skills: remove existing skills and add new ones
+            await connection.execute(
+                'DELETE FROM internship_skills WHERE internship_id = ?',
+                [id]
+            );
+
+            // Handle skills if provided
+            if (skills && skills.length > 0) {
+                console.log('Processing skills:', skills);
+                for (const skillName of skills) {
+                    // Check if skill exists, if not create it
+                    const [existingSkills] = await connection.execute(
+                        'SELECT id FROM skills WHERE name = ?',
+                        [skillName]
+                    );
+
+                    let skillId;
+                    if (existingSkills.length === 0) {
+                        // Create new skill
+                        const [newSkill] = await connection.execute(
+                            'INSERT INTO skills (name) VALUES (?)',
+                            [skillName]
+                        );
+                        skillId = newSkill.insertId;
+                        console.log('Created new skill:', skillName, 'with ID:', skillId);
+                    } else {
+                        skillId = existingSkills[0].id;
+                        console.log('Found existing skill:', skillName, 'with ID:', skillId);
+                    }
+
+                    // Link skill to internship
+                    await connection.execute(
+                        'INSERT INTO internship_skills (internship_id, skill_id) VALUES (?, ?)',
+                        [id, skillId]
+                    );
+                }
+            }
+
+            await connection.commit();
+            console.log('Update transaction committed successfully');
+
+            return res.json({
+                message: 'Internship updated successfully',
+                internshipId: parseInt(id)
+            });
+        } catch (error) {
+            await connection.rollback();
+            console.error('Update transaction rolled back due to error:', error);
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error updating internship:', error);
+        return res.status(500).json({ message: 'Server error: ' + error.message });
+    }
+};
+
+const deleteInternship = async (req, res) => {
+    try {
+        console.log('Delete internship request received for ID:', req.params.id);
+        console.log('User from token:', req.user);
+
+        const { id } = req.params;
+        
+        // Validate ID
+        if (!id || isNaN(parseInt(id))) {
+            console.log('Invalid internship ID:', id);
+            return res.status(400).json({ message: 'Invalid internship ID' });
+        }
+
+        // Check if internship exists and belongs to the company
+        const existingInternship = await db.query(
+            'SELECT company_id FROM internships WHERE id = ? AND status = "active"',
+            [id]
+        );
+
+        console.log('Existing internship query result:', existingInternship);
+
+        if (existingInternship.length === 0) {
+            console.log('Internship not found or already deleted:', id);
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+
+        let companyId = existingInternship[0].company_id;
+        console.log('Internship belongs to company ID:', companyId);
+
+        // If user is a company, verify ownership
+        if (req.user && req.user.role === 'company') {
+            const userCompanyId = await getCompanyIdByUserId(req.user.userId);
+            console.log('User company ID:', userCompanyId);
+            if (companyId !== userCompanyId) {
+                console.log('Authorization failed: User does not own this internship');
+                return res.status(403).json({ message: 'You can only delete your own internships' });
+            }
+        }
+
+        // Soft delete by setting status to 'deleted'
+        const updateResult = await db.query(
+            'UPDATE internships SET status = "deleted", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [id]
+        );
+
+        console.log('Update query result:', updateResult);
+        console.log('Internship deleted successfully:', id);
+
+        return res.json({
+            message: 'Internship deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting internship:', error);
+        return res.status(500).json({ message: 'Server error: ' + error.message });
+    }
+};
+
 module.exports = {
     getAllInternships,
     getFeaturedCompanies,
     getInternshipById,
     createInternship,
+    updateInternship,
+    deleteInternship,
     getMatchingInternships
 };

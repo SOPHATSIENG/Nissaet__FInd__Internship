@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PlusCircle, 
   FilePlus, 
@@ -12,23 +12,55 @@ import {
   Lightbulb,
   ArrowRight,
   AlertTriangle,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../api/axios';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [internships, setInternships] = useState([
-    { id: 1, title: 'Marketing Intern', location: 'Phnom Penh • Full-time', date: 'Oct 12, 2023', applicants: 21, status: 'Active' },
-    { id: 2, title: 'Web Developer', location: 'Remote • Part-time', date: 'Oct 10, 2023', applicants: 43, status: 'Active' },
-    { id: 3, title: 'Graphic Designer', location: 'Siem Reap • Internship', date: 'Oct 05, 2023', applicants: 17, status: 'Active' },
-    { id: 4, title: 'Data Analyst', location: 'Phnom Penh • Full-time', date: 'Sep 28, 2023', applicants: 30, status: 'Closing Soon' },
-  ]);
-
+  const [internships, setInternships] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const fetchCompanyInternships = async () => {
+      try {
+        setLoading(true);
+        // For now, get all internships. In a real app, you'd filter by company ID
+        const response = await api.getInternships();
+        const items = Array.isArray(response?.internships) ? response.internships : [];
+        
+        // Transform data to match the expected format
+        const transformedItems = items.map(item => ({
+          id: item.id,
+          title: item.title,
+          location: `${item.location} • ${item.type || 'Full-time'}`,
+          date: new Date(item.created_at).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+          }),
+          applicants: item.applications_count || 0,
+          status: item.is_active ? 'Active' : 'Inactive'
+        }));
+        
+        setInternships(transformedItems);
+      } catch (error) {
+        console.error('Error fetching internships:', error);
+        setInternships([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCompanyInternships();
+  }, []);
 
   const stats = [
     { label: 'Total Posted', value: '12', icon: FilePlus, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+20%' },
@@ -37,12 +69,31 @@ export default function Dashboard() {
     { label: 'Expired Posts', value: '7', icon: History, color: 'text-orange-600', bg: 'bg-orange-50', trend: '+5%' },
   ];
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    console.log('handleDelete called with deleteId:', deleteId, 'type:', typeof deleteId);
     if (deleteId) {
-      setInternships(prev => prev.filter(item => item.id !== deleteId));
-      setDeleteId(null);
+      try {
+        setIsDeleting(true);
+        console.log('Calling api.deleteInternship with ID:', deleteId);
+        await api.deleteInternship(deleteId);
+        setInternships(prev => prev.filter(item => item.id !== deleteId));
+        setDeleteId(null);
+      } catch (error) {
+        console.error('Error deleting internship:', error);
+        alert(`Failed to delete internship: ${error.message || 'Please try again.'}`);
+      } finally {
+        setIsDeleting(false);
+      }
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-primary" size={40} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-8">
@@ -232,7 +283,7 @@ export default function Dashboard() {
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button 
-                            onClick={() => navigate(`/post/${job.id}`)}
+                            onClick={() => navigate(`/company/post/${job.id}`)}
                             className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 hover:text-primary transition-all"
                             title="Edit"
                           >
@@ -342,9 +393,10 @@ export default function Dashboard() {
                 </button>
                 <button 
                   onClick={handleDelete}
-                  className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 shadow-sm shadow-red-200 transition-all"
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 shadow-sm shadow-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Delete Post
+                  {isDeleting ? 'Deleting...' : 'Delete Post'}
                 </button>
               </div>
             </motion.div>

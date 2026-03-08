@@ -16,7 +16,11 @@ console.log('ADMIN_REGISTRATION_CODE loaded:', process.env.ADMIN_REGISTRATION_CO
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
 // FIX MARK: increase JSON payload limit so profile image (base64) can be saved.
 app.use(express.json({ limit: '10mb' })); // Body parser
 

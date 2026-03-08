@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5002/api';
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {
@@ -47,7 +47,13 @@ async function request(path, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = data?.message || 'Request failed.';
+    const message = data?.message || `Request failed with status ${response.status}`;
+    console.error('API Error Details:', {
+      status: response.status,
+      statusText: response.statusText,
+      url: `${API_BASE_URL}${path}`,
+      data: data
+    });
     throw new Error(message);
   }
 
@@ -186,6 +192,20 @@ export const api = {
 
   createInternship(payload) {
     return request('/internships', { method: 'POST', auth: true, body: payload });
+  },
+
+  updateInternship(id, payload) {
+    return request(`/internships/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  deleteInternship(id) {
+    console.log('Attempting to delete internship with ID:', id);
+    console.log('Stored token:', getStoredToken());
+    return request(`/internships/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  getInternshipById(id) {
+    return request(`/internships/${id}`);
   },
 };
 

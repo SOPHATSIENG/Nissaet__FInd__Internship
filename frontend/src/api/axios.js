@@ -150,6 +150,15 @@ export const api = {
     });
   },
 
+  getMatchingInternships() {
+    return request('/internships/matching', { auth: true }).then((data) => {
+      if (Array.isArray(data)) {
+        return { internships: data };
+      }
+      return data;
+    });
+  },
+
   getFeaturedCompanies(limit = 8) {
     return request(`/internships/featured-companies?limit=${limit}`).then((data) => {
       if (Array.isArray(data)) {

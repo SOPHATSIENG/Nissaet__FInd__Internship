@@ -247,9 +247,79 @@ const createInternship = async (req, res) => {
     }
 };
 
+const getMatchingInternships = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        // Get student's skills
+        const studentSkills = await db.query(
+            `SELECT s.id, s.name, ss.skill_level
+             FROM student_skills ss
+             JOIN skills s ON ss.skill_id = s.id
+             JOIN students st ON ss.student_id = st.id
+             WHERE st.user_id = ?`,
+            [userId]
+        );
+
+        if (studentSkills.length === 0) {
+            return res.json({ internships: [] });
+        }
+
+        const skillIds = studentSkills.map(skill => skill.id);
+        
+        // Find internships that match student's skills
+        const matchingInternships = await db.query(
+            `SELECT DISTINCT
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary_min,
+                i.stipend AS salary_max,
+                CASE 
+                    WHEN i.stipend > 0 THEN 'paid'
+                    ELSE 'unpaid'
+                END AS salary_type,
+                i.positions,
+                i.application_deadline AS deadline,
+                i.status AS is_active,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
+                c.logo AS company_logo,
+                COUNT(iskill.skill_id) AS matching_skills_count
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+             JOIN internship_skills iskill ON i.id = iskill.internship_id
+             WHERE i.status = 'active' AND iskill.skill_id IN (?)
+             GROUP BY i.id, c.id
+             HAVING matching_skills_count > 0
+             ORDER BY matching_skills_count DESC, i.created_at DESC`,
+            [skillIds]
+        );
+
+        return res.json({ internships: matchingInternships });
+    } catch (error) {
+        console.error('Error fetching matching internships:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     getAllInternships,
     getFeaturedCompanies,
     getInternshipById,
-    createInternship
+    createInternship,
+    getMatchingInternships
 };

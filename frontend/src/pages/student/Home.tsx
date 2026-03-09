@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
+import HoverRevealCards from "../../components/HoverRevealCards";
 
 interface FeaturedCompany {
   id: number;
@@ -326,6 +327,8 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      <HoverRevealCards />
 
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
         <div className="max-w-5xl mx-auto bg-[#3b82f6] rounded-3xl p-10 md:p-16 flex flex-col md:flex-row items-center justify-between gap-8">

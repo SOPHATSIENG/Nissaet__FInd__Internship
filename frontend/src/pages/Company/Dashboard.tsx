@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   PlusCircle, 
   FilePlus, 
@@ -23,80 +23,109 @@ import api from '../../api/axios';
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [internships, setInternships] = useState<any[]>([]);
+  const [internships, setInternships] = useState([]);
+  const [recentApplications, setRecentApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    const fetchCompanyInternships = async () => {
-      try {
-        setLoading(true);
-        // For now, get all internships. In a real app, you'd filter by company ID
-        const response = await api.getInternships();
-        const items = Array.isArray(response?.internships) ? response.internships : [];
-        
-        // Transform data to match the expected format
-        const transformedItems = items.map(item => ({
-          id: item.id,
-          title: item.title,
-          location: `${item.location} • ${item.type || 'Full-time'}`,
-          date: new Date(item.created_at).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
-          }),
-          applicants: item.applications_count || 0,
-          status: item.is_active ? 'Active' : 'Inactive'
-        }));
-        
-        setInternships(transformedItems);
-      } catch (error) {
-        console.error('Error fetching internships:', error);
-        setInternships([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      const [internshipsRes, applicationsRes] = await Promise.all([
+        api.getCompanyInternships(),
+        api.getCompanyApplications({ limit: 5 })
+      ]);
 
-    fetchCompanyInternships();
+      if (internshipsRes.success) {
+        setInternships(internshipsRes.internships || []);
+      }
+      if (applicationsRes.success) {
+        setRecentApplications(applicationsRes.applications || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err);
+      setError('Could not load dashboard data. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
   const stats = [
-    { label: 'Total Posted', value: '12', icon: FilePlus, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+20%' },
-    { label: 'Total Applicants', value: '148', icon: Users, color: 'text-purple-600', bg: 'bg-purple-50', trend: '+15%' },
-    { label: 'Active Posts', value: '5', icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', trend: 'Stable' },
-    { label: 'Expired Posts', value: '7', icon: History, color: 'text-orange-600', bg: 'bg-orange-50', trend: '+5%' },
+    { 
+      label: 'Total Posted', 
+      value: internships.length.toString(), 
+      icon: FilePlus, 
+      color: 'text-blue-600', 
+      bg: 'bg-blue-50', 
+      trend: 'Stable' 
+    },
+    { 
+      label: 'Total Applicants', 
+      value: internships.reduce((acc, curr) => acc + (curr.applicant_count || 0), 0).toString(), 
+      icon: Users, 
+      color: 'text-purple-600', 
+      bg: 'bg-purple-50', 
+      trend: 'Stable' 
+    },
+    { 
+      label: 'Active Posts', 
+      value: internships.filter(i => i.status === 'active').length.toString(), 
+      icon: CheckCircle, 
+      color: 'text-emerald-600', 
+      bg: 'bg-emerald-50', 
+      trend: 'Stable' 
+    },
+    { 
+      label: 'Expired Posts', 
+      value: internships.filter(i => i.status === 'expired' || i.status === 'closed').length.toString(), 
+      icon: History, 
+      color: 'text-orange-600', 
+      bg: 'bg-orange-50', 
+      trend: 'Stable' 
+    },
   ];
 
   const handleDelete = async () => {
-    console.log('handleDelete called with deleteId:', deleteId, 'type:', typeof deleteId);
-    if (deleteId) {
-      try {
-        setIsDeleting(true);
-        console.log('Calling api.deleteInternship with ID:', deleteId);
-        await api.deleteInternship(deleteId);
+    if (!deleteId) return;
+    
+    setIsDeleting(true);
+    try {
+      const response = await api.deleteInternship(deleteId);
+      if (response.success) {
         setInternships(prev => prev.filter(item => item.id !== deleteId));
         setDeleteId(null);
-      } catch (error) {
-        console.error('Error deleting internship:', error);
-        alert(`Failed to delete internship: ${error.message || 'Please try again.'}`);
-      } finally {
-        setIsDeleting(false);
       }
+    } catch (err) {
+      console.error('Failed to delete internship:', err);
+      alert('Failed to delete internship. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="animate-spin text-primary" size={40} />
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-8">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-center gap-3">
+          <AlertTriangle size={20} />
+          {error}
+        </div>
+      )}
+      
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Dashboard Overview</h1>
@@ -180,7 +209,9 @@ export default function Dashboard() {
                 <circle cx="50" cy="50" fill="transparent" r="40" stroke="#f59e0b" strokeDasharray="138.2 251.3" strokeDashoffset="-113.1" strokeWidth="12"></circle>
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-3xl font-bold text-slate-900">148</span>
+                <span className="text-3xl font-bold text-slate-900">
+                  {internships.reduce((acc, curr) => acc + (curr.applicant_count || 0), 0)}
+                </span>
                 <span className="text-[10px] uppercase text-slate-500 font-semibold tracking-wider">Total</span>
               </div>
             </div>
@@ -237,70 +268,80 @@ export default function Dashboard() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <AnimatePresence mode="popLayout">
-                  {internships.map((job) => (
-                    <motion.tr 
-                      key={job.id} 
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      className="group hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                            <PlusCircle size={20} />
+                  {internships.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-slate-500">
+                        No internships posted yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    internships.map((job) => (
+                      <motion.tr 
+                        key={job.id} 
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="group hover:bg-slate-50 transition-colors"
+                      >
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                              <PlusCircle size={20} />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900 text-sm">{job.title}</p>
+                              <p className="text-xs text-slate-500">{job.location}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-slate-900 text-sm">{job.title}</p>
-                            <p className="text-xs text-slate-500">{job.location}</p>
+                        </td>
+                        <td className="py-4 px-6 text-sm text-slate-600">
+                          {new Date(job.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex -space-x-2 overflow-hidden">
+                            {[1, 2, 3].map(n => (
+                              <img 
+                                key={n}
+                                className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
+                                src={`https://picsum.photos/seed/user${n}/32/32`} 
+                                alt="Applicant" 
+                              />
+                            ))}
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
+                              <span className="text-xs font-medium text-slate-500">+{job.applicant_count || 0}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-slate-600">{job.date}</td>
-                      <td className="py-4 px-6">
-                        <div className="flex -space-x-2 overflow-hidden">
-                          {[1, 2, 3].map(n => (
-                            <img 
-                              key={n}
-                              className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
-                              src={`https://picsum.photos/seed/user${n}/32/32`} 
-                              alt="Applicant" 
-                            />
-                          ))}
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
-                            <span className="text-xs font-medium text-slate-500">+{job.applicants}</span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                            job.status === 'active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
+                          }`}>
+                            {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => navigate(`/company/post/${job.id}`)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 hover:text-primary transition-all"
+                              title="Edit"
+                            >
+                              <Edit3 size={14} />
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => setDeleteId(job.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={18} />
+                            </button>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
-                          job.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
-                        }`}>
-                          {job.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button 
-                            onClick={() => navigate(`/company/post/${job.id}`)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 hover:text-primary transition-all"
-                            title="Edit"
-                          >
-                            <Edit3 size={14} />
-                            Edit
-                          </button>
-                          <button 
-                            onClick={() => setDeleteId(job.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
+                        </td>
+                      </motion.tr>
+                    ))
+                  )}
                 </AnimatePresence>
               </tbody>
             </table>
@@ -311,29 +352,38 @@ export default function Dashboard() {
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-lg font-bold text-slate-900 mb-4">Recent Applicants</h3>
             <div className="space-y-4">
-              {[
-                { id: 1, name: 'Sophea Chan', role: 'Marketing Intern', time: '2 hours ago' },
-                { id: 2, name: 'Dara Sok', role: 'Web Developer', time: '5 hours ago' },
-                { id: 3, name: 'Vanna Ly', role: 'Data Analyst', time: '1 day ago' },
-              ].map((app, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <img className="h-10 w-10 rounded-full object-cover" src={`https://picsum.photos/seed/app${i}/40/40`} alt="Applicant" />
-                  <div className="flex-1 min-w-0">
-                    <Link 
-                      to={`/student/${app.id}`}
-                      className="text-sm font-medium text-slate-900 truncate hover:text-primary transition-colors block"
-                    >
-                      {app.name}
-                    </Link>
-                    <p className="text-xs text-slate-500 truncate">Applied for {app.role}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{app.time}</p>
+              {recentApplications.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">No recent applicants.</p>
+              ) : (
+                recentApplications.map((app, i) => (
+                  <div key={app.id} className="flex items-start gap-3">
+                    <img 
+                      className="h-10 w-10 rounded-full object-cover" 
+                      src={app.student_image || `https://picsum.photos/seed/app${i}/40/40`} 
+                      alt="Applicant" 
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Link 
+                        to={`/company/student/${app.student_id}`}
+                        className="text-sm font-medium text-slate-900 truncate hover:text-primary transition-colors block"
+                      >
+                        {app.student_name}
+                      </Link>
+                      <p className="text-xs text-slate-500 truncate">Applied for {app.internship_title}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {new Date(app.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
-            <button className="w-full mt-4 text-center text-sm font-medium text-primary hover:text-primary-dark transition-colors">
+            <Link 
+              to="/company/applicants"
+              className="w-full mt-4 text-center text-sm font-medium text-primary hover:text-primary-dark transition-colors block"
+            >
               View All Activity
-            </button>
+            </Link>
           </div>
           <div className="bg-primary/10 rounded-xl p-6 border border-primary/20">
             <div className="flex items-center gap-2 mb-2">
@@ -343,9 +393,9 @@ export default function Dashboard() {
             <p className="text-xs text-slate-600 leading-relaxed mb-3">
               Companies with detailed internship descriptions get 40% more qualified applicants.
             </p>
-            <a className="text-xs font-bold text-primary hover:underline flex items-center gap-1" href="#">
+            <Link className="text-xs font-bold text-primary hover:underline flex items-center gap-1" to="/company/settings">
               Edit your profile <ArrowRight size={12} />
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -358,7 +408,7 @@ export default function Dashboard() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setDeleteId(null)}
+              onClick={() => !isDeleting && setDeleteId(null)}
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             />
             <motion.div 
@@ -374,7 +424,8 @@ export default function Dashboard() {
                   </div>
                   <button 
                     onClick={() => setDeleteId(null)}
-                    className="p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                    disabled={isDeleting}
+                    className="p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors disabled:opacity-50"
                   >
                     <X size={20} />
                   </button>
@@ -387,15 +438,17 @@ export default function Dashboard() {
               <div className="bg-slate-50 p-6 flex gap-3">
                 <button 
                   onClick={() => setDeleteId(null)}
-                  className="flex-1 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all"
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 shadow-sm shadow-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 shadow-sm shadow-red-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {isDeleting && <Loader2 size={16} className="animate-spin" />}
                   {isDeleting ? 'Deleting...' : 'Delete Post'}
                 </button>
               </div>

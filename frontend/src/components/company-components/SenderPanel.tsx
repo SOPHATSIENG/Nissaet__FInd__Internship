@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Send, AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react';
-import { useNotifications } from '../contexts/NotificationContext';
-import { useAuth } from '../contexts/AuthContext';
-import { NotificationType } from '../types';
+import { useNotifications } from '../../context/company-contexts/NotificationContext';
+import { useAuth } from '../../context/company-contexts/AuthContext';
+import { NotificationType } from '../../types';
 
 export const SenderPanel: React.FC = () => {
   const { sendNotification } = useNotifications();

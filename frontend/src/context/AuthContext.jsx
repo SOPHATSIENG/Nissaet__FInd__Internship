@@ -26,7 +26,7 @@ const getStoredUser = () => {
 const storeSession = (token, user) => {
   const normalizedUser = normalizeUser(user);
   authStorage.setToken(token);
-  localStorage.setItem('token', token); // backward compatibility for existing code
+  localStorage.setItem('token', token);
   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(normalizedUser));
   localStorage.setItem('user', JSON.stringify(normalizedUser));
   return normalizedUser;
@@ -143,7 +143,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // FIX MARK: keep auth session user in sync when profile settings (including image) are updated.
     const handleProfileUpdated = (event) => {
       const personal = event?.detail?.personal;
       if (!personal) return;

@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield, User, Mail, Key, Building2, Send } from 'lucide-react';
-import { SplitLayout } from '../components/SplitLayout';
-import { Input } from '../components/Input';
-import { Select } from '../components/Select';
-import { Button } from '../components/Button';
+import { SplitLayout } from '../../components/SplitLayout';
+import { Input } from '../../components/Input';
+import { Select } from '../../components/Select';
+import { Button } from '../../components/Button';
 
 export function AdminStep2() {
   const navigate = useNavigate();
@@ -43,7 +43,7 @@ export function AdminStep2() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Input
           label="Full Name"
-          placeholder="Jane Administrator"
+          placeholder="Name Administrator"
           icon={User}
         />
 

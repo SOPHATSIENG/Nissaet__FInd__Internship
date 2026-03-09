@@ -19,7 +19,6 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
-import api from '../../api/axios';
 
 export default function PostInternship() {
   const { id } = useParams();
@@ -44,7 +43,6 @@ export default function PostInternship() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isEditMode) {

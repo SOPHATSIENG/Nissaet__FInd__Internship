@@ -20,11 +20,31 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
 
+interface Internship {
+  id: number;
+  title: string;
+  location: string;
+  status: string;
+  created_at: string;
+  applicant_count: number;
+}
+
+interface Application {
+  id: number;
+  student_id: number;
+  internship_id: number;
+  status: string;
+  created_at: string;
+  internship_title: string;
+  student_name: string;
+  student_image: string;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [internships, setInternships] = useState([]);
-  const [recentApplications, setRecentApplications] = useState([]);
+  const { user } = useAuth() as { user: { company_name?: string; company_profile?: { company_name?: string } } | null };
+  const [internships, setInternships] = useState<Internship[]>([]);
+  const [recentApplications, setRecentApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -38,11 +58,11 @@ export default function Dashboard() {
         api.getCompanyApplications({ limit: 5 })
       ]);
 
-      if (internshipsRes.success) {
-        setInternships(internshipsRes.internships || []);
+      if (internshipsRes?.success && internshipsRes.internships) {
+        setInternships(internshipsRes.internships);
       }
-      if (applicationsRes.success) {
-        setRecentApplications(applicationsRes.applications || []);
+      if (applicationsRes?.success && applicationsRes.applications) {
+        setRecentApplications(applicationsRes.applications);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);

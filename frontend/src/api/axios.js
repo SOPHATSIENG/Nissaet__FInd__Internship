@@ -220,8 +220,14 @@ export const api = {
     return request(`/internships/${id}`, { method: 'DELETE', auth: true });
   },
 
-  getCompanyApplications() {
-    return request('/applications/company/mine', { auth: true });
+  getCompanyApplications(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/applications/company/mine${query ? `?${query}` : ''}`, { auth: true });
   },
 
   // FIXED: dynamic skill lookup for registration step 3.

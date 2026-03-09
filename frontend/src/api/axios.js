@@ -47,7 +47,13 @@ async function request(path, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = data?.message || 'Request failed.';
+    const message = data?.message || `Request failed with status ${response.status}`;
+    console.error('API Error Details:', {
+      status: response.status,
+      statusText: response.statusText,
+      url: `${API_BASE_URL}${path}`,
+      data: data
+    });
     throw new Error(message);
   }
 
@@ -99,7 +105,7 @@ export const api = {
 
   // FIX MARK: profile settings API used by dynamic account settings page.
   getProfileSettings() {
-    return request('/profile/settings', { auth: true });
+    return request(`/profile/settings?ts=${Date.now()}`, { auth: true });
   },
 
   updatePersonalSettings(payload) {
@@ -150,6 +156,15 @@ export const api = {
     });
   },
 
+  getMatchingInternships() {
+    return request('/internships/matching', { auth: true }).then((data) => {
+      if (Array.isArray(data)) {
+        return { internships: data };
+      }
+      return data;
+    });
+  },
+
   getFeaturedCompanies(limit = 8) {
     return request(`/internships/featured-companies?limit=${limit}`).then((data) => {
       if (Array.isArray(data)) {
@@ -173,6 +188,24 @@ export const api = {
       }
       return data;
     });
+  },
+
+  createInternship(payload) {
+    return request('/internships', { method: 'POST', auth: true, body: payload });
+  },
+
+  updateInternship(id, payload) {
+    return request(`/internships/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  deleteInternship(id) {
+    console.log('Attempting to delete internship with ID:', id);
+    console.log('Stored token:', getStoredToken());
+    return request(`/internships/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  getInternshipById(id) {
+    return request(`/internships/${id}`);
   },
 };
 

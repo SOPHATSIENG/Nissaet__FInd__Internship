@@ -660,6 +660,7 @@ const updateCompanySettings = async (req, res) => {
         const industry = toNullableString(req.body.industry);
         const website = toNullableString(req.body.website);
         const location = toNullableString(req.body.location);
+        const logo = toNullableString(req.body.logo);
 
         await updateCompanyProfile(userId, {
             name,
@@ -667,7 +668,17 @@ const updateCompanySettings = async (req, res) => {
             industry,
             website,
             headquarters: location,
+            logo,
         });
+
+        if (logo) {
+            const userColumns = await getTableColumns('users');
+            if (userColumns.has('profile_image')) {
+                await db.query('UPDATE users SET profile_image = ? WHERE id = ?', [logo, userId]);
+            } else if (userColumns.has('profile')) {
+                await db.query('UPDATE users SET profile = ? WHERE id = ?', [logo, userId]);
+            }
+        }
 
         const refreshed = await db.query(
             `SELECT

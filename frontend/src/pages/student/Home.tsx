@@ -24,6 +24,8 @@ interface Internship {
   title: string;
   company_name: string;
   location: string;
+  description?: string;
+  requirements?: string;
   salary_type: string;
   salary_min: number | null;
   salary_max: number | null;
@@ -31,9 +33,31 @@ interface Internship {
   company_logo: string | null;
 }
 
+const normalizeText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const SKILL_ALIASES: Record<string, string[]> = {
+  frontend: ["frontend", "front end", "react", "javascript", "typescript", "html", "css", "ui", "ux"],
+  python: ["python", "django", "flask", "fastapi", "pandas"],
+};
+
+const hasPhrase = (target: string, phrase: string) =>
+  ` ${target} `.includes(` ${normalizeText(phrase)} `);
+
+const matchesSkill = (target: string, skill: string) => {
+  const normalizedSkill = normalizeText(skill);
+  const aliases = SKILL_ALIASES[normalizedSkill] || [normalizedSkill];
+  return aliases.some((alias) => hasPhrase(target, alias));
+};
+
 export default function Home() {
   const [featuredCompanies, setFeaturedCompanies] = useState<FeaturedCompany[]>([]);
   const [latestInternships, setLatestInternships] = useState<Internship[]>([]);
+  const [profileSkills, setProfileSkills] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -44,9 +68,10 @@ export default function Home() {
       try {
         setLoading(true);
         setError("");
-        const [companiesRes, internshipsRes] = await Promise.all([
+        const [companiesRes, internshipsRes, profileRes] = await Promise.all([
           api.getFeaturedCompanies(4),
-          api.getInternships({ limit: 6 }),
+          api.getInternships({ limit: 100 }),
+          api.getProfileSettings().catch(() => null),
         ]);
 
         if (!isMounted) {
@@ -55,6 +80,13 @@ export default function Home() {
 
         setFeaturedCompanies(companiesRes.companies || []);
         setLatestInternships(internshipsRes.internships || []);
+        setProfileSkills(
+          Array.isArray(profileRes?.settings?.skills)
+            ? profileRes.settings.skills
+                .map((skill: { name?: string }) => (skill?.name || "").trim().toLowerCase())
+                .filter(Boolean)
+            : []
+        );
       } catch (requestError) {
         if (!isMounted) {
           return;
@@ -78,7 +110,20 @@ export default function Home() {
   }, []);
 
   const companiesForDisplay = useMemo(() => featuredCompanies.slice(0, 4), [featuredCompanies]);
-  const internshipsForDisplay = useMemo(() => latestInternships.slice(0, 4), [latestInternships]);
+  const internshipsForDisplay = useMemo(() => {
+    if (!profileSkills.length) {
+      return [];
+    }
+
+    return latestInternships
+      .filter((job) => {
+        const target = normalizeText(
+          `${job.title} ${job.description || ""} ${job.requirements || ""}`
+        );
+        return profileSkills.some((skill) => matchesSkill(target, skill));
+      })
+      .slice(0, 4);
+  }, [latestInternships, profileSkills]);
 
   const salaryText = (item: Internship) => {
     if (item.salary_type === "unpaid") {
@@ -229,7 +274,7 @@ export default function Home() {
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#f6f8f7]">
         <div className="max-w-[1440px] mx-auto">
           <div className="flex justify-between items-center mb-10">
-            <h2 className="text-3xl font-bold">Latest Internships</h2>
+            <h2 className="text-3xl font-bold">Find Matching Internships</h2>
             <Link
               to="/internships"
               className="text-[#3b82f6] font-bold hover:underline"
@@ -273,7 +318,11 @@ export default function Home() {
             ))}
           </div>
           {!loading && !internshipsForDisplay.length && (
-            <p className="text-sm text-gray-500 mt-4">No internships available yet.</p>
+            <p className="text-sm text-gray-500 mt-4">
+              {profileSkills.length
+                ? "No internships match this student's registered skills yet."
+                : "No registered skills found for this student. Add skills in Student Settings to get matching internships."}
+            </p>
           )}
         </div>
       </section>

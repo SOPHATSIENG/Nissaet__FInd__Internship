@@ -12,15 +12,17 @@ import {
   Underline,
   List,
   ListOrdered,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
+import api from '../../api/axios';
 
 export default function PostInternship() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const isEditMode = !!id;
+  const isEditMode = !!id && id !== 'undefined' && id !== 'null';
 
   const [formData, setFormData] = useState({
     title: '',
@@ -36,32 +38,132 @@ export default function PostInternship() {
     deadline: ''
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isEditMode) {
-      // Mock fetching data for the internship
-      setFormData({
-        title: 'Marketing Intern',
-        location: 'Phnom Penh',
-        duration: '3',
-        description: 'We are looking for a creative Marketing Intern to join our team...',
-        requirements: 'Currently enrolled in a Marketing or related degree...',
-        salaryType: 'paid',
-        minSalary: '150',
-        maxSalary: '300',
-        skills: ['Social Media', 'Copywriting', 'Content Strategy'],
-        positions: 2,
-        deadline: '2023-12-31'
-      });
-    }
-  }, [id, isEditMode]);
+    if (isEditMode && id) {
+      const fetchInternship = async () => {
+        try {
+          setLoading(true);
+          const response = await api.getInternshipById(id);
+          const internship = response.internship;
+          
+          if (internship) {
+            setFormData({
+              title: internship.title || '',
+              location: internship.location || 'Phnom Penh',
+              duration: internship.duration?.toString() || '',
+              description: internship.description || '',
+              requirements: internship.requirements || '',
+              salaryType: internship.stipend > 0 ? 'paid' : 'unpaid',
+              minSalary: internship.stipend?.toString() || '',
+              maxSalary: internship.stipend?.toString() || '',
+              skills: [], // Will be populated separately if needed
+              positions: internship.positions || 1,
+              deadline: internship.deadline || ''
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching internship:', error);
+          alert('Failed to load internship data. Please try again.');
+          navigate('/company');
+        } finally {
+          setLoading(false);
+        }
+      };
 
-  const handleDelete = () => {
-    // In a real application, this would call an API to delete the post
-    console.log(`Deleting internship post with ID: ${id}`);
-    setIsDeleteModalOpen(false);
-    navigate('/dashboard');
+      fetchInternship();
+    }
+  }, [id, isEditMode, navigate]);
+
+  if (loading && isEditMode) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-primary" size={40} />
+      </div>
+    );
+  }
+
+  const handleDelete = async () => {
+    try {
+      await api.deleteInternship(id);
+      setIsDeleteModalOpen(false);
+      navigate('/company');
+    } catch (error) {
+      console.error('Error deleting internship:', error);
+      alert(`Failed to delete internship: ${error.message || 'Please try again.'}`);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Validation
+      if (!formData.title.trim()) {
+        alert('Please enter an internship title');
+        return;
+      }
+      if (!formData.description.trim()) {
+        alert('Please enter a job description');
+        return;
+      }
+      if (!formData.duration) {
+        alert('Please enter the duration');
+        return;
+      }
+      if (!formData.deadline) {
+        alert('Please select an application deadline');
+        return;
+      }
+      if (formData.salaryType === 'paid') {
+        const minSalary = parseFloat(formData.minSalary) || 0;
+        const maxSalary = parseFloat(formData.maxSalary) || 0;
+        if (minSalary > 0 && maxSalary > 0 && minSalary > maxSalary) {
+          alert('Minimum salary cannot be greater than maximum salary');
+          return;
+        }
+      }
+
+      // Map form data to backend API format
+      const payload = {
+        title: formData.title,
+        description: formData.description,
+        requirements: formData.requirements,
+        location: formData.location,
+        type: 'full-time',
+        duration_months: parseInt(formData.duration),
+        stipend: formData.salaryType === 'paid' ? parseFloat(formData.minSalary) || 0 : 0,
+        stipend_currency: 'USD',
+        positions: formData.positions,
+        application_deadline: formData.deadline,
+        skills: formData.skills
+      };
+
+      console.log('Submitting payload:', payload);
+      console.log('isEditMode:', isEditMode, 'id:', id);
+
+      if (isEditMode) {
+        console.log('Calling updateInternship with ID:', id);
+        const response = await api.updateInternship(id, payload);
+        console.log('Update response:', response);
+      } else {
+        console.log('Calling createInternship');
+        const response = await api.createInternship(payload);
+        console.log('Create response:', response);
+      }
+
+      navigate('/company');
+    } catch (error) {
+      const action = isEditMode ? 'updating' : 'creating';
+      console.error(`Error ${action} internship:`, error);
+      alert(`Failed to ${action.replace('ing', '')} internship: ${error.message || 'Please try again.'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -98,7 +200,7 @@ export default function PostInternship() {
         </div>
       </div>
 
-      <form className="flex flex-col gap-6" onSubmit={(e) => e.preventDefault()}>
+      <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 md:p-8">
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
             <Info size={20} className="text-primary" />
@@ -348,9 +450,13 @@ export default function PostInternship() {
           >
             Cancel
           </button>
-          <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all" type="submit">
+          <button 
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed" 
+            type="submit"
+            disabled={isSubmitting}
+          >
             <Send size={20} />
-            {isEditMode ? 'Update Internship' : 'Publish Internship'}
+            {isSubmitting ? 'Publishing...' : (isEditMode ? 'Update Internship' : 'Publish Internship')}
           </button>
         </div>
       </form>

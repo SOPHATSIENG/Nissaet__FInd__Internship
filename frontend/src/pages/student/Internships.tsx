@@ -7,6 +7,7 @@ import {
   Bookmark,
   BookmarkCheck,
   Building2,
+  Plus,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -43,8 +44,20 @@ export default function Internships() {
   const [query, setQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
   const [internships, setInternships] = useState<InternshipApiItem[]>([]);
+  const [matchingInternships, setMatchingInternships] = useState<InternshipApiItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMatching, setLoadingMatching] = useState(false);
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const goToPage = (page: number) => {
+    const totalPages = Math.ceil(filteredCards.length / itemsPerPage);
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -69,7 +82,28 @@ export default function Internships() {
       }
     };
 
+    const loadMatching = async () => {
+      try {
+        setLoadingMatching(true);
+        const res = await api.getMatchingInternships();
+        const items = Array.isArray(res?.internships) ? res.internships : [];
+        if (mounted) {
+          setMatchingInternships(items);
+        }
+      } catch (err) {
+        console.error('Failed to load matching internships:', err);
+        if (mounted) {
+          setMatchingInternships([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoadingMatching(false);
+        }
+      }
+    };
+
     load();
+    loadMatching();
     return () => {
       mounted = false;
     };
@@ -115,7 +149,46 @@ export default function Internships() {
     });
   }, [cards, query, locationQuery]);
 
-  const recommendedInternships = filteredCards.slice(0, 2);
+  const recommendedInternships = matchingInternships.length > 0 ? matchingInternships.slice(0, 2) : filteredCards.slice(0, 2);
+
+  const totalPages = Math.ceil(filteredCards.length / itemsPerPage);
+
+  const paginatedCards = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredCards.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredCards, currentPage, itemsPerPage]);
+
+  const visiblePages = useMemo(() => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    if (start > 1) {
+      pages.push(1);
+      if (start > 2) pages.push("...");
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+
+    if (end < totalPages) {
+      if (end < totalPages - 1) pages.push("...");
+      pages.push(totalPages);
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, locationQuery]);
 
   return (
     <div className="flex flex-col">
@@ -178,8 +251,8 @@ export default function Internships() {
                   { name: "Backend Dev", count: 8, checked: false },
                   { name: "UI/UX Design", count: 5, checked: true },
                   { name: "Data Science", count: 3, checked: false },
-                ].map((item, i) => (
-                  <label key={i} className="flex items-center justify-between cursor-pointer group">
+                ].map((item) => (
+                  <label key={item.name} className="flex items-center justify-between cursor-pointer group">
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
@@ -204,8 +277,8 @@ export default function Internships() {
                   { name: "Phnom Penh", checked: false },
                   { name: "Siem Reap", checked: false },
                   { name: "Remote", checked: false },
-                ].map((item, i) => (
-                  <label key={i} className="flex items-center gap-3 cursor-pointer group">
+                ].map((item) => (
+                  <label key={item.name} className="flex items-center gap-3 cursor-pointer group">
                     <input
                       type="radio"
                       name="location"
@@ -225,7 +298,7 @@ export default function Internships() {
               <div className="flex gap-2">
                 {["All", "Paid", "Unpaid"].map((item, i) => (
                   <button
-                    key={i}
+                    key={item}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                       i === 0
                         ? "bg-[#3b82f6]/10 text-[#2563eb] border border-[#3b82f6]/30"
@@ -248,54 +321,100 @@ export default function Internships() {
 
             <div className="mb-12">
               <div className="flex justify-between items-end mb-6">
-                <h2 className="text-2xl font-bold">Recommended for you</h2>
+                <div>
+                  <h2 className="text-2xl font-bold">
+                    {matchingInternships.length > 0 ? "Matching Internships" : "Recommended for you"}
+                  </h2>
+                  {matchingInternships.length > 0 && (
+                    <p className="text-gray-500 text-sm mt-1">
+                      Based on your skills ({matchingInternships.length} found)
+                    </p>
+                  )}
+                </div>
                 <Link to="/internships" className="text-[#3b82f6] font-bold hover:underline">
-                  View All →
+                  View All -&gt;
                 </Link>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                {recommendedInternships.map((job) => (
-                  <div
-                    key={job.id}
-                    className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
-                  >
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#3b82f6]/5 rounded-bl-full -z-10"></div>
-                    <div className="flex items-start gap-4 mb-4">
-                      <img src={job.logo} alt={job.company} className="w-12 h-12 rounded-xl object-cover" />
-                      <div>
-                        <Link
-                          to={`/internships/${job.id}`}
-                          className="font-bold text-lg leading-tight hover:text-[#3b82f6] transition-colors"
-                        >
-                          {job.title}
-                        </Link>
-                        <p className="text-gray-500 text-sm">
-                          {job.company} | {job.location}
-                        </p>
+              {loadingMatching ? (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm animate-pulse">
+                      <div className="flex items-start gap-4 mb-4">
+                        <div className="w-12 h-12 rounded-xl bg-gray-200"></div>
+                        <div className="flex-1">
+                          <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mb-6">
+                        <div className="h-6 bg-gray-200 rounded w-20"></div>
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
                       </div>
                     </div>
-
-                    <div className="flex gap-2 mb-6">
-                      {job.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                      <span className="text-gray-400 text-xs">Posted {job.posted || ""}</span>
-                      <Link to={`/internships/${job.id}`} className="text-[#3b82f6] font-bold text-sm hover:underline">
-                        View Details
-                      </Link>
-                    </div>
+                  ))}
+                </div>
+              ) : matchingInternships.length === 0 && !loadingMatching ? (
+                <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Code className="w-8 h-8 text-gray-400" />
                   </div>
-                ))}
-              </div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No registered skills found</h3>
+                  <p className="text-gray-500 mb-4">
+                    Add skills in Student Settings to get matching internships.
+                  </p>
+                  <Link 
+                    to="/settings?tab=skills" 
+                    className="inline-flex items-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Skills
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {recommendedInternships.map((job) => (
+                    <div
+                      key={job.id}
+                      className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
+                    >
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-[#3b82f6]/5 rounded-bl-full -z-10"></div>
+                      <div className="flex items-start gap-4 mb-4">
+                        <img src={job.logo} alt={job.company} className="w-12 h-12 rounded-xl object-cover" />
+                        <div>
+                          <Link
+                            to={`/internships/${job.id}`}
+                            className="font-bold text-lg leading-tight hover:text-[#3b82f6] transition-colors"
+                          >
+                            {job.title}
+                          </Link>
+                          <p className="text-gray-500 text-sm">
+                            {job.company} | {job.location}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 mb-6">
+                        {job.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                        <span className="text-gray-400 text-xs">Posted {job.posted || ""}</span>
+                        <Link to={`/internships/${job.id}`} className="text-[#3b82f6] font-bold text-sm hover:underline">
+                          View Details
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
@@ -319,7 +438,7 @@ export default function Internships() {
                     No internships found.
                   </div>
                 ) : (
-                  filteredCards.map((job) => (
+                  paginatedCards.map((job) => (
                     <div
                       key={job.id}
                       className={`bg-white p-6 rounded-2xl border ${
@@ -395,26 +514,47 @@ export default function Internships() {
               </div>
 
               <div className="flex justify-center items-center gap-2 mt-12">
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <span className="sr-only">Previous</span>
-                  &lt;
+                  <span aria-hidden="true">&lt;</span>
                 </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#3b82f6] text-[#111816] font-bold">
-                  1
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  2
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  3
-                </button>
-                <span className="text-gray-400">...</span>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
-                  8
-                </button>
-                <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+                {visiblePages.map((page) => {
+                  if (typeof page !== "number") {
+                    return (
+                      <span key={page} className="px-1 text-gray-400 select-none">
+                        ...
+                      </span>
+                    );
+                  }
+                  const isActive = page === currentPage;
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => goToPage(page)}
+                      className={`w-10 h-10 flex items-center justify-center rounded-lg font-medium transition-colors ${
+                        isActive
+                          ? "bg-[#3b82f6] text-[#111816] font-bold"
+                          : "hover:bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <span className="sr-only">Next</span>
-                  &gt;
+                  <span aria-hidden="true">&gt;</span>
                 </button>
               </div>
             </div>

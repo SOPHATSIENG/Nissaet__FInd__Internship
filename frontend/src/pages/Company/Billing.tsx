@@ -9,8 +9,17 @@ import {
   Building2,
   Lock
 } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 
 export default function Billing() {
+  const location = useLocation();
+  
+  const navItems = [
+    { name: 'Company Profile', icon: Building2, path: '/company/settings' },
+    { name: 'Security & Login', icon: Lock, path: '/company/security' },
+    { name: 'Notifications', icon: Bell, path: '/company/notifications' },
+    { name: 'Billing', icon: CreditCard, path: '/company/billing' },
+  ];
   const history = [
     { date: 'Oct 14, 2024', desc: 'Premium Plan - Monthly', amount: '$49.00', status: 'Paid' },
     { date: 'Sep 14, 2024', desc: 'Premium Plan - Monthly', amount: '$49.00', status: 'Paid' },
@@ -36,25 +45,23 @@ export default function Billing() {
       <div className="flex flex-col lg:flex-row gap-8">
         <aside className="lg:w-64 flex-shrink-0">
           <nav className="flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-            {[
-              { name: 'Company Profile', icon: Building2 },
-              { name: 'Security & Login', icon: Lock },
-              { name: 'Notifications', icon: Bell },
-              { name: 'Billing', icon: CreditCard, active: true },
-            ].map((item) => (
-              <a
-                key={item.name}
-                href="#"
-                className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
-                  item.active 
-                    ? 'bg-white text-primary shadow-sm border border-slate-200' 
-                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                }`}
-              >
-                <item.icon size={20} />
-                {item.name}
-              </a>
-            ))}
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+              return (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
+                    isActive 
+                      ? 'bg-white text-primary shadow-sm border border-slate-200' 
+                      : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                  }`}
+                >
+                  <item.icon size={20} />
+                  {item.name}
+                </Link>
+              );
+            })}
           </nav>
         </aside>
 

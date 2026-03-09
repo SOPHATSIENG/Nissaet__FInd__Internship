@@ -41,6 +41,24 @@ function RequireAuth({ children }) {
   return children;
 }
 
+function RequireStudentArea({ children }) {
+  const { isAuthenticated, user } = useAuth();
+
+  if (!isAuthenticated) {
+    return children;
+  }
+
+  if (user?.role === 'admin') {
+    return <Navigate to="/admin/step-2" replace />;
+  }
+
+  if (user?.role === 'company') {
+    return <Navigate to="/company" replace />;
+  }
+
+  return children;
+}
+
 function RequireCompany({ children }) {
   const { isAuthenticated, user } = useAuth();
   const location = useLocation();
@@ -68,7 +86,14 @@ export default function WebRouter() {
         <Route path="/register/company/step-2" element={<CompanyStep2 />} />
         <Route path="/register/company/step-3" element={<CompanyStep3 />} />
         <Route path="/admin/step-2" element={<AdminStep2 />} />
-        <Route path="/" element={<Layout />}>
+        <Route
+          path="/"
+          element={(
+            <RequireStudentArea>
+              <Layout />
+            </RequireStudentArea>
+          )}
+        >
           <Route index element={<Home />} />
           <Route path="internships" element={<Internships />} />
           <Route path="internships/:id" element={<InternshipDetails />} />

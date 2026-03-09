@@ -9,9 +9,169 @@ const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
  * Helper to get company ID by user ID
  */
 const getCompanyIdByUserId = async (userId) => {
+    const rows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+    return rows.length > 0 ? rows[0].id : null;
+};
+
+// Helper function to build IN clause with proper placeholders
+const buildInClause = (columnName, items) => {
+    if (!items || items.length === 0) {
+        return { clause: '', params: [] };
+    }
+    const placeholders = items.map(() => '?').join(', ');
+    return {
+        clause: `${columnName} IN (${placeholders})`,
+        params: items
+    };
+};
+
+const getAllInternships = async (req, res) => {
     try {
-        const rows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
-        return rows.length > 0 ? rows[0].id : null;
+        const parsedLimit = Number.parseInt(req.query.limit, 10);
+        const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : null;
+        
+        // Filter parameters
+        const search = req.query.search ? req.query.search.trim() : null;
+        const position = req.query.position ? Number.parseInt(req.query.position, 10) : null;
+        const minPositions = req.query.minPositions ? Number.parseInt(req.query.minPositions, 10) : null;
+        const maxPositions = req.query.maxPositions ? Number.parseInt(req.query.maxPositions, 10) : null;
+        
+        // Work mode filter: 'remote', 'hybrid', 'onsite', or empty for all
+        const workMode = req.query.work_mode ? req.query.work_mode.toLowerCase() : null;
+        
+        // Skills filter: comma-separated skill IDs
+        const skillsParam = req.query.skills ? req.query.skills : null;
+        const skillIds = skillsParam ? skillsParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)) : [];
+
+        // Build dynamic WHERE clause
+        const whereConditions = ["i.status = 'active'"];
+        const params = [];
+
+        // Search filter (title or company name)
+        if (search) {
+            whereConditions.push("(i.title LIKE ? OR c.name LIKE ?)");
+            const searchPattern = `%${search}%`;
+            params.push(searchPattern, searchPattern);
+        }
+
+        // Position filter (exact match)
+        if (position !== null && !isNaN(position)) {
+            whereConditions.push("i.positions = ?");
+            params.push(position);
+        }
+
+        // Minimum positions filter
+        if (minPositions !== null && !isNaN(minPositions)) {
+            whereConditions.push("i.positions >= ?");
+            params.push(minPositions);
+        }
+
+        // Maximum positions filter
+        if (maxPositions !== null && !isNaN(maxPositions)) {
+            whereConditions.push("i.positions <= ?");
+            params.push(maxPositions);
+        }
+
+        // Work mode filter
+        if (workMode === 'remote') {
+            whereConditions.push("i.is_remote = 1");
+        } else if (workMode === 'hybrid') {
+            whereConditions.push("i.is_hybrid = 1");
+        } else if (workMode === 'onsite') {
+            whereConditions.push("i.is_remote = 0 AND i.is_hybrid = 0");
+        }
+
+        const whereClause = whereConditions.join(' AND ');
+
+        // Build SQL query with optional skills join
+        let sql = `
+            SELECT
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.location,
+                i.is_remote,
+                i.is_hybrid,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary_min,
+                i.stipend AS salary_max,
+                CASE 
+                    WHEN i.stipend > 0 THEN 'paid'
+                    ELSE 'unpaid'
+                END AS salary_type,
+                i.positions,
+                i.application_deadline AS deadline,
+                i.status AS is_active,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
+                c.logo AS company_logo
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+        `;
+        
+        // Add skills join if skills filter is provided
+        let skillFilter = null;
+        if (skillIds.length > 0) {
+            sql = `
+                SELECT DISTINCT
+                    i.id,
+                    i.company_id,
+                    i.title,
+                    i.description,
+                    i.requirements,
+                    i.location,
+                    i.is_remote,
+                    i.is_hybrid,
+                    i.type AS work_mode,
+                    i.duration_months AS duration,
+                    i.stipend AS salary_min,
+                    i.stipend AS salary_max,
+                    CASE 
+                        WHEN i.stipend > 0 THEN 'paid'
+                        ELSE 'unpaid'
+                    END AS salary_type,
+                    i.positions,
+                    i.application_deadline AS deadline,
+                    i.status AS is_active,
+                    i.views_count AS views,
+                    i.applications_count,
+                    i.created_at,
+                    i.updated_at,
+                    c.name AS company_name,
+                    c.headquarters AS company_location,
+                    c.logo AS company_logo
+                FROM internships i
+                JOIN companies c ON i.company_id = c.id
+                JOIN internship_skills iskill ON i.id = iskill.internship_id
+            `;
+            // Build skill filter with proper placeholders
+            skillFilter = buildInClause('iskill.skill_id', skillIds);
+        }
+
+        sql += ` WHERE ${whereClause}`;
+        
+        // Add skill filter
+        if (skillFilter) {
+            sql += ` AND ${skillFilter.clause}`;
+            params.push(...skillFilter.params);
+        }
+
+        sql += ` ORDER BY i.created_at DESC`;
+        
+        if (limit) {
+            sql += ` LIMIT ${limit}`;
+        }
+
+        const internships = await db.query(sql, params);
+
+        return res.json({ internships });
     } catch (error) {
         console.error('Error getting company ID:', error);
         return null;
@@ -453,7 +613,48 @@ const updateInternship = async (req, res) => {
             }
         }
 
-        if (updateSet.length === 0) return res.status(400).json({ message: 'No fields to update' });
+        const skillIds = studentSkills.map(skill => skill.id);
+        
+        // Build the IN clause with proper placeholders
+        const skillFilter = buildInClause('iskill.skill_id', skillIds);
+        
+        // Find internships that match student's skills
+        const matchingInternships = await db.query(
+            `SELECT DISTINCT
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary_min,
+                i.stipend AS salary_max,
+                CASE 
+                    WHEN i.stipend > 0 THEN 'paid'
+                    ELSE 'unpaid'
+                END AS salary_type,
+                i.positions,
+                i.application_deadline AS deadline,
+                i.status AS is_active,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
+                c.logo AS company_logo,
+                COUNT(iskill.skill_id) AS matching_skills_count
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+             JOIN internship_skills iskill ON i.id = iskill.internship_id
+             WHERE i.status = 'active' AND ${skillFilter.clause}
+             GROUP BY i.id, c.id
+             HAVING matching_skills_count > 0
+             ORDER BY matching_skills_count DESC, i.created_at DESC`,
+            skillFilter.params
+        );
 
         params.push(id);
         await db.query(`UPDATE internships SET ${updateSet.join(', ')} WHERE id = ?`, params);
@@ -643,6 +844,165 @@ const getCompanyInternships = async (req, res) => {
     }
 };
 
+// Save/Bookmark functions
+const getSavedInternships = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        // Get student's ID
+        const studentRows = await db.query(
+            'SELECT id FROM students WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+
+        if (studentRows.length === 0) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const studentId = studentRows[0].id;
+
+        const savedInternships = await db.query(
+            `SELECT 
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary_min,
+                i.stipend AS salary_max,
+                CASE 
+                    WHEN i.stipend > 0 THEN 'paid'
+                    ELSE 'unpaid'
+                END AS salary_type,
+                i.positions,
+                i.application_deadline AS deadline,
+                i.status AS is_active,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
+                c.logo AS company_logo,
+                si.created_at AS saved_at
+             FROM saved_internships si
+             JOIN internships i ON si.internship_id = i.id
+             JOIN companies c ON i.company_id = c.id
+             WHERE si.student_id = ? AND i.status = 'active'
+             ORDER BY si.created_at DESC`,
+            [studentId]
+        );
+
+        return res.json({ internships: savedInternships });
+    } catch (error) {
+        console.error('Error fetching saved internships:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const saveInternship = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        // Get student's ID
+        const studentRows = await db.query(
+            'SELECT id FROM students WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+
+        if (studentRows.length === 0) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const studentId = studentRows[0].id;
+
+        // Check if internship exists
+        const internshipRows = await db.query(
+            'SELECT id FROM internships WHERE id = ? AND status = "active"',
+            [id]
+        );
+
+        if (internshipRows.length === 0) {
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+
+        // Check if already saved
+        const existingSave = await db.query(
+            'SELECT id FROM saved_internships WHERE student_id = ? AND internship_id = ?',
+            [studentId, id]
+        );
+
+        if (existingSave.length > 0) {
+            return res.status(400).json({ message: 'Internship already saved' });
+        }
+
+        // Save the internship
+        await db.query(
+            'INSERT INTO saved_internships (student_id, internship_id) VALUES (?, ?)',
+            [studentId, id]
+        );
+
+        return res.status(201).json({ message: 'Internship saved successfully' });
+    } catch (error) {
+        console.error('Error saving internship:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const unsaveInternship = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        // Get student's ID
+        const studentRows = await db.query(
+            'SELECT id FROM students WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+
+        if (studentRows.length === 0) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const studentId = studentRows[0].id;
+
+        // Check if save exists
+        const existingSave = await db.query(
+            'SELECT id FROM saved_internships WHERE student_id = ? AND internship_id = ?',
+            [studentId, id]
+        );
+
+        if (existingSave.length === 0) {
+            return res.status(404).json({ message: 'Saved internship not found' });
+        }
+
+        // Remove the save
+        await db.query(
+            'DELETE FROM saved_internships WHERE student_id = ? AND internship_id = ?',
+            [studentId, id]
+        );
+
+        return res.json({ message: 'Internship unsaved successfully' });
+    } catch (error) {
+        console.error('Error unsaving internship:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     getAllInternships,
     getFeaturedCompanies,
@@ -651,7 +1011,9 @@ module.exports = {
     createInternship,
     updateInternship,
     deleteInternship,
-    getRecommendedInternships,
-    getCompanyInternships
+    getMatchingInternships,
+    getSavedInternships,
+    saveInternship,
+    unsaveInternship
 };
 

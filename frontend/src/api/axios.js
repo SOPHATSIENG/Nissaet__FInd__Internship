@@ -4,7 +4,7 @@ const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 function getStoredToken() {
   return localStorage.getItem(AUTH_STORAGE_KEY);
 }
-
+ 
 function setStoredToken(token) {
   if (token) {
     localStorage.setItem(AUTH_STORAGE_KEY, token);
@@ -163,6 +163,7 @@ export const api = {
   },
 
   getInternships(params = {}) {
+    // Support search, position, minPositions, maxPositions filters
     const query = new URLSearchParams(
       Object.entries(params)
         .filter(([, value]) => value !== undefined && value !== null && value !== '')
@@ -262,6 +263,38 @@ export const api = {
 
   getInternshipById(id) {
     return request(`/internships/${id}`);
+  },
+
+  // Save/Bookmark methods
+  saveInternship(id) {
+    return request(`/internships/${id}/save`, { method: 'POST', auth: true });
+  },
+
+  unsaveInternship(id) {
+    return request(`/internships/${id}/save`, { method: 'DELETE', auth: true });
+  },
+
+  getSavedInternships() {
+    return request('/internships/saved', { auth: true }).then((data) => {
+      if (Array.isArray(data)) {
+        return { internships: data };
+      }
+      return data;
+    });
+  },
+
+  // Application methods
+  getMyApplications() {
+    return request('/applications/my', { auth: true }).then((data) => {
+      if (Array.isArray(data)) {
+        return { applications: data };
+      }
+      return data;
+    });
+  },
+
+  applyForInternship(internshipId, coverLetter) {
+    return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter } });
   },
 };
 

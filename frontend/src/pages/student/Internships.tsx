@@ -8,6 +8,10 @@ import {
   BookmarkCheck,
   Building2,
   Plus,
+  Users,
+  Briefcase,
+  Home,
+  Laptop,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -25,6 +29,7 @@ type InternshipCard = {
   closed?: boolean;
   posted?: string;
   logo: string;
+  applicationStatus?: string;
 };
 
 type InternshipApiItem = {
@@ -38,15 +43,44 @@ type InternshipApiItem = {
   work_mode: string;
   company_logo: string | null;
   created_at?: string;
+  is_remote?: number;
+  is_hybrid?: number;
+};
+
+type Skill = {
+  id: number;
+  name: string;
+};
+
+type ApplicationStatus = {
+  [key: number]: string;
 };
 
 export default function Internships() {
   const [query, setQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
+  const [positionFilter, setPositionFilter] = useState<number | "">("");
+  const [minPositions, setMinPositions] = useState<number | "">("");
+  const [maxPositions, setMaxPositions] = useState<number | "">("");
+  
+  // Work mode filter
+  const [workModeFilter, setWorkModeFilter] = useState<string>("");
+  
+  // Skills filter
+  const [skillsFilter, setSkillsFilter] = useState<number[]>([]);
+  const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
+  
+  // Active tab: 'all', 'saved', 'applied'
+  const [activeTab, setActiveTab] = useState<string>("all");
+  
   const [internships, setInternships] = useState<InternshipApiItem[]>([]);
   const [matchingInternships, setMatchingInternships] = useState<InternshipApiItem[]>([]);
+  const [savedInternships, setSavedInternships] = useState<InternshipApiItem[]>([]);
+  const [myApplications, setMyApplications] = useState<ApplicationStatus>({});
   const [loading, setLoading] = useState(true);
   const [loadingMatching, setLoadingMatching] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [loadingApplications, setLoadingApplications] = useState(false);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -59,6 +93,48 @@ export default function Internships() {
     }
   };
 
+  // Function to fetch internships with filters
+  const fetchInternships = async (search?: string, position?: number | "", minPos?: number | "", maxPos?: number | "") => {
+    try {
+      setLoading(true);
+      setError("");
+      
+      const params: { search?: string; position?: number; minPositions?: number; maxPositions?: number; work_mode?: string; skills?: string } = {};
+      
+      if (search) params.search = search;
+      if (position) params.position = position;
+      if (minPos) params.minPositions = minPos;
+      if (maxPos) params.maxPositions = maxPos;
+      if (workModeFilter) params.work_mode = workModeFilter;
+      if (skillsFilter.length > 0) params.skills = skillsFilter.join(',');
+      
+      const res = await api.getInternships(params);
+      const items = Array.isArray(res?.internships) ? res.internships : [];
+      setInternships(items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load internships");
+      setInternships([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load available skills
+  useEffect(() => {
+    const loadSkills = async () => {
+      try {
+        const res = await api.getSkills();
+        if (res?.skills) {
+          setAvailableSkills(res.skills);
+        }
+      } catch (err) {
+        console.error('Failed to load skills:', err);
+      }
+    };
+    loadSkills();
+  }, []);
+
+  // Load internships with current filters
   useEffect(() => {
     let mounted = true;
 
@@ -66,7 +142,14 @@ export default function Internships() {
       try {
         setLoading(true);
         setError("");
-        const res = await api.getInternships();
+        const res = await api.getInternships({
+          search: query || undefined,
+          position: positionFilter || undefined,
+          minPositions: minPositions || undefined,
+          maxPositions: maxPositions || undefined,
+          work_mode: workModeFilter || undefined,
+          skills: skillsFilter.length > 0 ? skillsFilter.join(',') : undefined,
+        });
         const items = Array.isArray(res?.internships) ? res.internships : [];
         if (mounted) {
           setInternships(items);
@@ -102,12 +185,58 @@ export default function Internships() {
       }
     };
 
+    const loadSavedInternships = async () => {
+      try {
+        setLoadingSaved(true);
+        const res = await api.getSavedInternships();
+        const items = Array.isArray(res?.internships) ? res.internships : [];
+        if (mounted) {
+          setSavedInternships(items);
+        }
+      } catch (err) {
+        console.error('Failed to load saved internships:', err);
+        if (mounted) {
+          setSavedInternships([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoadingSaved(false);
+        }
+      }
+    };
+
+    const loadMyApplications = async () => {
+      try {
+        setLoadingApplications(true);
+        const res = await api.getMyApplications();
+        if (mounted && res?.applications) {
+          const appStatus: ApplicationStatus = {};
+          res.applications.forEach((app: any) => {
+            appStatus[app.internship_id] = app.status;
+          });
+          setMyApplications(appStatus);
+        }
+      } catch (err) {
+        console.error('Failed to load applications:', err);
+        if (mounted) {
+          setMyApplications({});
+        }
+      } finally {
+        if (mounted) {
+          setLoadingApplications(false);
+        }
+      }
+    };
+
     load();
     loadMatching();
+    loadSavedInternships();
+    loadMyApplications();
+    
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [query, positionFilter, minPositions, maxPositions, workModeFilter, skillsFilter]);
 
   const salaryText = (item: InternshipApiItem) => {
     if (item.salary_type === "unpaid") {
@@ -122,9 +251,28 @@ export default function Internships() {
     return item.salary_type === "stipend" ? "Stipend" : "Paid";
   };
 
+  const getWorkModeDisplay = (item: InternshipApiItem) => {
+    if (item.is_remote === 1) return "Remote";
+    if (item.is_hybrid === 1) return "Hybrid";
+    return item.work_mode || "On-site";
+  };
+
+  const getWorkModeTag = (item: InternshipApiItem) => {
+    const mode = getWorkModeDisplay(item);
+    if (mode === "Remote") return <Laptop className="w-3 h-3" />;
+    if (mode === "Hybrid") return <Home className="w-3 h-3" />;
+    return <Building2 className="w-3 h-3" />;
+  };
+
   const cards: InternshipCard[] = useMemo(() => {
-    return internships.map((item) => {
-      const tags = [item.work_mode, salaryText(item)].filter(Boolean);
+    let sourceInternships = internships;
+    
+    if (activeTab === "saved") {
+      sourceInternships = savedInternships;
+    }
+    
+    return sourceInternships.map((item) => {
+      const tags = [getWorkModeDisplay(item), salaryText(item)].filter(Boolean);
       return {
         id: item.id,
         title: item.title,
@@ -132,12 +280,13 @@ export default function Internships() {
         location: item.location,
         pay: salaryText(item),
         tags,
-        saved: false,
+        saved: savedInternships.some(s => s.id === item.id),
         closed: false,
         logo: item.company_logo || `https://picsum.photos/seed/internship-${item.id}/48/48`,
+        applicationStatus: myApplications[item.id],
       };
     });
-  }, [internships]);
+  }, [internships, savedInternships, myApplications, activeTab]);
 
   const filteredCards = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -188,7 +337,50 @@ export default function Internships() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [query, locationQuery]);
+  }, [query, locationQuery, workModeFilter, skillsFilter, activeTab]);
+
+  // Handle save/unsave internship
+  const handleToggleSave = async (internshipId: number, isSaved: boolean) => {
+    try {
+      if (isSaved) {
+        await api.unsaveInternship(internshipId);
+        setSavedInternships(prev => prev.filter(i => i.id !== internshipId));
+      } else {
+        await api.saveInternship(internshipId);
+        const internshipToSave = internships.find(i => i.id === internshipId);
+        if (internshipToSave) {
+          setSavedInternships(prev => [...prev, internshipToSave]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to toggle save:', err);
+    }
+  };
+
+  // Handle skill filter change
+  const handleSkillChange = (skillId: number, checked: boolean) => {
+    if (checked) {
+      setSkillsFilter(prev => [...prev, skillId]);
+    } else {
+      setSkillsFilter(prev => prev.filter(id => id !== skillId));
+    }
+  };
+
+  // Get status badge color
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-700';
+      case 'reviewing':
+        return 'bg-blue-100 text-blue-700';
+      case 'accepted':
+        return 'bg-green-100 text-green-700';
+      case 'rejected':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
 
   return (
     <div className="flex flex-col">
@@ -230,6 +422,7 @@ export default function Internships() {
               <span
                 key={tag}
                 className="px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
+                onClick={() => setQuery(tag)}
               >
                 {tag}
               </span>
@@ -241,27 +434,112 @@ export default function Internships() {
       <section className="py-12 px-4 sm:px-6 lg:px-8 bg-[#f6f8f7] flex-grow">
         <div className="max-w-[1440px] mx-auto flex flex-col lg:flex-row gap-8">
           <aside className="w-full lg:w-64 flex-shrink-0 space-y-6">
+            {/* Tabs */}
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => setActiveTab("all")}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
+                    activeTab === "all" 
+                      ? "bg-[#3b82f6]/10 text-[#2563eb]" 
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <Briefcase className="w-4 h-4" />
+                  All Internships
+                </button>
+                <button
+                  onClick={() => setActiveTab("saved")}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
+                    activeTab === "saved" 
+                      ? "bg-[#3b82f6]/10 text-[#2563eb]" 
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <Bookmark className="w-4 h-4" />
+                  Saved ({savedInternships.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("applied")}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
+                    activeTab === "applied" 
+                      ? "bg-[#3b82f6]/10 text-[#2563eb]" 
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  My Applications
+                </button>
+              </div>
+            </div>
+
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <h3 className="font-bold flex items-center gap-2 mb-4">
                 <Code className="w-5 h-5 text-[#3b82f6]" /> Skills
               </h3>
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {availableSkills.length > 0 ? (
+                  availableSkills.slice(0, 10).map((skill) => (
+                    <label key={skill.id} className="flex items-center justify-between cursor-pointer group">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={skillsFilter.includes(skill.id)}
+                          onChange={(e) => handleSkillChange(skill.id, e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
+                        />
+                        <span className="text-gray-600 group-hover:text-gray-900">{skill.name}</span>
+                      </div>
+                    </label>
+                  ))
+                ) : (
+                  <>
+                    {[
+                      { name: "Frontend Dev", checked: false },
+                      { name: "Backend Dev", checked: false },
+                      { name: "UI/UX Design", checked: false },
+                      { name: "Data Science", checked: false },
+                    ].map((item) => (
+                      <label key={item.name} className="flex items-center justify-between cursor-pointer group">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            defaultChecked={item.checked}
+                            className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
+                          />
+                          <span className="text-gray-600 group-hover:text-gray-900">{item.name}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="font-bold flex items-center gap-2 mb-4">
+                <Map className="w-5 h-5 text-[#3b82f6]" /> Work Mode
+              </h3>
               <div className="space-y-3">
                 {[
-                  { name: "Frontend Dev", count: 12, checked: false },
-                  { name: "Backend Dev", count: 8, checked: false },
-                  { name: "UI/UX Design", count: 5, checked: true },
-                  { name: "Data Science", count: 3, checked: false },
+                  { name: "All Modes", value: "", icon: Building2 },
+                  { name: "Remote", value: "remote", icon: Laptop },
+                  { name: "Hybrid", value: "hybrid", icon: Home },
+                  { name: "On-site", value: "onsite", icon: Building2 },
                 ].map((item) => (
-                  <label key={item.name} className="flex items-center justify-between cursor-pointer group">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        defaultChecked={item.checked}
-                        className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                      />
-                      <span className="text-gray-600 group-hover:text-gray-900">{item.name}</span>
-                    </div>
-                    <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-full">{item.count}</span>
+                  <label key={item.name} className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="workMode"
+                      value={item.value}
+                      checked={workModeFilter === item.value}
+                      onChange={(e) => setWorkModeFilter(e.target.value)}
+                      className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
+                    />
+                    <span className="text-gray-600 group-hover:text-gray-900 flex items-center gap-2">
+                      <item.icon className="w-4 h-4" />
+                      {item.name}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -269,25 +547,72 @@ export default function Internships() {
 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <h3 className="font-bold flex items-center gap-2 mb-4">
-                <Map className="w-5 h-5 text-[#3b82f6]" /> Location
+                <Users className="w-5 h-5 text-[#3b82f6]" /> Positions
               </h3>
               <div className="space-y-3">
-                {[
-                  { name: "All Locations", checked: true },
-                  { name: "Phnom Penh", checked: false },
-                  { name: "Siem Reap", checked: false },
-                  { name: "Remote", checked: false },
-                ].map((item) => (
-                  <label key={item.name} className="flex items-center gap-3 cursor-pointer group">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="position"
+                    checked={positionFilter === "" && minPositions === "" && maxPositions === ""}
+                    onChange={() => {
+                      setPositionFilter("");
+                      setMinPositions("");
+                      setMaxPositions("");
+                    }}
+                    className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
+                  />
+                  <span className="text-gray-600 group-hover:text-gray-900">All Positions</span>
+                </label>
+                {[1, 2, 3, 5, 10].map((num) => (
+                  <label key={num} className="flex items-center gap-3 cursor-pointer group">
                     <input
                       type="radio"
-                      name="location"
-                      defaultChecked={item.checked}
+                      name="position"
+                      checked={positionFilter === num}
+                      onChange={() => {
+                        setPositionFilter(num);
+                        setMinPositions("");
+                        setMaxPositions("");
+                      }}
                       className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
-                    <span className="text-gray-600 group-hover:text-gray-900">{item.name}</span>
+                    <span className="text-gray-600 group-hover:text-gray-900">{num} {num === 1 ? 'position' : 'positions'}</span>
                   </label>
                 ))}
+                {/* Custom position range */}
+                <div className="pt-2 mt-2 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 mb-2">Custom range:</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Min"
+                        value={minPositions}
+                        onChange={(e) => {
+                          setPositionFilter("");
+                          setMinPositions(e.target.value ? parseInt(e.target.value) : "");
+                        }}
+                        className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent"
+                      />
+                    </div>
+                    <span className="text-gray-400 self-center">-</span>
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Max"
+                        value={maxPositions}
+                        onChange={(e) => {
+                          setPositionFilter("");
+                          setMaxPositions(e.target.value ? parseInt(e.target.value) : "");
+                        }}
+                        className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -319,108 +644,171 @@ export default function Internships() {
               </div>
             )}
 
-            <div className="mb-12">
-              <div className="flex justify-between items-end mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold">
-                    {matchingInternships.length > 0 ? "Matching Internships" : "Recommended for you"}
-                  </h2>
-                  {matchingInternships.length > 0 && (
-                    <p className="text-gray-500 text-sm mt-1">
-                      Based on your skills ({matchingInternships.length} found)
-                    </p>
-                  )}
-                </div>
-                <Link to="/internships" className="text-[#3b82f6] font-bold hover:underline">
-                  View All -&gt;
-                </Link>
-              </div>
-
-              {loadingMatching ? (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm animate-pulse">
-                      <div className="flex items-start gap-4 mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-gray-200"></div>
-                        <div className="flex-1">
-                          <div className="h-6 bg-gray-200 rounded mb-2"></div>
-                          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mb-6">
-                        <div className="h-6 bg-gray-200 rounded w-20"></div>
-                        <div className="h-6 bg-gray-200 rounded w-16"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : matchingInternships.length === 0 && !loadingMatching ? (
-                <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Code className="w-8 h-8 text-gray-400" />
+            {activeTab !== "applied" && (
+              <div className="mb-12">
+                <div className="flex justify-between items-end mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold">
+                      {matchingInternships.length > 0 ? "Matching Internships" : "Recommended for you"}
+                    </h2>
+                    {matchingInternships.length > 0 && (
+                      <p className="text-gray-500 text-sm mt-1">
+                        Based on your skills ({matchingInternships.length} found)
+                      </p>
+                    )}
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No registered skills found</h3>
-                  <p className="text-gray-500 mb-4">
-                    Add skills in Student Settings to get matching internships.
-                  </p>
-                  <Link 
-                    to="/settings?tab=skills" 
-                    className="inline-flex items-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Skills
+                  <Link to="/internships" className="text-[#3b82f6] font-bold hover:underline">
+                    View All
                   </Link>
                 </div>
-              ) : (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {recommendedInternships.map((job) => (
-                    <div
-                      key={job.id}
-                      className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
-                    >
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-[#3b82f6]/5 rounded-bl-full -z-10"></div>
-                      <div className="flex items-start gap-4 mb-4">
-                        <img src={job.logo} alt={job.company} className="w-12 h-12 rounded-xl object-cover" />
-                        <div>
-                          <Link
-                            to={`/internships/${job.id}`}
-                            className="font-bold text-lg leading-tight hover:text-[#3b82f6] transition-colors"
-                          >
-                            {job.title}
-                          </Link>
-                          <p className="text-gray-500 text-sm">
-                            {job.company} | {job.location}
-                          </p>
+
+                {loadingMatching ? (
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm animate-pulse">
+                        <div className="flex items-start gap-4 mb-4">
+                          <div className="w-12 h-12 rounded-xl bg-gray-200"></div>
+                          <div className="flex-1">
+                            <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mb-6">
+                          <div className="h-6 bg-gray-200 rounded w-20"></div>
+                          <div className="h-6 bg-gray-200 rounded w-16"></div>
                         </div>
                       </div>
-
-                      <div className="flex gap-2 mb-6">
-                        {job.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                        <span className="text-gray-400 text-xs">Posted {job.posted || ""}</span>
-                        <Link to={`/internships/${job.id}`} className="text-[#3b82f6] font-bold text-sm hover:underline">
-                          View Details
-                        </Link>
-                      </div>
+                    ))}
+                  </div>
+                ) : matchingInternships.length === 0 && !loadingMatching ? (
+                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Code className="w-8 h-8 text-gray-400" />
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No registered skills found</h3>
+                    <p className="text-gray-500 mb-4">
+                      Add skills in Student Settings to get matching internships.
+                    </p>
+                    <Link 
+                      to="/settings?tab=skills" 
+                      className="inline-flex items-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Skills
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {recommendedInternships.map((job) => (
+                      <div
+                        key={job.id}
+                        className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
+                      >
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#3b82f6]/5 rounded-bl-full -z-10"></div>
+                        <div className="flex items-start gap-4 mb-4">
+                          <img src={job.company_logo || `https://picsum.photos/seed/internship-${job.id}/48/48`} alt={job.company_name} className="w-12 h-12 rounded-xl object-cover" />
+                          <div>
+                            <Link
+                              to={`/internships/${job.id}`}
+                              className="font-bold text-lg leading-tight hover:text-[#3b82f6] transition-colors"
+                            >
+                              {job.title}
+                            </Link>
+                            <p className="text-gray-500 text-sm">
+                              {job.company_name} | {job.location}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 mb-6">
+                          <span className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium flex items-center gap-1">
+                            {getWorkModeDisplay(job)}
+                          </span>
+                          <span className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium">
+                            {salaryText(job)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                          <span className="text-gray-400 text-xs">Posted {job.created_at || ""}</span>
+                          <Link to={`/internships/${job.id}`} className="text-[#3b82f6] font-bold text-sm hover:underline">
+                            View Details
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "applied" && (
+              <div className="mb-12">
+                <h2 className="text-2xl font-bold mb-6">My Applications</h2>
+                {Object.keys(myApplications).length === 0 ? (
+                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Briefcase className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No applications yet</h3>
+                    <p className="text-gray-500">
+                      Start applying to internships to track your applications here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {internships
+                      .filter(internship => myApplications[internship.id])
+                      .map((job) => (
+                        <div
+                          key={job.id}
+                          className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"
+                        >
+                          <div className="flex items-start gap-4 flex-1">
+                            <img
+                              src={job.company_logo || `https://picsum.photos/seed/internship-${job.id}/48/48`}
+                              alt={job.company_name}
+                              className="w-12 h-12 rounded-xl object-cover"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Link
+                                  to={`/internships/${job.id}`}
+                                  className="font-bold text-lg hover:text-[#3b82f6] transition-colors"
+                                >
+                                  {job.title}
+                                </Link>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getStatusBadge(myApplications[job.id])}`}>
+                                  {myApplications[job.id]}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500">
+                                <span className="flex items-center gap-1">
+                                  <Building2 className="w-4 h-4" /> {job.company_name}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-4 h-4" /> {job.location}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
-                  {loading ? "Loading internships..." : `${filteredCards.length} Internships found`}
+                  {loading ? "Loading internships..." : 
+                    activeTab === "saved" 
+                      ? `${filteredCards.length} Saved Internships`
+                      : activeTab === "applied"
+                        ? `${Object.keys(myApplications).length} Applications`
+                        : `${filteredCards.length} Internships found`
+                  }
                 </h2>
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <span>Sort by:</span>
@@ -464,6 +852,11 @@ export default function Internships() {
                                 New
                               </span>
                             )}
+                            {job.applicationStatus && (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getStatusBadge(job.applicationStatus)}`}>
+                                {job.applicationStatus}
+                              </span>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 mb-3">
                             <span className="flex items-center gap-1">
@@ -500,6 +893,7 @@ export default function Internships() {
                           </Link>
                         )}
                         <button
+                          onClick={() => handleToggleSave(job.id, job.saved || false)}
                           className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors ${
                             job.saved ? "bg-[#3b82f6]/10 text-[#2563eb]" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
                           }`}
@@ -521,7 +915,7 @@ export default function Internships() {
                   className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="sr-only">Previous</span>
-                  <span aria-hidden="true">&lt;</span>
+                  <span aria-hidden="true"></span>
                 </button>
                 {visiblePages.map((page) => {
                   if (typeof page !== "number") {
@@ -554,7 +948,7 @@ export default function Internships() {
                   className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="sr-only">Next</span>
-                  <span aria-hidden="true">&gt;</span>
+                  <span aria-hidden="true"></span>
                 </button>
               </div>
             </div>
@@ -564,3 +958,4 @@ export default function Internships() {
     </div>
   );
 }
+

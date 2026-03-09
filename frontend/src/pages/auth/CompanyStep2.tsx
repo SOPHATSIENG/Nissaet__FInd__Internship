@@ -17,6 +17,7 @@ export function CompanyStep2() {
   const [contactPerson, setContactPerson] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [companyBio, setCompanyBio] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const step1 = registrationStorage.getStep1();
@@ -40,6 +41,13 @@ export function CompanyStep2() {
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!companyName.trim()) {
+      setError('Company name is required.');
+      return;
+    }
+
+    setError('');
 
     registrationStorage.setStep2({
       company_name: companyName.trim(),
@@ -183,6 +191,12 @@ export function CompanyStep2() {
             Continue to Step 3
           </Button>
         </div>
+
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+            {error}
+          </p>
+        )}
       </form>
     </SplitLayout>
   );

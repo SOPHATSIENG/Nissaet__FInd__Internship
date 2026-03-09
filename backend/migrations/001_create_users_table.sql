@@ -2,7 +2,9 @@
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(255),
+    password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    role ENUM('student', 'company', 'admin') DEFAULT 'student',
     phone VARCHAR(20),
     dob DATE,
     address TEXT,
@@ -15,11 +17,16 @@ CREATE TABLE IF NOT EXISTS users (
     industry VARCHAR(100),
     location VARCHAR(255),
     website VARCHAR(255),
+    contact_person VARCHAR(255),
+    contact_phone VARCHAR(20),
+    admin_code VARCHAR(100),
+    department VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email),
+    INDEX idx_role (role),
     INDEX idx_university (university),
     INDEX idx_industry (industry),
-    INDEX idx_location (location),
+    INDEX idx_location (location),  
     INDEX idx_graduation_year (graduation_year)
 );

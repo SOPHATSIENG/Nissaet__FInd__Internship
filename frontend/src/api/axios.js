@@ -118,6 +118,10 @@ export const api = {
     return request('/profile/notifications', { method: 'PUT', auth: true, body: payload });
   },
 
+  updateCompanySettings(payload) {
+    return request('/profile/company', { method: 'PUT', auth: true, body: payload });
+  },
+
   // FIX MARK: notification card API for header bell dropdown.
   getNotificationCard() {
     return request('/profile/notifications/card', { auth: true });
@@ -129,6 +133,27 @@ export const api = {
 
   updateTwoFactorSettings(payload) {
     return request('/profile/security/two-factor', { method: 'PUT', auth: true, body: payload });
+  },
+
+  getInternshipById(id) {
+    return request(`/internships/${id}`).then((data) => {
+      return data;
+    });
+  },
+
+  getCompanies(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/internships/companies${query ? `?${query}` : ''}`).then((data) => {
+      if (Array.isArray(data)) {
+        return { companies: data };
+      }
+      return data;
+    });
   },
 
   getInternships(params = {}) {
@@ -153,6 +178,35 @@ export const api = {
       }
       return data;
     });
+  },
+
+  getRecommendedInternships() {
+    return request('/internships/student/recommended', { auth: true }).then((data) => {
+      if (Array.isArray(data)) {
+        return { internships: data };
+      }
+      return data;
+    });
+  },
+
+  getCompanyInternships() {
+    return request('/internships/company/mine', { auth: true });
+  },
+
+  createInternship(payload) {
+    return request('/internships', { method: 'POST', auth: true, body: payload });
+  },
+
+  updateInternship(id, payload) {
+    return request(`/internships/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  deleteInternship(id) {
+    return request(`/internships/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  getCompanyApplications() {
+    return request('/applications/company/mine', { auth: true });
   },
 
   // FIXED: dynamic skill lookup for registration step 3.

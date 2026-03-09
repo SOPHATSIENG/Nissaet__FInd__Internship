@@ -5,9 +5,10 @@ import {
   Send,
   CheckCircle2,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 
 interface FeaturedCompany {
@@ -29,37 +30,23 @@ interface Internship {
   salary_type: string;
   salary_min: number | null;
   salary_max: number | null;
+  stipend: number | null;
+  stipend_currency: string | null;
   work_mode: string;
   company_logo: string | null;
 }
 
-const normalizeText = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const SKILL_ALIASES: Record<string, string[]> = {
-  frontend: ["frontend", "front end", "react", "javascript", "typescript", "html", "css", "ui", "ux"],
-  python: ["python", "django", "flask", "fastapi", "pandas"],
-};
-
-const hasPhrase = (target: string, phrase: string) =>
-  ` ${target} `.includes(` ${normalizeText(phrase)} `);
-
-const matchesSkill = (target: string, skill: string) => {
-  const normalizedSkill = normalizeText(skill);
-  const aliases = SKILL_ALIASES[normalizedSkill] || [normalizedSkill];
-  return aliases.some((alias) => hasPhrase(target, alias));
-};
-
 export default function Home() {
+  const navigate = useNavigate();
   const [featuredCompanies, setFeaturedCompanies] = useState<FeaturedCompany[]>([]);
   const [latestInternships, setLatestInternships] = useState<Internship[]>([]);
-  const [profileSkills, setProfileSkills] = useState<string[]>([]);
+  const [recommendedInternships, setRecommendedInternships] = useState<Internship[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // Search state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [locationTerm, setLocationTerm] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -68,11 +55,22 @@ export default function Home() {
       try {
         setLoading(true);
         setError("");
-        const [companiesRes, internshipsRes, profileRes] = await Promise.all([
+        
+        // Fetch featured companies, latest internships and recommended if logged in
+        const requests: Promise<any>[] = [
           api.getFeaturedCompanies(4),
-          api.getInternships({ limit: 100 }),
-          api.getProfileSettings().catch(() => null),
-        ]);
+          api.getInternships({ limit: 4 }),
+        ];
+
+        // Try to fetch recommended internships (will only work if logged in as student)
+        const [companiesRes, internshipsRes] = await Promise.all(requests);
+        
+        let recommendedRes = { internships: [] };
+        try {
+          recommendedRes = await api.getRecommendedInternships();
+        } catch (e) {
+          // Ignore if not logged in or fails
+        }
 
         if (!isMounted) {
           return;
@@ -80,13 +78,7 @@ export default function Home() {
 
         setFeaturedCompanies(companiesRes.companies || []);
         setLatestInternships(internshipsRes.internships || []);
-        setProfileSkills(
-          Array.isArray(profileRes?.settings?.skills)
-            ? profileRes.settings.skills
-                .map((skill: { name?: string }) => (skill?.name || "").trim().toLowerCase())
-                .filter(Boolean)
-            : []
-        );
+        setRecommendedInternships(recommendedRes.internships || []);
       } catch (requestError) {
         if (!isMounted) {
           return;
@@ -109,25 +101,20 @@ export default function Home() {
     };
   }, []);
 
-  const companiesForDisplay = useMemo(() => featuredCompanies.slice(0, 4), [featuredCompanies]);
-  const internshipsForDisplay = useMemo(() => {
-    if (!profileSkills.length) {
-      return [];
-    }
-
-    return latestInternships
-      .filter((job) => {
-        const target = normalizeText(
-          `${job.title} ${job.description || ""} ${job.requirements || ""}`
-        );
-        return profileSkills.some((skill) => matchesSkill(target, skill));
-      })
-      .slice(0, 4);
-  }, [latestInternships, profileSkills]);
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const params = new URLSearchParams();
+    if (searchTerm) params.append("search", searchTerm);
+    if (locationTerm) params.append("location", locationTerm);
+    navigate(`/internships?${params.toString()}`);
+  };
 
   const salaryText = (item: Internship) => {
-    if (item.salary_type === "unpaid") {
+    if (item.salary_type === "unpaid" || (item.stipend === 0)) {
       return "Unpaid";
+    }
+    if (item.stipend) {
+      return `${item.stipend_currency || '$'}${item.stipend}/mo`;
     }
     if (item.salary_min && item.salary_max) {
       return `$${item.salary_min} - $${item.salary_max}`;
@@ -135,7 +122,7 @@ export default function Home() {
     if (item.salary_min) {
       return `$${item.salary_min}+`;
     }
-    return item.salary_type === "stipend" ? "Stipend" : "Paid";
+    return "Paid";
   };
 
   return (
@@ -151,13 +138,15 @@ export default function Home() {
             your professional network on Nissaet.
           </p>
 
-          <div className="bg-white p-2 rounded-full shadow-lg border border-gray-100 flex flex-col md:flex-row gap-2 max-w-3xl mx-auto">
+          <form onSubmit={handleSearch} className="bg-white p-2 rounded-full shadow-lg border border-gray-100 flex flex-col md:flex-row gap-2 max-w-3xl mx-auto">
             <div className="flex-1 flex items-center px-4 py-2">
               <Search className="w-5 h-5 text-gray-400 mr-3" />
               <input
                 type="text"
                 placeholder="What internship are you looking for?"
                 className="w-full outline-none text-gray-700 bg-transparent"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <div className="hidden md:block w-px bg-gray-200 my-2"></div>
@@ -167,14 +156,64 @@ export default function Home() {
                 type="text"
                 placeholder="Location"
                 className="w-full outline-none text-gray-700 bg-transparent"
+                value={locationTerm}
+                onChange={(e) => setLocationTerm(e.target.value)}
               />
             </div>
-            <button className="bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-bold px-8 py-3 rounded-full transition-colors w-full md:w-auto">
+            <button type="submit" className="bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-bold px-8 py-3 rounded-full transition-colors w-full md:w-auto">
               Search
             </button>
-          </div>
+          </form>
         </div>
       </section>
+
+      {/* Recommended Section (Only if available) */}
+      {recommendedInternships.length > 0 && (
+        <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+          <div className="max-w-[1440px] mx-auto">
+            <div className="flex justify-between items-center mb-10">
+              <h2 className="text-3xl font-bold">Recommended for You</h2>
+              <Link to="/internships" className="text-[#3b82f6] font-bold hover:underline">
+                View All Matching
+              </Link>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {recommendedInternships.map((job) => (
+                <Link
+                  to={`/internships/${job.id}`}
+                  key={job.id}
+                  className="bg-[#f6f8f7] p-6 rounded-2xl border border-gray-100 hover:border-[#3b82f6] transition-colors flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={job.company_logo || `https://picsum.photos/seed/rec-${job.id}/48/48`}
+                      alt={job.company_name}
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div>
+                      <h3 className="font-bold text-lg group-hover:text-[#3b82f6] transition-colors">
+                        {job.title}
+                      </h3>
+                      <p className="text-gray-500 text-sm mb-2">
+                        {job.company_name} | {job.location}
+                      </p>
+                      <div className="flex gap-2">
+                        <span className="bg-white text-gray-600 text-xs px-2 py-1 rounded">
+                          {salaryText(job)}
+                        </span>
+                        <span className="bg-white text-gray-600 text-xs px-2 py-1 rounded">
+                          {job.work_mode}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="text-gray-300 group-hover:text-[#3b82f6] transition-colors" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#f6f8f7]">
         <div className="max-w-[1440px] mx-auto text-center">
@@ -239,33 +278,39 @@ export default function Home() {
             </p>
           )}
 
-          <div className="grid md:grid-cols-4 gap-6">
-            {companiesForDisplay.map((company) => (
-              <div
-                key={company.id}
-                className="bg-[#f6f8f7] p-6 rounded-2xl border border-gray-100 hover:shadow-md transition-shadow"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <img
-                    src={company.logo || `https://picsum.photos/seed/company-${company.id}/40/40`}
-                    alt={company.company_name}
-                    className="w-12 h-12 rounded-lg object-cover"
-                  />
-                  <div className="flex items-center bg-white px-2 py-1 rounded text-sm font-bold text-yellow-600 shadow-sm">
-                    Rating: {company.rating || 0}
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-10 h-10 animate-spin text-[#3b82f6]" />
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-4 gap-6">
+              {featuredCompanies.map((company) => (
+                <div
+                  key={company.id}
+                  className="bg-[#f6f8f7] p-6 rounded-2xl border border-gray-100 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <img
+                      src={company.logo || `https://picsum.photos/seed/company-${company.id}/40/40`}
+                      alt={company.company_name}
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div className="flex items-center bg-white px-2 py-1 rounded text-sm font-bold text-yellow-600 shadow-sm">
+                      Rating: {company.rating || 0}
+                    </div>
+                  </div>
+                  <h3 className="font-bold text-lg mb-1">{company.company_name}</h3>
+                  <p className="text-gray-500 text-sm mb-6 line-clamp-2">
+                    {company.description || "Verified company looking for internship talent."}
+                  </p>
+                  <div className="inline-block bg-[#3b82f6]/10 text-[#2563eb] text-xs font-bold px-3 py-1.5 rounded-full">
+                    {company.open_positions} Open Internships
                   </div>
                 </div>
-                <h3 className="font-bold text-lg mb-1">{company.company_name}</h3>
-                <p className="text-gray-500 text-sm mb-6 line-clamp-2">
-                  {company.description || "Verified company looking for internship talent."}
-                </p>
-                <div className="inline-block bg-[#3b82f6]/10 text-[#2563eb] text-xs font-bold px-3 py-1.5 rounded-full">
-                  {company.open_positions} Open Internships
-                </div>
-              </div>
-            ))}
-          </div>
-          {!loading && !companiesForDisplay.length && (
+              ))}
+            </div>
+          )}
+          {!loading && !featuredCompanies.length && (
             <p className="text-sm text-gray-500 mt-4">No featured companies available yet.</p>
           )}
         </div>
@@ -283,46 +328,48 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {internshipsForDisplay.map((job) => (
-              <Link
-                to={`/internships/${job.id}`}
-                key={job.id}
-                className="bg-white p-6 rounded-2xl border border-gray-100 hover:border-[#3b82f6] transition-colors flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-4">
-                  <img
-                    src={job.company_logo || `https://picsum.photos/seed/internship-${job.id}/40/40`}
-                    alt={job.company_name}
-                    className="w-12 h-12 rounded-lg object-cover"
-                  />
-                  <div>
-                    <h3 className="font-bold text-lg group-hover:text-[#3b82f6] transition-colors">
-                      {job.title}
-                    </h3>
-                    <p className="text-gray-500 text-sm mb-2">
-                      {job.company_name} | {job.location}
-                    </p>
-                    <div className="flex gap-2">
-                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
-                        {salaryText(job)}
-                      </span>
-                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
-                        {job.work_mode}
-                      </span>
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-10 h-10 animate-spin text-[#3b82f6]" />
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-6">
+              {latestInternships.map((job) => (
+                <Link
+                  to={`/internships/${job.id}`}
+                  key={job.id}
+                  className="bg-white p-6 rounded-2xl border border-gray-100 hover:border-[#3b82f6] transition-colors flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={job.company_logo || `https://picsum.photos/seed/internship-${job.id}/40/40`}
+                      alt={job.company_name}
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div>
+                      <h3 className="font-bold text-lg group-hover:text-[#3b82f6] transition-colors">
+                        {job.title}
+                      </h3>
+                      <p className="text-gray-500 text-sm mb-2">
+                        {job.company_name} | {job.location}
+                      </p>
+                      <div className="flex gap-2">
+                        <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+                          {salaryText(job)}
+                        </span>
+                        <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+                          {job.work_mode}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <ArrowRight className="text-gray-300 group-hover:text-[#3b82f6] transition-colors" />
-              </Link>
-            ))}
-          </div>
-          {!loading && !internshipsForDisplay.length && (
-            <p className="text-sm text-gray-500 mt-4">
-              {profileSkills.length
-                ? "No internships match this student's registered skills yet."
-                : "No registered skills found for this student. Add skills in Student Settings to get matching internships."}
-            </p>
+                  <ArrowRight className="text-gray-300 group-hover:text-[#3b82f6] transition-colors" />
+                </Link>
+              ))}
+            </div>
+          )}
+          {!loading && !latestInternships.length && (
+            <p className="text-sm text-gray-500 mt-4">No internships available yet.</p>
           )}
         </div>
       </section>

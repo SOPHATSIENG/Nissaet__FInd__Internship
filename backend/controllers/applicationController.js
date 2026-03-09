@@ -244,11 +244,67 @@ const updateApplicationStatus = async (req, res) => {
     }
 };
 
+/**
+ * Get all applications for internships belonging to the authenticated company
+ */
+const getCompanyApplications = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const companyRows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+        if (companyRows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Company profile not found' });
+        }
+        const companyId = companyRows[0].id;
+
+        const { page, limit, offset } = parsePagination(req.query);
+
+        const sql = `
+            SELECT
+                a.id,
+                a.student_id,
+                a.internship_id,
+                a.status,
+                a.created_at,
+                i.title AS internship_title,
+                u.full_name AS student_name,
+                u.profile_image AS student_image
+            FROM applications a
+            JOIN internships i ON a.internship_id = i.id
+            JOIN students s ON a.student_id = s.id
+            JOIN users u ON s.user_id = u.id
+            WHERE i.company_id = ?
+            ORDER BY a.created_at DESC
+            LIMIT ? OFFSET ?
+        `;
+
+        const applications = await db.query(sql, [companyId, limit, offset]);
+
+        const countRows = await db.query(
+            `SELECT COUNT(*) AS total 
+             FROM applications a
+             JOIN internships i ON a.internship_id = i.id
+             WHERE i.company_id = ?`,
+            [companyId]
+        );
+        const total = Number(countRows[0]?.total || 0);
+
+        return res.json({
+            success: true,
+            applications,
+            total
+        });
+    } catch (error) {
+        console.error('Error fetching company applications:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 module.exports = {
     applyForInternship,
     getStudentApplications,
     getInternshipApplications,
-    updateApplicationStatus
+    updateApplicationStatus,
+    getCompanyApplications
 };
 
 

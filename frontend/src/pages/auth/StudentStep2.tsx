@@ -17,6 +17,7 @@ export function StudentStep2() {
   const [university, setUniversity] = useState('');
   const [bio, setBio] = useState('');
   const [cvUrl, setCvUrl] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const step1 = registrationStorage.getStep1();
@@ -42,6 +43,26 @@ export function StudentStep2() {
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (dob) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+        setError('Date of birth must be a valid date.');
+        return;
+      }
+      const parsed = new Date(`${dob}T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) {
+        setError('Date of birth must be a valid date.');
+        return;
+      }
+      const today = new Date();
+      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (parsed > todayMidnight) {
+        setError('Date of birth cannot be in the future.');
+        return;
+      }
+    }
+
+    setError('');
     registrationStorage.setStep2({
       phone: phone.trim() || null,
       dob: dob || null,
@@ -190,6 +211,12 @@ export function StudentStep2() {
             Continue to Step 3
           </Button>
         </div>
+
+        {error ? (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+            {error}
+          </p>
+        ) : null}
       </form>
     </SplitLayout>
   );

@@ -10,6 +10,7 @@ router.get('/companies', internshipController.getAllCompanies);
 router.get('/:id', internshipController.getInternshipById);
 
 // Protected routes
+router.get('/company/mine', authenticate, authorize('company'), internshipController.getCompanyInternships);
 router.get('/student/recommended', authenticate, authorize('student'), internshipController.getRecommendedInternships);
 router.post('/', authenticate, authorize('company', 'admin'), internshipController.createInternship);
 router.put('/:id', authenticate, authorize('company', 'admin'), internshipController.updateInternship);

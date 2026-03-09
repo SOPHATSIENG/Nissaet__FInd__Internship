@@ -189,6 +189,26 @@ export const api = {
     });
   },
 
+  getCompanyInternships() {
+    return request('/internships/company/mine', { auth: true });
+  },
+
+  createInternship(payload) {
+    return request('/internships', { method: 'POST', auth: true, body: payload });
+  },
+
+  updateInternship(id, payload) {
+    return request(`/internships/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  deleteInternship(id) {
+    return request(`/internships/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  getCompanyApplications() {
+    return request('/applications/company/mine', { auth: true });
+  },
+
   // FIXED: dynamic skill lookup for registration step 3.
   getSkills(params = {}) {
     const query = new URLSearchParams(

@@ -11,25 +11,11 @@ import {
   Briefcase,
   Home,
   Laptop,
+  Loader2,
 } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import api from "../../api/axios";
-
-type InternshipCard = {
-  id: number;
-  title: string;
-  company: string;
-  location: string;
-  pay: string;
-  tags: string[];
-  isNew?: boolean;
-  saved?: boolean;
-  closed?: boolean;
-  posted?: string;
-  logo: string;
-  applicationStatus?: string;
-};
 
 type InternshipApiItem = {
   id: number;
@@ -40,13 +26,15 @@ type InternshipApiItem = {
   stipend_currency: string;
   type: string;
   status: string;
-  is_remote: boolean;
-  is_hybrid: boolean;
   work_mode: string;
   company_logo: string | null;
   created_at?: string;
   is_remote?: number;
   is_hybrid?: number;
+  isNew?: boolean;
+  saved?: boolean;
+  closed?: boolean;
+  applicationStatus?: string;
 };
 
 type Skill = {
@@ -58,23 +46,18 @@ type ApplicationStatus = {
   [key: number]: string;
 };
 
+const ITEMS_PER_PAGE = 10;
+
 export default function Internships() {
   const [query, setQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
   const [positionFilter, setPositionFilter] = useState<number | "">("");
   const [minPositions, setMinPositions] = useState<number | "">("");
   const [maxPositions, setMaxPositions] = useState<number | "">("");
-  
-  // Work mode filter
   const [workModeFilter, setWorkModeFilter] = useState<string>("");
-  
-  // Skills filter
   const [skillsFilter, setSkillsFilter] = useState<number[]>([]);
   const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
-  
-  // Active tab: 'all', 'saved', 'applied'
   const [activeTab, setActiveTab] = useState<string>("all");
-  
   const [internships, setInternships] = useState<InternshipApiItem[]>([]);
   const [matchingInternships, setMatchingInternships] = useState<InternshipApiItem[]>([]);
   const [savedInternships, setSavedInternships] = useState<InternshipApiItem[]>([]);
@@ -82,78 +65,29 @@ export default function Internships() {
   const [loading, setLoading] = useState(true);
   const [loadingMatching, setLoadingMatching] = useState(false);
   const [loadingSaved, setLoadingSaved] = useState(false);
-  const [loadingApplications, setLoadingApplications] = useState(false);
   const [error, setError] = useState("");
-  const [totalFound, setTotalFound] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [locationInput, setLocationInput] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [compFilter, setCompFilter] = useState("All");
 
-  // Filter values from URL
-  const query = searchParams.get("search") || "";
-  const location = searchParams.get("location") || "";
-  const comp = searchParams.get("comp") || "All";
-  const type = searchParams.get("type") || "all";
-  const page = parseInt(searchParams.get("page") || "1", 10);
-
-  // Local input state (for the text boxes before submitting)
-  const [searchInput, setSearchInput] = useState(query);
-  const [locationInput, setLocationInput] = useState(location);
-
-  // Sync inputs when URL changes (e.g., coming from Home page)
-  useEffect(() => {
-    setSearchInput(query);
-    setLocationInput(location);
-  }, [query, location]);
-
-  const fetchInternships = useCallback(async () => {
+  const fetchInternships = async (search?: string) => {
     try {
       setLoading(true);
       setError("");
-      
-      const params: any = {
-        limit: 10,
-        offset: (page - 1) * 10,
-        search: query || undefined,
-        location: location || undefined,
-        type: type !== 'all' ? type : undefined,
-      };
-
-      if (comp === "Paid") {
-        params.min_stipend = 1;
-      } else if (comp === "Unpaid") {
-        params.max_stipend = 0;
-      }
-
-      if (location === "Remote") {
-        params.remote = "true";
-        params.location = undefined; // Use specific remote flag
-      }
-
-      const response = await api.getInternships(params);
-      setInternships(response.internships || []);
-      setTotalFound(response.total || response.count || 0);
-    } catch (err) {
-      setError("Failed to fetch internships. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [query, location, comp, type, page]);
-
-  // Function to fetch internships with filters
-  const fetchInternships = async (search?: string, position?: number | "", minPos?: number | "", maxPos?: number | "") => {
-    try {
-      setLoading(true);
-      setError("");
-      
-      const params: { search?: string; position?: number; minPositions?: number; maxPositions?: number; work_mode?: string; skills?: string } = {};
-      
-      if (search) params.search = search;
-      if (position) params.position = position;
-      if (minPos) params.minPositions = minPos;
-      if (maxPos) params.maxPositions = maxPos;
+      const params: Record<string, unknown> = {};
+      if (search || query) params.search = search ?? query;
+      if (locationQuery) params.location = locationQuery;
+      if (positionFilter) params.position = positionFilter;
+      if (minPositions) params.minPositions = minPositions;
+      if (maxPositions) params.maxPositions = maxPositions;
       if (workModeFilter) params.work_mode = workModeFilter;
-      if (skillsFilter.length > 0) params.skills = skillsFilter.join(',');
-      
+      if (skillsFilter.length > 0) params.skills = skillsFilter.join(",");
+      if (compFilter === "Paid") params.min_stipend = 1;
+      else if (compFilter === "Unpaid") params.max_stipend = 0;
+
       const res = await api.getInternships(params);
-      const items = Array.isArray(res?.internships) ? res.internships : [];
+      const items: InternshipApiItem[] = Array.isArray(res?.internships) ? res.internships : [];
       setInternships(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load internships");
@@ -163,135 +97,99 @@ export default function Internships() {
     }
   };
 
-  // Load available skills
   useEffect(() => {
     const loadSkills = async () => {
       try {
         const res = await api.getSkills();
-        if (res?.skills) {
-          setAvailableSkills(res.skills);
-        }
+        if (res?.skills) setAvailableSkills(res.skills);
       } catch (err) {
-        console.error('Failed to load skills:', err);
+        console.error("Failed to load skills:", err);
       }
     };
     loadSkills();
   }, []);
 
-  // Load internships with current filters
   useEffect(() => {
-    fetchInternships();
-  }, [fetchInternships]);
-
-  useEffect(() => {
-    const fetchRecommendations = async () => {
-      try {
-        setLoading(true);
-        setError("");
-        const res = await api.getInternships({
-          search: query || undefined,
-          position: positionFilter || undefined,
-          minPositions: minPositions || undefined,
-          maxPositions: maxPositions || undefined,
-          work_mode: workModeFilter || undefined,
-          skills: skillsFilter.length > 0 ? skillsFilter.join(',') : undefined,
-        });
-        const items = Array.isArray(res?.internships) ? res.internships : [];
-        if (mounted) {
-          setInternships(items);
-        }
-      } catch (err) {
-        console.warn("Could not fetch recommendations");
-      }
-    };
+    let mounted = true;
 
     const loadMatching = async () => {
       try {
         setLoadingMatching(true);
         const res = await api.getMatchingInternships();
-        const items = Array.isArray(res?.internships) ? res.internships : [];
-        if (mounted) {
-          setMatchingInternships(items);
-        }
-      } catch (err) {
-        console.error('Failed to load matching internships:', err);
-        if (mounted) {
-          setMatchingInternships([]);
-        }
+        if (mounted) setMatchingInternships(Array.isArray(res?.internships) ? res.internships : []);
+      } catch {
+        if (mounted) setMatchingInternships([]);
       } finally {
-        if (mounted) {
-          setLoadingMatching(false);
-        }
+        if (mounted) setLoadingMatching(false);
       }
     };
 
-    const loadSavedInternships = async () => {
+    const loadSaved = async () => {
       try {
         setLoadingSaved(true);
         const res = await api.getSavedInternships();
-        const items = Array.isArray(res?.internships) ? res.internships : [];
-        if (mounted) {
-          setSavedInternships(items);
-        }
-      } catch (err) {
-        console.error('Failed to load saved internships:', err);
-        if (mounted) {
-          setSavedInternships([]);
-        }
+        if (mounted) setSavedInternships(Array.isArray(res?.internships) ? res.internships : []);
+      } catch {
+        if (mounted) setSavedInternships([]);
       } finally {
-        if (mounted) {
-          setLoadingSaved(false);
-        }
+        if (mounted) setLoadingSaved(false);
       }
     };
 
-    const loadMyApplications = async () => {
+    const loadApplications = async () => {
       try {
-        setLoadingApplications(true);
         const res = await api.getMyApplications();
         if (mounted && res?.applications) {
           const appStatus: ApplicationStatus = {};
-          res.applications.forEach((app: any) => {
+          res.applications.forEach((app: { internship_id: number; status: string }) => {
             appStatus[app.internship_id] = app.status;
           });
           setMyApplications(appStatus);
         }
-      } catch (err) {
-        console.error('Failed to load applications:', err);
-        if (mounted) {
-          setMyApplications({});
-        }
-      } finally {
-        if (mounted) {
-          setLoadingApplications(false);
-        }
+      } catch {
+        if (mounted) setMyApplications({});
       }
     };
 
-    load();
+    fetchInternships();
     loadMatching();
-    loadSavedInternships();
-    loadMyApplications();
-    
-    return () => {
-      mounted = false;
-    };
-  }, [query, positionFilter, minPositions, maxPositions, workModeFilter, skillsFilter]);
+    loadSaved();
+    loadApplications();
 
-  const updateFilters = (updates: Record<string, string | number | null>) => {
-    const newParams = new URLSearchParams(searchParams);
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value === null || value === "" || value === "all" || (key === "comp" && value === "All")) {
-        newParams.delete(key);
+    return () => { mounted = false; };
+  }, [query, locationQuery, positionFilter, minPositions, maxPositions, workModeFilter, skillsFilter, compFilter]);
+
+  // Reset page on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, locationQuery, workModeFilter, skillsFilter, activeTab]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuery(searchInput);
+    setLocationQuery(locationInput);
+  };
+
+  const handleToggleSave = async (internshipId: number, isSaved: boolean) => {
+    try {
+      if (isSaved) {
+        await api.unsaveInternship(internshipId);
+        setSavedInternships((prev) => prev.filter((i) => i.id !== internshipId));
       } else {
-        newParams.set(key, String(value));
+        await api.saveInternship(internshipId);
+        const internshipToSave = internships.find((i) => i.id === internshipId);
+        if (internshipToSave) setSavedInternships((prev) => [...prev, internshipToSave]);
       }
-    });
-    // Reset to page 1 on filter change unless specifically setting page
-    if (!updates.page) {
-      newParams.delete("page");
+      setInternships((prev) =>
+        prev.map((i) => (i.id === internshipId ? { ...i, saved: !isSaved } : i))
+      );
+    } catch (err) {
+      console.error("Failed to toggle save:", err);
     }
-    setSearchParams(newParams);
+  };
+
+  const handleSkillChange = (skillId: number, checked: boolean) => {
+    setSkillsFilter((prev) => checked ? [...prev, skillId] : prev.filter((id) => id !== skillId));
   };
 
   const getWorkModeDisplay = (item: InternshipApiItem) => {
@@ -300,125 +198,52 @@ export default function Internships() {
     return item.work_mode || "On-site";
   };
 
-  const getWorkModeTag = (item: InternshipApiItem) => {
-    const mode = getWorkModeDisplay(item);
-    if (mode === "Remote") return <Laptop className="w-3 h-3" />;
-    if (mode === "Hybrid") return <Home className="w-3 h-3" />;
-    return <Building2 className="w-3 h-3" />;
-  };
-
-  const cards: InternshipCard[] = useMemo(() => {
-    let sourceInternships = internships;
-    
-    if (activeTab === "saved") {
-      sourceInternships = savedInternships;
-    }
-    
-    return sourceInternships.map((item) => {
-      const tags = [getWorkModeDisplay(item), salaryText(item)].filter(Boolean);
-      return {
-        id: item.id,
-        title: item.title,
-        company: item.company_name,
-        location: item.location,
-        pay: salaryText(item),
-        tags,
-        saved: savedInternships.some(s => s.id === item.id),
-        closed: false,
-        logo: item.company_logo || `https://picsum.photos/seed/internship-${item.id}/48/48`,
-        applicationStatus: myApplications[item.id],
-      };
-    });
-  }, [internships, savedInternships, myApplications, activeTab]);
-
-  const salaryText = (job: Internship) => {
+  const salaryText = (job: InternshipApiItem) => {
     if (!job.stipend || job.stipend === 0) return "Unpaid";
-    return `${job.stipend_currency || '$'}${job.stipend}/mo`;
+    return `${job.stipend_currency || "$"}${job.stipend}/mo`;
   };
 
-  const recommendedInternships = matchingInternships.length > 0 ? matchingInternships.slice(0, 2) : filteredCards.slice(0, 2);
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case "pending": return "bg-yellow-100 text-yellow-700";
+      case "reviewing": return "bg-blue-100 text-blue-700";
+      case "accepted": return "bg-green-100 text-green-700";
+      case "rejected": return "bg-red-100 text-red-700";
+      default: return "bg-gray-100 text-gray-700";
+    }
+  };
 
-  const totalPages = Math.ceil(filteredCards.length / itemsPerPage);
+  const displayedInternships = useMemo(() => {
+    if (activeTab === "saved") return savedInternships;
+    return internships;
+  }, [internships, savedInternships, activeTab]);
 
-  const paginatedCards = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredCards.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredCards, currentPage, itemsPerPage]);
+  const totalPages = Math.ceil(displayedInternships.length / ITEMS_PER_PAGE);
+
+  const paginatedInternships = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return displayedInternships.slice(start, start + ITEMS_PER_PAGE);
+  }, [displayedInternships, currentPage]);
 
   const visiblePages = useMemo(() => {
     const pages: (number | string)[] = [];
     const maxVisible = 5;
     let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
     let end = Math.min(totalPages, start + maxVisible - 1);
-
-    if (end - start + 1 < maxVisible) {
-      start = Math.max(1, end - maxVisible + 1);
-    }
-
-    if (start > 1) {
-      pages.push(1);
-      if (start > 2) pages.push("...");
-    }
-
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-
-    if (end < totalPages) {
-      if (end < totalPages - 1) pages.push("...");
-      pages.push(totalPages);
-    }
-
+    if (end - start + 1 < maxVisible) start = Math.max(1, end - maxVisible + 1);
+    if (start > 1) { pages.push(1); if (start > 2) pages.push("..."); }
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < totalPages) { if (end < totalPages - 1) pages.push("..."); pages.push(totalPages); }
     return pages;
   }, [currentPage, totalPages]);
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [query, locationQuery, workModeFilter, skillsFilter, activeTab]);
-
-  // Handle save/unsave internship
-  const handleToggleSave = async (internshipId: number, isSaved: boolean) => {
-    try {
-      if (isSaved) {
-        await api.unsaveInternship(internshipId);
-        setSavedInternships(prev => prev.filter(i => i.id !== internshipId));
-      } else {
-        await api.saveInternship(internshipId);
-        const internshipToSave = internships.find(i => i.id === internshipId);
-        if (internshipToSave) {
-          setSavedInternships(prev => [...prev, internshipToSave]);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to toggle save:', err);
-    }
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
-  // Handle skill filter change
-  const handleSkillChange = (skillId: number, checked: boolean) => {
-    if (checked) {
-      setSkillsFilter(prev => [...prev, skillId]);
-    } else {
-      setSkillsFilter(prev => prev.filter(id => id !== skillId));
-    }
-  };
-
-  // Get status badge color
-  const getStatusBadge = (status?: string) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'reviewing':
-        return 'bg-blue-100 text-blue-700';
-      case 'accepted':
-        return 'bg-green-100 text-green-700';
-      case 'rejected':
-        return 'bg-red-100 text-red-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
-  };
+  const recommendedInternships = matchingInternships.length > 0
+    ? matchingInternships.slice(0, 2)
+    : internships.slice(0, 2);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -460,7 +285,7 @@ export default function Internships() {
               <span
                 key={tag}
                 className="px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
-                onClick={() => setQuery(tag)}
+                onClick={() => { setSearchInput(tag); setQuery(tag); }}
               >
                 {tag}
               </span>
@@ -473,15 +298,12 @@ export default function Internships() {
         <div className="max-w-[1440px] mx-auto flex flex-col lg:flex-row gap-8">
           {/* Sidebar Filters */}
           <aside className="w-full lg:w-64 flex-shrink-0 space-y-6">
-            {/* Tabs */}
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => setActiveTab("all")}
                   className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                    activeTab === "all" 
-                      ? "bg-[#3b82f6]/10 text-[#2563eb]" 
-                      : "text-gray-600 hover:bg-gray-50"
+                    activeTab === "all" ? "bg-[#3b82f6]/10 text-[#2563eb]" : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
                   <Briefcase className="w-4 h-4" />
@@ -490,9 +312,7 @@ export default function Internships() {
                 <button
                   onClick={() => setActiveTab("saved")}
                   className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                    activeTab === "saved" 
-                      ? "bg-[#3b82f6]/10 text-[#2563eb]" 
-                      : "text-gray-600 hover:bg-gray-50"
+                    activeTab === "saved" ? "bg-[#3b82f6]/10 text-[#2563eb]" : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
                   <Bookmark className="w-4 h-4" />
@@ -501,9 +321,7 @@ export default function Internships() {
                 <button
                   onClick={() => setActiveTab("applied")}
                   className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                    activeTab === "applied" 
-                      ? "bg-[#3b82f6]/10 text-[#2563eb]" 
-                      : "text-gray-600 hover:bg-gray-50"
+                    activeTab === "applied" ? "bg-[#3b82f6]/10 text-[#2563eb]" : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
                   <Users className="w-4 h-4" />
@@ -514,7 +332,7 @@ export default function Internships() {
 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <h3 className="font-bold flex items-center gap-2 mb-4">
-                <Map className="w-5 h-5 text-[#3b82f6]" /> Location
+                <Code className="w-5 h-5 text-[#3b82f6]" /> Skills
               </h3>
               <div className="space-y-3 max-h-48 overflow-y-auto">
                 {availableSkills.length > 0 ? (
@@ -532,25 +350,12 @@ export default function Internships() {
                     </label>
                   ))
                 ) : (
-                  <>
-                    {[
-                      { name: "Frontend Dev", checked: false },
-                      { name: "Backend Dev", checked: false },
-                      { name: "UI/UX Design", checked: false },
-                      { name: "Data Science", checked: false },
-                    ].map((item) => (
-                      <label key={item.name} className="flex items-center justify-between cursor-pointer group">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            defaultChecked={item.checked}
-                            className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                          />
-                          <span className="text-gray-600 group-hover:text-gray-900">{item.name}</span>
-                        </div>
-                      </label>
-                    ))}
-                  </>
+                  ["Frontend Dev", "Backend Dev", "UI/UX Design", "Data Science"].map((name) => (
+                    <label key={name} className="flex items-center gap-3 cursor-pointer group">
+                      <input type="checkbox" className="w-4 h-4 rounded border-gray-300" disabled />
+                      <span className="text-gray-400">{name}</span>
+                    </label>
+                  ))
                 )}
               </div>
             </div>
@@ -594,11 +399,7 @@ export default function Internships() {
                     type="radio"
                     name="position"
                     checked={positionFilter === "" && minPositions === "" && maxPositions === ""}
-                    onChange={() => {
-                      setPositionFilter("");
-                      setMinPositions("");
-                      setMaxPositions("");
-                    }}
+                    onChange={() => { setPositionFilter(""); setMinPositions(""); setMaxPositions(""); }}
                     className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
                   />
                   <span className="text-gray-600 group-hover:text-gray-900">All Positions</span>
@@ -609,47 +410,32 @@ export default function Internships() {
                       type="radio"
                       name="position"
                       checked={positionFilter === num}
-                      onChange={() => {
-                        setPositionFilter(num);
-                        setMinPositions("");
-                        setMaxPositions("");
-                      }}
+                      onChange={() => { setPositionFilter(num); setMinPositions(""); setMaxPositions(""); }}
                       className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
-                    <span className="text-gray-600 group-hover:text-gray-900">{num} {num === 1 ? 'position' : 'positions'}</span>
+                    <span className="text-gray-600 group-hover:text-gray-900">{num} {num === 1 ? "position" : "positions"}</span>
                   </label>
                 ))}
-                {/* Custom position range */}
                 <div className="pt-2 mt-2 border-t border-gray-100">
                   <p className="text-xs text-gray-500 mb-2">Custom range:</p>
                   <div className="flex gap-2">
-                    <div className="flex-1">
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Min"
-                        value={minPositions}
-                        onChange={(e) => {
-                          setPositionFilter("");
-                          setMinPositions(e.target.value ? parseInt(e.target.value) : "");
-                        }}
-                        className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent"
-                      />
-                    </div>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Min"
+                      value={minPositions}
+                      onChange={(e) => { setPositionFilter(""); setMinPositions(e.target.value ? parseInt(e.target.value) : ""); }}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#3b82f6]"
+                    />
                     <span className="text-gray-400 self-center">-</span>
-                    <div className="flex-1">
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Max"
-                        value={maxPositions}
-                        onChange={(e) => {
-                          setPositionFilter("");
-                          setMaxPositions(e.target.value ? parseInt(e.target.value) : "");
-                        }}
-                        className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent"
-                      />
-                    </div>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Max"
+                      value={maxPositions}
+                      onChange={(e) => { setPositionFilter(""); setMaxPositions(e.target.value ? parseInt(e.target.value) : ""); }}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#3b82f6]"
+                    />
                   </div>
                 </div>
               </div>
@@ -663,9 +449,9 @@ export default function Internships() {
                 {["All", "Paid", "Unpaid"].map((item) => (
                   <button
                     key={item}
-                    onClick={() => updateFilters({ comp: item })}
+                    onClick={() => setCompFilter(item)}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      comp === item
+                      compFilter === item
                         ? "bg-[#3b82f6]/10 text-[#2563eb] border border-[#3b82f6]/30"
                         : "bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100"
                     }`}
@@ -714,24 +500,18 @@ export default function Internships() {
                             <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                           </div>
                         </div>
-                        <div className="flex gap-2 mb-6">
-                          <div className="h-6 bg-gray-200 rounded w-20"></div>
-                          <div className="h-6 bg-gray-200 rounded w-16"></div>
-                        </div>
                       </div>
                     ))}
                   </div>
-                ) : matchingInternships.length === 0 && !loadingMatching ? (
+                ) : matchingInternships.length === 0 ? (
                   <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Code className="w-8 h-8 text-gray-400" />
                     </div>
                     <h3 className="text-lg font-semibold text-gray-700 mb-2">No registered skills found</h3>
-                    <p className="text-gray-500 mb-4">
-                      Add skills in Student Settings to get matching internships.
-                    </p>
-                    <Link 
-                      to="/settings?tab=skills" 
+                    <p className="text-gray-500 mb-4">Add skills in Student Settings to get matching internships.</p>
+                    <Link
+                      to="/settings?tab=skills"
                       className="inline-flex items-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
                     >
                       <Plus className="w-4 h-4" />
@@ -747,29 +527,26 @@ export default function Internships() {
                       >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-[#3b82f6]/5 rounded-bl-full -z-10"></div>
                         <div className="flex items-start gap-4 mb-4">
-                          <img src={job.company_logo || `https://picsum.photos/seed/internship-${job.id}/48/48`} alt={job.company_name} className="w-12 h-12 rounded-xl object-cover" />
+                          <img
+                            src={job.company_logo || `https://picsum.photos/seed/internship-${job.id}/48/48`}
+                            alt={job.company_name}
+                            className="w-12 h-12 rounded-xl object-cover"
+                          />
                           <div>
-                            <Link
-                              to={`/internships/${job.id}`}
-                              className="font-bold text-lg leading-tight hover:text-[#3b82f6] transition-colors"
-                            >
+                            <Link to={`/internships/${job.id}`} className="font-bold text-lg leading-tight hover:text-[#3b82f6] transition-colors">
                               {job.title}
                             </Link>
-                            <p className="text-gray-500 text-sm">
-                              {job.company_name} | {job.location}
-                            </p>
+                            <p className="text-gray-500 text-sm">{job.company_name} | {job.location}</p>
                           </div>
                         </div>
-
                         <div className="flex gap-2 mb-6">
-                          <span className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium flex items-center gap-1">
+                          <span className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium">
                             {getWorkModeDisplay(job)}
                           </span>
                           <span className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium">
                             {salaryText(job)}
                           </span>
                         </div>
-
                         <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                           <span className="text-gray-400 text-xs">Posted {job.created_at || ""}</span>
                           <Link to={`/internships/${job.id}`} className="text-[#3b82f6] font-bold text-sm hover:underline">
@@ -792,19 +569,14 @@ export default function Internships() {
                       <Briefcase className="w-8 h-8 text-gray-400" />
                     </div>
                     <h3 className="text-lg font-semibold text-gray-700 mb-2">No applications yet</h3>
-                    <p className="text-gray-500">
-                      Start applying to internships to track your applications here.
-                    </p>
+                    <p className="text-gray-500">Start applying to internships to track your applications here.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {internships
-                      .filter(internship => myApplications[internship.id])
+                      .filter((internship) => myApplications[internship.id])
                       .map((job) => (
-                        <div
-                          key={job.id}
-                          className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"
-                        >
+                        <div key={job.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                           <div className="flex items-start gap-4 flex-1">
                             <img
                               src={job.company_logo || `https://picsum.photos/seed/internship-${job.id}/48/48`}
@@ -813,10 +585,7 @@ export default function Internships() {
                             />
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
-                                <Link
-                                  to={`/internships/${job.id}`}
-                                  className="font-bold text-lg hover:text-[#3b82f6] transition-colors"
-                                >
+                                <Link to={`/internships/${job.id}`} className="font-bold text-lg hover:text-[#3b82f6] transition-colors">
                                   {job.title}
                                 </Link>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getStatusBadge(myApplications[job.id])}`}>
@@ -824,12 +593,8 @@ export default function Internships() {
                                 </span>
                               </div>
                               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500">
-                                <span className="flex items-center gap-1">
-                                  <Building2 className="w-4 h-4" /> {job.company_name}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="w-4 h-4" /> {job.location}
-                                </span>
+                                <span className="flex items-center gap-1"><Building2 className="w-4 h-4" /> {job.company_name}</span>
+                                <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {job.location}</span>
                               </div>
                             </div>
                           </div>
@@ -843,17 +608,15 @@ export default function Internships() {
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
-                  {loading ? "Loading internships..." : 
-                    activeTab === "saved" 
-                      ? `${filteredCards.length} Saved Internships`
+                  {loading ? "Loading internships..." :
+                    activeTab === "saved"
+                      ? `${displayedInternships.length} Saved Internships`
                       : activeTab === "applied"
                         ? `${Object.keys(myApplications).length} Applications`
-                        : `${filteredCards.length} Internships found`
+                        : `${displayedInternships.length} Internships found`
                   }
                 </h2>
               </div>
-
-              {error && <div className="p-4 mb-6 bg-red-50 text-red-600 rounded-xl border border-red-100">{error}</div>}
 
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 text-gray-400">
@@ -862,7 +625,7 @@ export default function Internships() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {internships.map((job) => (
+                  {paginatedInternships.map((job) => (
                     <div
                       key={job.id}
                       className="bg-white p-6 rounded-2xl border border-gray-100 hover:border-[#3b82f6]/50 shadow-sm transition-colors flex flex-col md:flex-row md:items-center justify-between gap-6"
@@ -875,17 +638,9 @@ export default function Internships() {
                         />
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <Link
-                              to={`/internships/${job.id}`}
-                              className="font-bold text-lg hover:text-[#3b82f6] transition-colors"
-                            >
+                            <Link to={`/internships/${job.id}`} className="font-bold text-lg hover:text-[#3b82f6] transition-colors">
                               {job.title}
                             </Link>
-                            {job.isNew && (
-                              <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                                New
-                              </span>
-                            )}
                             {job.applicationStatus && (
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getStatusBadge(job.applicationStatus)}`}>
                                 {job.applicationStatus}
@@ -893,23 +648,13 @@ export default function Internships() {
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 mb-3">
-                            <span className="flex items-center gap-1">
-                              <Building2 className="w-4 h-4" /> {job.company_name}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4" /> {job.location}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <DollarSign className="w-4 h-4" /> {salaryText(job)}
-                            </span>
+                            <span className="flex items-center gap-1"><Building2 className="w-4 h-4" /> {job.company_name}</span>
+                            <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {job.location}</span>
+                            <span className="flex items-center gap-1"><DollarSign className="w-4 h-4" /> {salaryText(job)}</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <span className="bg-gray-50 text-gray-500 text-xs px-2.5 py-1 rounded-md capitalize">
-                              {job.work_mode}
-                            </span>
-                            <span className="bg-gray-50 text-gray-500 text-xs px-2.5 py-1 rounded-md capitalize">
-                              {job.type}
-                            </span>
+                            <span className="bg-gray-50 text-gray-500 text-xs px-2.5 py-1 rounded-md capitalize">{job.work_mode || getWorkModeDisplay(job)}</span>
+                            <span className="bg-gray-50 text-gray-500 text-xs px-2.5 py-1 rounded-md capitalize">{job.type}</span>
                           </div>
                         </div>
                       </div>
@@ -922,32 +667,31 @@ export default function Internships() {
                         ) : (
                           <Link
                             to={`/internships/${job.id}`}
-                            className="flex-1 md:flex-none bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-bold px-6 py-2.5 rounded-xl transition-colors text-center"
+                            className="flex-1 md:flex-none bg-[#3b82f6] hover:bg-[#2563eb] text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-center"
                           >
                             View Details
                           </Link>
                         )}
                         <button
-                          onClick={() => handleToggleSave(job.id, job.saved || false)}
+                          onClick={() => handleToggleSave(job.id, savedInternships.some((s) => s.id === job.id))}
                           className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors ${
-                            job.saved ? "bg-[#3b82f6]/10 text-[#2563eb]" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                            savedInternships.some((s) => s.id === job.id)
+                              ? "bg-[#3b82f6]/10 text-[#2563eb]"
+                              : "bg-gray-50 text-gray-600 hover:bg-gray-100"
                           }`}
                         >
-                          View Details
-                        </Link>
-                        <button className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium bg-gray-50 text-gray-600 hover:bg-100">
                           <Bookmark className="w-4 h-4" />
-                          Save
+                          {savedInternships.some((s) => s.id === job.id) ? "Saved" : "Save"}
                         </button>
                       </div>
                     </div>
                   ))}
-                  
-                  {!internships.length && (
+
+                  {!displayedInternships.length && (
                     <div className="bg-white p-12 rounded-2xl border border-dashed border-gray-200 text-center">
                       <p className="text-gray-500">No internships found matching your criteria.</p>
-                      <button 
-                        onClick={() => setSearchParams({})}
+                      <button
+                        onClick={() => { setQuery(""); setLocationQuery(""); setSearchInput(""); setLocationInput(""); setSkillsFilter([]); setWorkModeFilter(""); setCompFilter("All"); }}
                         className="mt-4 text-[#3b82f6] font-bold hover:underline"
                       >
                         Clear all filters
@@ -957,50 +701,43 @@ export default function Internships() {
                 </div>
               )}
 
-              <div className="flex justify-center items-center gap-2 mt-12">
-                <button
-                  type="button"
-                  onClick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="sr-only">Previous</span>
-                  <span aria-hidden="true"></span>
-                </button>
-                {visiblePages.map((page) => {
-                  if (typeof page !== "number") {
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-12">
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ←
+                  </button>
+                  {visiblePages.map((page, idx) => {
+                    if (typeof page !== "number") {
+                      return <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 select-none">...</span>;
+                    }
                     return (
-                      <span key={page} className="px-1 text-gray-400 select-none">
-                        ...
-                      </span>
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => goToPage(page)}
+                        className={`w-10 h-10 flex items-center justify-center rounded-lg font-medium transition-colors ${
+                          page === currentPage ? "bg-[#3b82f6] text-white font-bold" : "hover:bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {page}
+                      </button>
                     );
-                  }
-                  const isActive = page === currentPage;
-                  return (
-                    <button
-                      key={page}
-                      type="button"
-                      onClick={() => goToPage(page)}
-                      className={`w-10 h-10 flex items-center justify-center rounded-lg font-medium transition-colors ${
-                        isActive
-                          ? "bg-[#3b82f6] text-[#111816] font-bold"
-                          : "hover:bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="sr-only">Next</span>
-                  <span aria-hidden="true"></span>
-                </button>
-              </div>
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    →
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1008,4 +745,3 @@ export default function Internships() {
     </div>
   );
 }
-

@@ -67,6 +67,7 @@ export const authStorage = {
 };
 
 export const api = {
+  // Auth endpoints
   register(payload) {
     const role = payload?.role || payload?.user_type;
 
@@ -103,7 +104,7 @@ export const api = {
     return request('/auth/me', { auth: true });
   },
 
-  // FIX MARK: profile settings API used by dynamic account settings page.
+  // Profile settings endpoints
   getProfileSettings() {
     return request(`/profile/settings?ts=${Date.now()}`, { auth: true });
   },
@@ -128,7 +129,6 @@ export const api = {
     return request('/profile/company', { method: 'PUT', auth: true, body: payload });
   },
 
-  // FIX MARK: notification card API for header bell dropdown.
   getNotificationCard() {
     return request('/profile/notifications/card', { auth: true });
   },
@@ -141,6 +141,23 @@ export const api = {
     return request('/profile/security/two-factor', { method: 'PUT', auth: true, body: payload });
   },
 
+  // Skills endpoint
+  getSkills(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/auth/skills${query ? `?${query}` : ''}`).then((data) => {
+      if (Array.isArray(data)) {
+        return { skills: data };
+      }
+      return data;
+    });
+  },
+
+  // Internship endpoints
   getInternshipById(id) {
     return request(`/internships/${id}`).then((data) => {
       return data;
@@ -163,7 +180,6 @@ export const api = {
   },
 
   getInternships(params = {}) {
-    // Support search, position, minPositions, maxPositions filters
     const query = new URLSearchParams(
       Object.entries(params)
         .filter(([, value]) => value !== undefined && value !== null && value !== '')
@@ -221,6 +237,16 @@ export const api = {
     return request(`/internships/${id}`, { method: 'DELETE', auth: true });
   },
 
+  // Dashboard endpoints
+  getDashboardStats() {
+    return request('/internships/dashboard/stats', { auth: true });
+  },
+
+  getApplicationTrends() {
+    return request('/internships/dashboard/trends', { auth: true });
+  },
+
+  // Application endpoints
   getCompanyApplications(params = {}) {
     const query = new URLSearchParams(
       Object.entries(params)
@@ -231,66 +257,16 @@ export const api = {
     return request(`/applications/company/mine${query ? `?${query}` : ''}`, { auth: true });
   },
 
-  // FIXED: dynamic skill lookup for registration step 3.
-  getSkills(params = {}) {
-    const query = new URLSearchParams(
-      Object.entries(params)
-        .filter(([, value]) => value !== undefined && value !== null && value !== '')
-        .map(([key, value]) => [key, String(value)])
-    ).toString();
-
-    return request(`/auth/skills${query ? `?${query}` : ''}`).then((data) => {
-      if (Array.isArray(data)) {
-        return { skills: data };
-      }
-      return data;
-    });
+  getApplicants() {
+    return request('/applications', { auth: true });
   },
 
-  createInternship(payload) {
-    return request('/internships', { method: 'POST', auth: true, body: payload });
+  updateApplicationStatus(id, status) {
+    return request(`/applications/${id}/status`, { method: 'PUT', auth: true, body: { status } });
   },
 
-  updateInternship(id, payload) {
-    return request(`/internships/${id}`, { method: 'PUT', auth: true, body: payload });
-  },
-
-  deleteInternship(id) {
-    console.log('Attempting to delete internship with ID:', id);
-    console.log('Stored token:', getStoredToken());
-    return request(`/internships/${id}`, { method: 'DELETE', auth: true });
-  },
-
-  getInternshipById(id) {
-    return request(`/internships/${id}`);
-  },
-
-  // Save/Bookmark methods
-  saveInternship(id) {
-    return request(`/internships/${id}/save`, { method: 'POST', auth: true });
-  },
-
-  unsaveInternship(id) {
-    return request(`/internships/${id}/save`, { method: 'DELETE', auth: true });
-  },
-
-  getSavedInternships() {
-    return request('/internships/saved', { auth: true }).then((data) => {
-      if (Array.isArray(data)) {
-        return { internships: data };
-      }
-      return data;
-    });
-  },
-
-  // Application methods
-  getMyApplications() {
-    return request('/applications/my', { auth: true }).then((data) => {
-      if (Array.isArray(data)) {
-        return { applications: data };
-      }
-      return data;
-    });
+  bulkUpdateApplicationStatus(ids, status) {
+    return request('/applications/bulk-status', { method: 'PUT', auth: true, body: { ids, status } });
   },
 
   applyForInternship(internshipId, coverLetter) {

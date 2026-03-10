@@ -46,45 +46,57 @@ export default function PostInternship() {
 
   useEffect(() => {
     if (isEditMode) {
-      const fetchInternship = async () => {
-        try {
-          const data = await api.getInternshipById(id);
-          if (data.success && data.internship) {
-            const i = data.internship;
-            setFormData({
-              title: i.title || '',
-              location: i.location || 'Phnom Penh',
-              duration: i.duration ? String(i.duration) : '',
-              description: i.description || '',
-              requirements: i.requirements || '',
-              salaryType: i.stipend > 0 ? 'paid' : 'unpaid',
-              minSalary: i.stipend ? String(i.stipend) : '',
-              maxSalary: '', // Not always in DB, adjust if needed
-              skills: i.skills ? i.skills.map(s => s.name) : [],
-              positions: i.positions || 1,
-              deadline: i.deadline ? i.deadline.split('T')[0] : ''
-            });
-          }
-        } catch (err) {
-          console.error('Failed to fetch internship:', err);
-          setError('Could not load internship details.');
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchInternship();
+      fetchInternshipData();
     }
   }, [id, isEditMode]);
 
+  const fetchInternshipData = async () => {
+    try {
+      setLoading(true);
+      const response = await api.getInternshipById(id);
+      const internship = response.internship;
+      
+      if (internship) {
+        setFormData({
+          title: internship.title || '',
+          location: internship.location || 'Phnom Penh',
+          duration: internship.duration_months?.toString() || '',
+          description: internship.description || '',
+          requirements: internship.requirements || '',
+          salaryType: internship.stipend > 0 ? 'paid' : 'unpaid',
+          minSalary: internship.stipend ? internship.stipend.toString() : '',
+          maxSalary: internship.stipend ? internship.stipend.toString() : '',
+          skills: [], // Will be populated separately if needed
+          positions: internship.positions || 1,
+          deadline: internship.application_deadline ? internship.application_deadline.split('T')[0] : ''
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching internship data:', error);
+      alert('Failed to load internship data. Please try again.');
+      navigate('/company');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.deleteInternship(id);
+      setIsDeleteModalOpen(false);
+      navigate('/company');
+    } catch (error) {
+      console.error('Error deleting internship:', error);
+      alert('Failed to delete internship. Please try again.');
+    }
+  };
+
   const validate = () => {
-    if (!formData.title.trim()) return 'Internship title is required.';
-    if (!formData.location.trim()) return 'Location is required.';
-    if (!formData.duration.trim()) return 'Duration is required.';
-    if (!formData.description.trim()) return 'Job description is required.';
-    if (!formData.requirements.trim()) return 'Requirements are required.';
-    if (formData.salaryType === 'paid' && !formData.minSalary) return 'Minimum salary is required for paid internships.';
+    if (!formData.title.trim()) return 'Title is required.';
+    if (!formData.description.trim()) return 'Description is required.';
     if (!formData.deadline) return 'Application deadline is required.';
-    return '';
+    if (formData.salaryType === 'paid' && !formData.minSalary) return 'Salary amount is required for paid internships.';
+    return null;
   };
 
   const handleSubmit = async (e) => {
@@ -114,28 +126,18 @@ export default function PostInternship() {
 
     try {
       if (isEditMode) {
-        await api.updateInternship(id, payload);
+        const response = await api.updateInternship(id, payload);
+        console.log('Update response:', response);
       } else {
         await api.createInternship(payload);
       }
       navigate('/company');
-    } catch (err) {
-      console.error('Failed to save internship:', err);
-      setError(err.message || 'Failed to save internship. Please try again.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error('Error submitting internship:', error);
+      const action = isEditMode ? 'updating' : 'creating';
+      alert(`Failed to ${action} internship: ${error.message || 'Please try again.'}`);
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    try {
-      await api.deleteInternship(id);
-      setIsDeleteModalOpen(false);
-      navigate('/company');
-    } catch (err) {
-      console.error('Delete failed:', err);
-      alert('Failed to delete internship.');
     }
   };
 
@@ -149,14 +151,13 @@ export default function PostInternship() {
 
   return (
     <div className="max-w-[1000px] mx-auto px-4 py-8 md:px-6 flex flex-col gap-8">
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-center gap-3">
-          <AlertCircle size={20} />
-          {error}
+      {isEditMode && loading ? (
+        <div className="flex justify-center items-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
-      )}
-
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      ) : (
+        <>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
             {isEditMode ? 'Edit Internship Post' : 'Create New Internship'}
@@ -449,6 +450,8 @@ export default function PostInternship() {
         confirmText="Delete Post"
         type="danger"
       />
+        </>
+      )}
     </div>
   );
 }

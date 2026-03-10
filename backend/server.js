@@ -1,18 +1,26 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+
 // Load env vars
 dotenv.config();
+
+// Import database config
+const db = require('./config/db');
+
 // Set JWT_SECRET if not loaded from .env
 if (!process.env.JWT_SECRET) {
     process.env.JWT_SECRET = 'your_jwt_secret_key_change_this_for_production';
 }
+
 // Set ADMIN_REGISTRATION_CODE if not loaded from .env
 if (!process.env.ADMIN_REGISTRATION_CODE) {
     process.env.ADMIN_REGISTRATION_CODE = 'change_this_admin_code';
 }
+
 console.log('JWT_SECRET loaded:', process.env.JWT_SECRET ? 'YES' : 'NO');
 console.log('ADMIN_REGISTRATION_CODE loaded:', process.env.ADMIN_REGISTRATION_CODE ? 'YES' : 'NO');
+
 const app = express();
 
 // Middleware

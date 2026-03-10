@@ -39,31 +39,53 @@ export default function PostInternship() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isEditMode) {
-      // Mock fetching data for the internship
-      setFormData({
-        title: 'Marketing Intern',
-        location: 'Phnom Penh',
-        duration: '3',
-        description: 'We are looking for a creative Marketing Intern to join our team...',
-        requirements: 'Currently enrolled in a Marketing or related degree...',
-        salaryType: 'paid',
-        minSalary: '150',
-        maxSalary: '300',
-        skills: ['Social Media', 'Copywriting', 'Content Strategy'],
-        positions: 2,
-        deadline: '2023-12-31'
-      });
+      fetchInternshipData();
     }
   }, [id, isEditMode]);
 
-  const handleDelete = () => {
-    // In a real application, this would call an API to delete the post
-    console.log(`Deleting internship post with ID: ${id}`);
-    setIsDeleteModalOpen(false);
-    navigate('/company');
+  const fetchInternshipData = async () => {
+    try {
+      setLoading(true);
+      const response = await api.getInternshipById(id);
+      const internship = response.internship;
+      
+      if (internship) {
+        setFormData({
+          title: internship.title || '',
+          location: internship.location || 'Phnom Penh',
+          duration: internship.duration_months?.toString() || '',
+          description: internship.description || '',
+          requirements: internship.requirements || '',
+          salaryType: internship.stipend > 0 ? 'paid' : 'unpaid',
+          minSalary: internship.stipend ? internship.stipend.toString() : '',
+          maxSalary: internship.stipend ? internship.stipend.toString() : '',
+          skills: [], // Will be populated separately if needed
+          positions: internship.positions || 1,
+          deadline: internship.application_deadline ? internship.application_deadline.split('T')[0] : ''
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching internship data:', error);
+      alert('Failed to load internship data. Please try again.');
+      navigate('/company');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.deleteInternship(id);
+      setIsDeleteModalOpen(false);
+      navigate('/company');
+    } catch (error) {
+      console.error('Error deleting internship:', error);
+      alert('Failed to delete internship. Please try again.');
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -115,9 +137,8 @@ export default function PostInternship() {
       console.log('Submitting payload:', payload);
 
       if (isEditMode) {
-        // TODO: Implement update functionality
-        console.log('Update internship:', payload);
-        // await api.updateInternship(id, payload);
+        const response = await api.updateInternship(id, payload);
+        console.log('Update response:', response);
       } else {
         const response = await api.createInternship(payload);
         console.log('Create response:', response);
@@ -125,8 +146,9 @@ export default function PostInternship() {
 
       navigate('/company');
     } catch (error) {
-      console.error('Error creating internship:', error);
-      alert(`Failed to create internship: ${error.message || 'Please try again.'}`);
+      console.error('Error submitting internship:', error);
+      const action = isEditMode ? 'updating' : 'creating';
+      alert(`Failed to ${action} internship: ${error.message || 'Please try again.'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -134,7 +156,13 @@ export default function PostInternship() {
 
   return (
     <div className="max-w-[1000px] mx-auto px-4 py-8 md:px-6 flex flex-col gap-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      {isEditMode && loading ? (
+        <div className="flex justify-center items-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      ) : (
+        <>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
             {isEditMode ? 'Edit Internship Post' : 'Create New Internship'}
@@ -436,6 +464,8 @@ export default function PostInternship() {
         confirmText="Delete Post"
         type="danger"
       />
+        </>
+      )}
     </div>
   );
 }

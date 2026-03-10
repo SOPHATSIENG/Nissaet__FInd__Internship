@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PlusCircle, 
   FilePlus, 
@@ -17,30 +17,103 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../api/axios';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [internships, setInternships] = useState([
-    { id: 1, title: 'Marketing Intern', location: 'Phnom Penh • Full-time', date: 'Oct 12, 2023', applicants: 21, status: 'Active' },
-    { id: 2, title: 'Web Developer', location: 'Remote • Part-time', date: 'Oct 10, 2023', applicants: 43, status: 'Active' },
-    { id: 3, title: 'Graphic Designer', location: 'Siem Reap • Internship', date: 'Oct 05, 2023', applicants: 17, status: 'Active' },
-    { id: 4, title: 'Data Analyst', location: 'Phnom Penh • Full-time', date: 'Sep 28, 2023', applicants: 30, status: 'Closing Soon' },
+  const [internships, setInternships] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [deleteId, setDeleteId] = useState(null);
+  const [stats, setStats] = useState([
+    { label: 'Total Posted', value: '0', icon: FilePlus, color: 'text-blue-600', bg: 'bg-blue-50', trend: '0%' },
+    { label: 'Total Applicants', value: '0', icon: Users, color: 'text-purple-600', bg: 'bg-purple-50', trend: '0%' },
+    { label: 'Active Posts', value: '0', icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', trend: 'Stable' },
+    { label: 'Expired Posts', value: '0', icon: History, color: 'text-orange-600', bg: 'bg-orange-50', trend: '0%' },
   ]);
+  const [trends, setTrends] = useState([]);
 
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+  useEffect(() => {
+    console.log('Current user:', user);
+    fetchDashboardData();
+  }, []);
 
-  const stats = [
-    { label: 'Total Posted', value: '12', icon: FilePlus, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+20%' },
-    { label: 'Total Applicants', value: '148', icon: Users, color: 'text-purple-600', bg: 'bg-purple-50', trend: '+15%' },
-    { label: 'Active Posts', value: '5', icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', trend: 'Stable' },
-    { label: 'Expired Posts', value: '7', icon: History, color: 'text-orange-600', bg: 'bg-orange-50', trend: '+5%' },
-  ];
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all data in parallel
+      const [internshipsResponse, statsResponse, trendsResponse] = await Promise.all([
+        api.getCompanyInternships(),
+        api.getDashboardStats(),
+        api.getApplicationTrends()
+      ]);
+      
+      console.log('Internships response:', internshipsResponse);
+      console.log('Stats response:', statsResponse);
+      console.log('Trends response:', trendsResponse);
+      
+      setInternships(internshipsResponse.internships || []);
+      
+      // Update stats with real data
+      if (statsResponse) {
+        const newStats = [
+          { 
+            label: 'Total Posted', 
+            value: statsResponse.totalPosted?.toString() || '0', 
+            icon: FilePlus, 
+            color: 'text-blue-600', 
+            bg: 'bg-blue-50', 
+            trend: statsResponse.postsTrend || '0%' 
+          },
+          { 
+            label: 'Total Applicants', 
+            value: statsResponse.totalApplicants?.toString() || '0', 
+            icon: Users, 
+            color: 'text-purple-600', 
+            bg: 'bg-purple-50', 
+            trend: '+15%' // Calculate this later if needed
+          },
+          { 
+            label: 'Active Posts', 
+            value: statsResponse.activePosts?.toString() || '0', 
+            icon: CheckCircle, 
+            color: 'text-emerald-600', 
+            bg: 'bg-emerald-50', 
+            trend: 'Stable' 
+          },
+          { 
+            label: 'Expired Posts', 
+            value: statsResponse.expiredPosts?.toString() || '0', 
+            icon: History, 
+            color: 'text-orange-600', 
+            bg: 'bg-orange-50', 
+            trend: '+5%' // Calculate this later if needed
+          }
+        ];
+        setStats(newStats);
+      }
+      
+      setTrends(trendsResponse.trends || []);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId) {
-      setInternships(prev => prev.filter(item => item.id !== deleteId));
-      setDeleteId(null);
+      try {
+        await api.deleteInternship(deleteId);
+        setInternships(prev => prev.filter(item => item.id !== deleteId));
+        setDeleteId(null);
+        // Refresh all dashboard data
+        fetchDashboardData();
+      } catch (error) {
+        console.error('Error deleting internship:', error);
+        alert('Failed to delete internship. Please try again.');
+      }
     }
   };
 
@@ -100,18 +173,43 @@ export default function Dashboard() {
             </select>
           </div>
           <div className="relative h-64 w-full flex items-end justify-between gap-2 sm:gap-4 pt-4 px-2">
-            {[30, 45, 35, 65, 80, 92].map((height, i) => (
-              <div key={i} className="relative z-10 flex flex-col items-center flex-1 h-full justify-end group">
-                <div 
-                  className={`w-full max-w-[40px] transition-all duration-300 rounded-t-md relative ${i === 5 ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-primary/20 hover:bg-primary'}`}
-                  style={{ height: `${height}%` }}
-                >
+            {trends.length > 0 ? (
+              trends.map((trend, i) => {
+                // Get the last 6 months for display
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthName = months[new Date(trend.month + '-01').getMonth()] || 'Month';
+                const isCurrentMonth = i === trends.length - 1;
+                
+                return (
+                  <div key={trend.month} className="relative z-10 flex flex-col items-center flex-1 h-full justify-end group">
+                    <div 
+                      className={`w-full max-w-[40px] transition-all duration-300 rounded-t-md relative ${
+                        isCurrentMonth ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-primary/20 hover:bg-primary'
+                      }`}
+                      style={{ height: `${Math.min((trend.applications || 1) * 2, 100)}%` }}
+                    >
+                    </div>
+                    <span className={`text-xs mt-2 ${isCurrentMonth ? 'font-bold text-primary' : 'text-slate-500'}`}>
+                      {monthName}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              // Fallback to mock data if no trends available
+              [30, 45, 35, 65, 80, 92].map((height, i) => (
+                <div key={i} className="relative z-10 flex flex-col items-center flex-1 h-full justify-end group">
+                  <div 
+                    className={`w-full max-w-[40px] transition-all duration-300 rounded-t-md relative ${i === 5 ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-primary/20 hover:bg-primary'}`}
+                    style={{ height: `${height}%` }}
+                  >
+                  </div>
+                  <span className={`text-xs mt-2 ${i === 5 ? 'font-bold text-primary' : 'text-slate-500'}`}>
+                    {['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'][i]}
+                  </span>
                 </div>
-                <span className={`text-xs mt-2 ${i === 5 ? 'font-bold text-primary' : 'text-slate-500'}`}>
-                  {['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'][i]}
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -124,12 +222,13 @@ export default function Dashboard() {
             <div className="relative h-48 w-48">
               <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" fill="transparent" r="40" stroke="#f1f5f9" strokeWidth="12"></circle>
-                <circle cx="50" cy="50" fill="transparent" r="40" stroke="#ef4444" strokeDasharray="37.7 251.3" strokeDashoffset="0" strokeWidth="12"></circle>
-                <circle cx="50" cy="50" fill="transparent" r="40" stroke="#13eca4" strokeDasharray="75.4 251.3" strokeDashoffset="-37.7" strokeWidth="12"></circle>
-                <circle cx="50" cy="50" fill="transparent" r="40" stroke="#f59e0b" strokeDasharray="138.2 251.3" strokeDashoffset="-113.1" strokeWidth="12"></circle>
+                <circle cx="50" cy="50" fill="transparent" r="40" stroke="#13eca4" strokeDasharray="37.7 251.3" strokeDashoffset="0" strokeWidth="12"></circle>
+                <circle cx="50" cy="50" fill="transparent" r="40" stroke="#f59e0b" strokeDasharray="138.2 251.3" strokeDashoffset="-37.7" strokeWidth="12"></circle>
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-3xl font-bold text-slate-900">148</span>
+                <span className="text-3xl font-bold text-slate-900">
+                  {stats.find(s => s.label === 'Total Applicants')?.value || '0'}
+                </span>
                 <span className="text-[10px] uppercase text-slate-500 font-semibold tracking-wider">Total</span>
               </div>
             </div>
@@ -174,85 +273,94 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/50 border-b border-slate-100">
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Internship Title</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Posted Date</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applicants</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="py-4 px-6 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                <AnimatePresence mode="popLayout">
-                  {internships.map((job) => (
-                    <motion.tr 
-                      key={job.id} 
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      className="group hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                            <PlusCircle size={20} />
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : internships.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                No internships posted yet. <Link to="/company/post" className="text-primary hover:underline">Post your first internship</Link>
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-100">
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Internship Title</th>
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Posted Date</th>
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applicants</th>
+                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                    <th className="py-4 px-6 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <AnimatePresence mode="popLayout">
+                    {internships.map((job) => (
+                      <motion.tr 
+                        key={job.id} 
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="group hover:bg-slate-50 transition-colors"
+                      >
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                              <PlusCircle size={20} />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900 text-sm">{job.title}</p>
+                              <p className="text-xs text-slate-500">{job.location} • {job.type}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-slate-900 text-sm">{job.title}</p>
-                            <p className="text-xs text-slate-500">{job.location}</p>
+                        </td>
+                        <td className="py-4 px-6 text-sm text-slate-600">
+                          {new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex -space-x-2 overflow-hidden">
+                            {job.applications_count > 0 && (
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
+                                <span className="text-xs font-medium text-slate-500">{job.applications_count}</span>
+                              </div>
+                            )}
+                            {job.applications_count === 0 && (
+                              <span className="text-xs text-slate-400">No applicants</span>
+                            )}
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-slate-600">{job.date}</td>
-                      <td className="py-4 px-6">
-                        <div className="flex -space-x-2 overflow-hidden">
-                          {[1, 2, 3].map(n => (
-                            <img 
-                              key={n}
-                              className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
-                              src={`https://picsum.photos/seed/user${n}/32/32`} 
-                              alt="Applicant" 
-                            />
-                          ))}
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
-                            <span className="text-xs font-medium text-slate-500">+{job.applicants}</span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                            job.status === 'active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
+                          }`}>
+                            {job.status === 'active' ? 'Active' : job.status}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => navigate(`/company/post/${job.id}`)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 hover:text-primary transition-all"
+                              title="Edit"
+                            >
+                              <Edit3 size={14} />
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => setDeleteId(job.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={18} />
+                            </button>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
-                          job.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
-                        }`}>
-                          {job.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button 
-                            onClick={() => navigate(`/post/${job.id}`)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 hover:text-primary transition-all"
-                            title="Edit"
-                          >
-                            <Edit3 size={14} />
-                            Edit
-                          </button>
-                          <button 
-                            onClick={() => setDeleteId(job.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </AnimatePresence>
-              </tbody>
-            </table>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 

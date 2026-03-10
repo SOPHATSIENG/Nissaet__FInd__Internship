@@ -15,6 +15,7 @@ import Companies from '../pages/student/Companies';
 import CareerAdvice from '../pages/student/CareerAdvice';
 import AccountSettings from '../pages/account/AccountSettings';
 import { useAuth } from '../context/AuthContext';
+
 // import Applicants from '../pages/student/Applicants';
 
 import CompanyLayout from '../pages/Company/CompanyLayout';

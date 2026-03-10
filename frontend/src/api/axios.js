@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5002/api';
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {
@@ -186,6 +186,46 @@ export const api = {
 
   createInternship(payload) {
     return request('/internships', { method: 'POST', auth: true, body: payload });
+  },
+
+  getCompanyInternships() {
+    return request('/internships/company', { auth: true });
+  },
+
+  getDashboardStats() {
+    return request('/internships/dashboard/stats', { auth: true });
+  },
+
+  getApplicationTrends() {
+    return request('/internships/dashboard/trends', { auth: true });
+  },
+
+  getApplicants() {
+    return request('/applications', { auth: true });
+  },
+
+  updateApplicationStatus(id, status) {
+    return request(`/applications/${id}/status`, { method: 'PUT', auth: true, body: { status } });
+  },
+
+  bulkUpdateApplicationStatus(ids, status) {
+    return request('/applications/bulk-status', { method: 'PUT', auth: true, body: { ids, status } });
+  },
+
+  getInternshipById(id) {
+    return request(`/internships/${id}`, { auth: true });
+  },
+
+  updateInternship(id, payload) {
+    return request(`/internships/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  deleteInternship(id) {
+    return request(`/internships/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  applyForInternship(internshipId, coverLetter) {
+    return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter } });
   },
 };
 

@@ -1,5 +1,7 @@
 import { Bookmark, BriefcaseBusiness, Clock3, Code2, MapPin, Share2, WalletCards } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import api from "../../api/axios";
 
 type InternshipRecord = {
   id: string;
@@ -80,12 +82,90 @@ const INTERNSHIPS: Record<string, InternshipRecord> = {
 };
 
 export default function InternshipDetails() {
-  const { id = "1" } = useParams();
-  const internship = INTERNSHIPS[id] ?? INTERNSHIPS["1"];
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [internship, setInternship] = useState<InternshipRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isApplying, setIsApplying] = useState(false);
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [coverLetter, setCoverLetter] = useState('');
+
+  useEffect(() => {
+    fetchInternship();
+  }, [id]);
+
+  const fetchInternship = async () => {
+    try {
+      setLoading(true);
+      const response = await api.getInternshipById(id);
+      console.log('Internship response:', response);
+
+      if (response.internship) {
+        // Transform API data to match expected format
+        const transformedData = {
+          id: response.internship.id,
+          title: response.internship.title,
+          company: response.internship.company_name || 'Company',
+          postedAgo: `Posted ${new Date(response.internship.created_at).toLocaleDateString()}`,
+          location: response.internship.location || 'Location TBD',
+          duration: `${response.internship.duration || '12'} Weeks`,
+          internshipType: response.internship.stipend ? 'Paid Internship' : 'Unpaid Internship',
+          skills: response.internship.requirements ? response.internship.requirements.split(',').map(s => s.trim()) : ['JavaScript', 'React'],
+          description: response.internship.description || 'No description available.',
+          deadline: response.internship.deadline ? new Date(response.internship.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'No deadline',
+          heroImage: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80',
+          logo: response.internship.company_logo || 'https://picsum.photos/seed/company/120/120'
+        };
+
+        setInternship(transformedData);
+      } else {
+        // Fallback to mock data if API fails
+        const mockData = INTERNSHIPS[id];
+        if (mockData) {
+          setInternship(mockData);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching internship:', error);
+      // Fallback to mock data if API fails
+      const mockData = INTERNSHIPS[id];
+      if (mockData) {
+        setInternship(mockData);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!coverLetter.trim()) {
+      alert('Please write a cover letter before applying.');
+      return;
+    }
+
+    setIsApplying(true);
+    try {
+      await api.applyForInternship(id, coverLetter);
+      alert('Application submitted successfully!');
+      setShowApplyModal(false);
+      setCoverLetter('');
+      navigate('/student/internships');
+    } catch (error) {
+      console.error('Error applying:', error);
+      alert('Failed to submit application. Please try again.');
+    } finally {
+      setIsApplying(false);
+    }
+  };
 
   return (
     <div className="bg-[#f3f5f8] min-h-screen py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-[1180px] mx-auto bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      {loading ? (
+        <div className="max-w-[1180px] mx-auto flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-700"></div>
+        </div>
+      ) : internship ? (
+        <div className="max-w-[1180px] mx-auto bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-6 md:px-8 py-5 border-b border-slate-200 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
@@ -195,12 +275,83 @@ export default function InternshipDetails() {
           </div>
           <button
             type="button"
+            onClick={() => setShowApplyModal(true)}
             className="bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xl md:text-lg px-10 py-3 rounded-2xl shadow-[0_8px_24px_rgba(67,56,202,0.35)] transition-colors"
           >
             Apply Now
           </button>
         </div>
       </div>
+      )
+      : (
+        <div className="max-w-[1180px] mx-auto flex items-center justify-center py-20">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Internship Not Found</h2>
+            <p className="text-slate-600">The internship you're looking for doesn't exist or has been removed.</p>
+            <button 
+              onClick={() => navigate('/student/internships')}
+              className="mt-4 px-6 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 transition-colors"
+            >
+              Back to Internships
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Apply Modal */}
+      {showApplyModal && internship && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Apply for {internship.title}</h2>
+                <button
+                  onClick={() => setShowApplyModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cover Letter <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={coverLetter}
+                  onChange={(e) => setCoverLetter(e.target.value)}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Tell us why you're interested in this internship and why you'd be a good fit..."
+                />
+                <p className="mt-2 text-sm text-gray-500">
+                  Write a compelling cover letter that highlights your relevant skills and experience.
+                </p>
+              </div>
+              
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowApplyModal(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApply}
+                  disabled={isApplying || !coverLetter.trim()}
+                  className="px-6 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isApplying ? 'Submitting...' : 'Submit Application'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

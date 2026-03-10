@@ -1,5 +1,10 @@
 const db = require('../config/db');
 
+const getCompanyIdByUserId = async (userId) => {
+    const rows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+    return rows.length > 0 ? rows[0].id : null;
+};
+
 const getStudentIdByUserId = async (userId) => {
     const rows = await db.query('SELECT id FROM students WHERE user_id = ? LIMIT 1', [userId]);
     return rows.length > 0 ? rows[0].id : null;
@@ -244,11 +249,178 @@ const updateApplicationStatus = async (req, res) => {
     }
 };
 
+const getCompanyApplications = async (req, res) => {
+    try {
+        const companyId = await getCompanyIdByUserId(req.user.userId);
+        
+        if (!companyId) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        const { page, limit, offset } = parsePagination(req.query);
+        const isAdmin = req.user?.role === 'admin';
+
+        let targetCompanyId = companyId;
+        if (!isAdmin) {
+            const ownCompanyId = await getCompanyIdByUserId(req.user.userId);
+            if (!ownCompanyId) {
+                return res.status(404).json({ message: 'Company profile not found' });
+            }
+            targetCompanyId = ownCompanyId;
+        }
+
+        const applications = await db.query(
+            `SELECT
+                a.id,
+                a.student_id,
+                a.internship_id,
+                a.cover_letter,
+                a.resume_url,
+                a.status,
+                a.created_at,
+                a.updated_at,
+                u.full_name,
+                u.email,
+                u.phone,
+                s.university,
+                s.education,
+                i.title,
+                i.company_id,
+                c.company_name
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN users u ON s.user_id = u.id
+             JOIN internships i ON a.internship_id = i.id
+             JOIN companies c ON i.company_id = c.id
+             WHERE i.company_id = ?
+             ORDER BY a.created_at DESC
+             LIMIT ${limit} OFFSET ${offset}`,
+            [targetCompanyId]
+        );
+
+        const countRows = await db.query(
+            `SELECT COUNT(*) AS total FROM applications a
+             JOIN internships i ON a.internship_id = i.id
+             WHERE i.company_id = ${companyId}`,
+            [targetCompanyId]
+        );
+        const total = Number(countRows[0]?.total || 0);
+        const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+        return res.json({
+            applications,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+                hasNext: page < totalPages,
+                hasPrev: page > 1
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching company applications:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const bulkUpdateApplicationStatus = async (req, res) => {
+    try {
+        const { ids, status } = req.body;
+        const companyId = await getCompanyIdByUserId(req.user.userId);
+        
+        if (!companyId) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ message: 'Application IDs are required' });
+        }
+
+        const validStatuses = new Set(['pending', 'reviewing', 'shortlisted', 'rejected', 'withdrawn']);
+        if (!validStatuses.has(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        // Verify all applications belong to this company
+        const applicationChecks = await db.query(
+            `SELECT a.id, i.company_id
+             FROM applications a
+             JOIN internships i ON a.internship_id = i.id
+             WHERE a.id IN (${ids.map(() => '?').join(',')}) AND i.company_id = ${companyId}`,
+            [ids, companyId]
+        );
+
+        if (applicationChecks.length !== ids.length) {
+            return res.status(404).json({ message: 'Some applications not found or do not belong to your company' });
+        }
+
+        const connection = await db.connection();
+        try {
+            await connection.beginTransaction();
+
+            for (const id of ids) {
+                await connection.execute(
+                    'UPDATE applications SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    [status, id]
+                );
+            }
+
+            await connection.commit();
+            return res.json({ 
+                message: `${ids.length} application(s) updated successfully`,
+                updatedCount: ids.length
+            });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error bulk updating application status:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const testDatabaseConnection = async (req, res) => {
+    try {
+        // Test basic database connection
+        const testQuery = await db.query('SELECT 1 as test');
+        console.log('Database connection test:', testQuery);
+        
+        // Test if applications table exists and has data
+        const applicationsCount = await db.query('SELECT COUNT(*) as count FROM applications');
+        console.log('Applications count:', applicationsCount);
+        
+        // Test if companies table exists
+        const companiesCount = await db.query('SELECT COUNT(*) as count FROM companies');
+        console.log('Companies count:', companiesCount);
+        
+        return res.json({
+            databaseConnected: true,
+            applicationsCount: applicationsCount[0]?.count || 0,
+            companiesCount: companiesCount[0]?.count || 0,
+            message: 'Database connection successful'
+        });
+    } catch (error) {
+        console.error('Database test failed:', error);
+        return res.status(500).json({
+            databaseConnected: false,
+            error: error.message,
+            message: 'Database connection failed'
+        });
+    }
+};
+
 module.exports = {
     applyForInternship,
     getStudentApplications,
     getInternshipApplications,
-    updateApplicationStatus
+    updateApplicationStatus,
+    getCompanyApplications,
+    bulkUpdateApplicationStatus,
+    testDatabaseConnection
 };
 
 

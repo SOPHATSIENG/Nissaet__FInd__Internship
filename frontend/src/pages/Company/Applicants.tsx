@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Download, 
@@ -28,11 +28,13 @@ import {
   ExternalLink,
   Star
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
+import api from '../../api/axios';
 
 export default function Applicants() {
+  const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -46,152 +48,88 @@ export default function Applicants() {
   const selectAllRef = React.useRef<HTMLInputElement>(null);
   const itemsPerPage = 5;
 
-  const [applicants, setApplicants] = useState([
-    { 
-      id: 1, 
-      name: 'Sophea Chan', 
-      email: 'sophea.chan@email.com', 
-      phone: '+855 12 345 678',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Marketing Intern', 
-      date: 'Oct 24, 2023', 
-      status: 'Pending Review', 
-      skills: ['Social Media', 'Content Writing', 'SEO'],
-      education: [
-        { school: 'Royal University of Phnom Penh', degree: 'Bachelor of Media & Communication', period: '2020 - Present' }
-      ],
-      experience: [
-        { company: 'Digital Agency X', role: 'Content Creator Intern', period: 'Jun 2023 - Aug 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 2, 
-      name: 'Dara Sok', 
-      email: 'dara.sok@email.com', 
-      phone: '+855 98 765 432',
-      location: 'Siem Reap, Cambodia',
-      role: 'Web Developer', 
-      date: 'Oct 22, 2023', 
-      status: 'Shortlisted', 
-      skills: ['React', 'Node.js', 'Tailwind'],
-      education: [
-        { school: 'Institute of Technology of Cambodia', degree: 'Bachelor of Computer Science', period: '2019 - 2023' }
-      ],
-      experience: [
-        { company: 'Tech Solutions Co.', role: 'Junior Web Developer', period: 'Jan 2023 - Jul 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 3, 
-      name: 'Vanna Ly', 
-      email: 'vanna.ly@email.com', 
-      phone: '+855 11 222 333',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Data Analyst', 
-      date: 'Oct 20, 2023', 
-      status: 'Pending Review', 
-      skills: ['Python', 'SQL', 'Tableau'],
-      education: [
-        { school: 'National University of Management', degree: 'Bachelor of Economics', period: '2020 - Present' }
-      ],
-      experience: [
-        { company: 'Market Research Inc.', role: 'Data Entry Clerk', period: 'Mar 2023 - Jun 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 4, 
-      name: 'Bopha Keo', 
-      email: 'bopha.keo@email.com', 
-      phone: '+855 77 888 999',
-      location: 'Battambang, Cambodia',
-      role: 'Graphic Designer', 
-      date: 'Oct 18, 2023', 
-      status: 'Rejected', 
-      skills: ['Photoshop', 'Illustrator'],
-      education: [
-        { school: 'Phnom Penh International Institute of the Arts', degree: 'Bachelor of Graphic Design', period: '2018 - 2022' }
-      ],
-      experience: [
-        { company: 'Creative Studio Y', role: 'Graphic Designer', period: 'Aug 2022 - Sep 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 5, 
-      name: 'Visal Long', 
-      email: 'visal.long@email.com', 
-      phone: '+855 15 444 555',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Web Developer', 
-      date: 'Oct 15, 2023', 
-      status: 'Pending Review', 
-      skills: ['JavaScript', 'HTML/CSS'],
-      education: [
-        { school: 'Kirirom Institute of Technology', degree: 'Bachelor of Software Engineering', period: '2021 - Present' }
-      ],
-      experience: [
-        { company: 'Freelance', role: 'Web Developer', period: '2022 - Present' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 6, 
-      name: 'Srey Leak', 
-      email: 'srey.leak@email.com', 
-      phone: '+855 16 666 777',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Marketing Intern', 
-      date: 'Oct 14, 2023', 
-      status: 'Shortlisted', 
-      skills: ['SEO', 'Copywriting'],
-      education: [
-        { school: 'Paññāsāstra University of Cambodia', degree: 'Bachelor of Marketing', period: '2020 - Present' }
-      ],
-      experience: [
-        { company: 'E-commerce Startup', role: 'Marketing Assistant', period: 'May 2023 - Aug 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 7, 
-      name: 'Phirun Meas', 
-      email: 'phirun.meas@email.com', 
-      phone: '+855 17 777 888',
-      location: 'Phnom Penh, Cambodia',
-      role: 'UI/UX Designer', 
-      date: 'Oct 12, 2023', 
-      status: 'Pending Review', 
-      skills: ['Figma', 'Prototyping'],
-      education: [
-        { school: 'Royal University of Fine Arts', degree: 'Bachelor of Design', period: '2019 - 2023' }
-      ],
-      experience: [
-        { company: 'Design Agency Z', role: 'UI Intern', period: 'Feb 2023 - May 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 8, 
-      name: 'Chanthou Ros', 
-      email: 'chanthou.ros@email.com', 
-      phone: '+855 18 888 999',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Software Engineer', 
-      date: 'Oct 10, 2023', 
-      status: 'Pending Review', 
-      skills: ['Java', 'Spring Boot'],
-      education: [
-        { school: 'American University of Phnom Penh', degree: 'Bachelor of IT', period: '2020 - Present' }
-      ],
-      experience: [
-        { company: 'Banking Software Co.', role: 'Backend Intern', period: 'Jun 2023 - Sep 2023' }
-      ],
-      resumeUrl: '#'
-    },
-  ]);
+  const [applicants, setApplicants] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check current user first
+    const checkCurrentUser = async () => {
+      try {
+        const userResponse = await api.getCurrentUser();
+        console.log('Current user:', userResponse);
+        console.log('User role:', userResponse.user?.role);
+      } catch (error) {
+        console.error('Error getting current user:', error);
+      }
+    };
+    
+    checkCurrentUser();
+    fetchApplicants();
+  }, []);
+
+  const fetchApplicants = async () => {
+    try {
+      setLoading(true);
+      console.log('Fetching applicants...');
+      const response = await api.getApplicants();
+      console.log('Applicants response:', response);
+      
+      // Check if response has applications data
+      if (!response || !response.applications) {
+        console.log('No applications data in response:', response);
+        setApplicants([]);
+        return;
+      }
+      
+      console.log('Raw applications data:', response.applications);
+      
+      // Transform database data to match frontend structure
+      const transformedApplicants = (response.applications || []).map(app => ({
+        ...app,
+        name: app.full_name || app.name,
+        role: app.internship_title || app.role || 'Unknown Role',
+        date: app.applied_at ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : app.date,
+        phone: app.phone || '+855 12 345 678',
+        location: 'Phnom Penh, Cambodia', // Default location
+        skills: ['JavaScript', 'React', 'Node.js'], // Default skills
+        education: [
+          { 
+            school: app.university || 'University', 
+            degree: app.major || 'Bachelor Degree', 
+            period: '2020 - Present' 
+          }
+        ],
+        experience: [
+          { 
+            company: 'Previous Company', 
+            role: 'Previous Role', 
+            period: '2022 - 2023' 
+          }
+        ],
+        resumeUrl: app.resume_url || '#'
+      }));
+      
+      console.log('Transformed applicants:', transformedApplicants);
+      setApplicants(transformedApplicants);
+    } catch (error) {
+      console.error('Error fetching applicants:', error);
+      // Show more detailed error information
+      if (error.message.includes('403')) {
+        console.error('Authentication error - user may not be logged in as company');
+      } else if (error.message.includes('404')) {
+        console.error('Company not found');
+      }
+      setApplicants([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelectApplicant = (id: number) => {
+    setSelectedApplicants(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
 
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -220,11 +158,16 @@ export default function Applicants() {
     });
   };
 
-  const handleUpdateStatus = (id: number, newStatus: string) => {
-    setApplicants(prev => prev.map(app => 
-      app.id === id ? { ...app, status: newStatus } : app
-    ));
-    setModalConfig(prev => ({ ...prev, isOpen: false }));
+  const handleUpdateStatus = async (id: number, newStatus: string) => {
+    try {
+      await api.updateApplicationStatus(id, newStatus);
+      setApplicants(prev => prev.map(app => 
+        app.id === id ? { ...app, status: newStatus } : app
+      ));
+      setModalConfig(prev => ({ ...prev, isOpen: false }));
+    } catch (error) {
+      console.error('Error updating application status:', error);
+    }
   };
 
   const openConfirmation = (id: number, name: string, action: 'approve' | 'reject' | 'reconsider') => {
@@ -324,7 +267,7 @@ export default function Applicants() {
         isOpen: true,
         type: 'danger',
         title: 'Bulk Delete',
-        message: `Are you sure you want to permanently delete ${selectedCount} selected applicants? This action cannot be undone.`,
+        message: `Are you sure you want to delete ${selectedCount} selected applicants?`,
         confirmText: 'Delete All',
         onConfirm: () => {
           setApplicants(prev => prev.filter(app => !selectedApplicants.includes(app.id)));
@@ -334,19 +277,6 @@ export default function Applicants() {
       });
     }
   };
-
-  const toggleSelectApplicant = (id: number) => {
-    setSelectedApplicants(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const stats = [
-    { label: 'Total Applicants', value: applicants.length.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+12 Today' },
-    { label: 'Pending Review', value: applicants.filter(a => a.status === 'Pending Review').length.toString(), icon: Hourglass, color: 'text-yellow-600', bg: 'bg-yellow-50' },
-    { label: 'Shortlisted', value: applicants.filter(a => a.status === 'Shortlisted').length.toString(), icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Rejected', value: applicants.filter(a => a.status === 'Rejected').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
-  ];
 
   const filteredApplicants = applicants.filter(app => {
     const matchesSearch = app.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -411,6 +341,13 @@ export default function Applicants() {
     setSelectedApplicants([]);
     setCurrentPage(1);
   };
+
+  const stats = [
+    { label: 'Total Applicants', value: applicants.length.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+12 Today' },
+    { label: 'Pending Review', value: applicants.filter(a => a.status === 'Pending Review' || a.status === 'pending').length.toString(), icon: Hourglass, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+    { label: 'Shortlisted', value: applicants.filter(a => a.status === 'Shortlisted').length.toString(), icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Rejected', value: applicants.filter(a => a.status === 'Rejected').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
+  ];
 
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-8">

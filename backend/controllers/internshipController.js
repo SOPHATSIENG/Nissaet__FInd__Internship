@@ -11,11 +11,13 @@ const getCompanyIdByUserId = async (userId) => {
 
 const getAllInternships = async (req, res) => {
     try {
-        const parsedLimit = Number.parseInt(req.query.limit, 10);
+        const { search, location, skills, salary_type, limit: queryLimit } = req.query;
+        
+        const parsedLimit = Number.parseInt(queryLimit, 10);
         const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : null;
 
-        const internships = await db.query(
-            `SELECT
+        let query = `
+            SELECT
                 i.id,
                 i.company_id,
                 i.title,
@@ -40,12 +42,52 @@ const getAllInternships = async (req, res) => {
                 c.name AS company_name,
                 c.headquarters AS company_location,
                 c.logo AS company_logo
-             FROM internships i
-             JOIN companies c ON i.company_id = c.id
-             WHERE i.status = 'active'
-             ORDER BY i.created_at DESC
-             ${limit ? `LIMIT ${limit}` : ''}`
-        );
+            FROM internships i
+            JOIN companies c ON i.company_id = c.id
+            WHERE i.status = 'active'
+        `;
+
+        const queryParams = [];
+
+        if (search) {
+            query += ` AND (i.title LIKE ? OR c.name LIKE ?)`;
+            queryParams.push(`%${search}%`, `%${search}%`);
+        }
+
+        if (location && location !== 'All Locations') {
+            query += ` AND i.location LIKE ?`;
+            queryParams.push(`%${location}%`);
+        }
+
+        if (salary_type && salary_type !== 'All') {
+            if (salary_type.toLowerCase() === 'paid') {
+                query += ` AND i.stipend > 0`;
+            } else if (salary_type.toLowerCase() === 'unpaid') {
+                query += ` AND i.stipend = 0`;
+            }
+        }
+
+        if (skills) {
+            const skillList = Array.isArray(skills) ? skills : [skills];
+            if (skillList.length > 0) {
+                query += ` AND i.id IN (
+                    SELECT iskill.internship_id 
+                    FROM internship_skills iskill 
+                    JOIN skills s ON iskill.skill_id = s.id 
+                    WHERE s.name IN (?)
+                )`;
+                queryParams.push(skillList);
+            }
+        }
+
+        query += ` ORDER BY i.created_at DESC`;
+
+        if (limit) {
+            query += ` LIMIT ?`;
+            queryParams.push(limit);
+        }
+
+        const internships = await db.query(query, queryParams);
 
         return res.json({ internships });
     } catch (error) {

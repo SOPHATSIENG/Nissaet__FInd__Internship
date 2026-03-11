@@ -1,8 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Manrope:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", var(--font-sans);
 }
 
 body {
@@ -10,6 +11,59 @@ body {
   background-color: #f6f7f8;
 }
 
+@theme {
+  --color-primary: var(--accent);
+  
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-border: var(--border);
 
+  --color-background-light: #f6f8f7;
+  --color-background-dark: #10221c;
+  --color-surface-light: #ffffff;
+  --color-surface-dark: #1a2e26;
+  --color-text-primary-light: #111816;
+  --color-text-primary-dark: #f0f4f3;
+  --color-text-secondary-light: #61897c;
+  --color-text-secondary-dark: #a3c2b8;
+  --color-border-light: #dbe6e2;
+  --color-border-dark: #2a4038;
+}
 
+@layer base {
+  :root {
+    --accent: #10b981;
+    --background: var(--color-background-light);
+    --surface: var(--color-surface-light);
+    --text-primary: var(--color-text-primary-light);
+    --text-secondary: var(--color-text-secondary-light);
+    --border: var(--color-border-light);
+  }
+
+  .dark {
+    --background: var(--color-background-dark);
+    --surface: var(--color-surface-dark);
+    --text-primary: var(--color-text-primary-dark);
+    --text-secondary: var(--color-text-secondary-dark);
+    --border: var(--color-border-dark);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    @apply antialiased transition-colors duration-200;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
 

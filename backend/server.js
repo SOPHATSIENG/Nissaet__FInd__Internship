@@ -17,7 +17,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
+  origin: '*', // Allow all origins for development to fix connection issues
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
@@ -33,18 +33,33 @@ const authRoutes = require('./routes/authRoutes');
 const internshipRoutes = require('./routes/internshipRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
 const profileRoutes = require('./routes/profileRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/internships', internshipRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/admin', adminRoutes);
 
 const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 5001;
 const PORT_RETRY_COUNT = Number.parseInt(process.env.PORT_RETRY_COUNT, 10) || 10;
 
-const startServer = (port, attempt = 0) => {
-    const server = app.listen(port, () => {
-        console.log(`Server running on port ${port}`);
+// FIX MARK: Test database connection on startup
+const db = require('./config/db');
+const testDbConnection = async () => {
+    try {
+        await db.connection();
+        console.log('✅ Database connection test successful');
+    } catch (error) {
+        console.error('❌ Database connection test failed during startup!');
+        console.error('Error details:', error.message);
+    }
+};
+
+const startServer = async (port, attempt = 0) => {
+    await testDbConnection();
+    const server = app.listen(port, '0.0.0.0', () => {
+        console.log(`Server running on port ${port} (all interfaces)`);
     });
 
     server.on('error', (error) => {

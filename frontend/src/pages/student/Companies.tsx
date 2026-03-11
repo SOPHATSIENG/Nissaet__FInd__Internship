@@ -10,14 +10,23 @@ type CompanyApiItem = {
   logo: string | null;
   location: string;
   open_positions: number;
+  industry: string; // Add industry field
 };
 
 export default function Companies() {
   const pageSize = 3;
   const [currentPage, setCurrentPage] = useState(1);
   const [companies, setCompanies] = useState<CompanyApiItem[]>([]);
+  const [allCompanies, setAllCompanies] = useState<CompanyApiItem[]>([]); // Store all companies for client-side filtering
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [locationQuery, setLocationQuery] = useState("");
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState("All Locations");
+  const [selectedCompanySizes, setSelectedCompanySizes] = useState<string[]>([]);
   
   const totalPages = Math.max(1, Math.ceil(companies.length / pageSize));
 
@@ -28,10 +37,19 @@ export default function Companies() {
       try {
         setLoading(true);
         setError("");
-        const res = await api.getFeaturedCompanies(50); // Get more companies for pagination
+        
+        // Map UI filters to API parameters
+        const params = {
+          search: searchQuery,
+          location: selectedLocation === "All Locations" ? locationQuery : selectedLocation,
+          industries: selectedIndustries.length > 0 ? selectedIndustries.join(',') : undefined,
+          company_sizes: selectedCompanySizes.length > 0 ? selectedCompanySizes.join(',') : undefined,
+        };
+        
+        const res = await api.getFeaturedCompanies(50, params);
         const items = Array.isArray(res?.companies) ? res.companies : [];
         if (mounted) {
-          setCompanies(items);
+          setAllCompanies(items); // Store all companies
         }
       } catch (err) {
         if (!mounted) return;
@@ -48,7 +66,67 @@ export default function Companies() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [searchQuery, locationQuery, selectedLocation, selectedIndustries, selectedCompanySizes]);
+
+  // Client-side filtering as fallback
+  const filteredCompanies = useMemo(() => {
+    try {
+      let filtered = allCompanies || []; // Fallback to empty array
+      
+      // Search filter
+      if (searchQuery) {
+        filtered = filtered.filter(company => 
+          company.company_name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+      
+      // Location filter - always use locationQuery from input field
+      if (locationQuery) {
+        filtered = filtered.filter(company => 
+          company.location && company.location.toLowerCase().includes(locationQuery.toLowerCase())
+        );
+      }
+      
+      // Industry filter - match by exact industry field OR keywords in description/name
+      if (selectedIndustries.length > 0) {
+        console.log('Selected industries:', selectedIndustries);
+        console.log('Companies before industry filter:', allCompanies.map(c => ({ name: c.company_name, industry: c.industry, description: c.description.substring(0, 50) + '...' })));
+        
+        filtered = filtered.filter(company => {
+          // First try exact industry match
+          if (company.industry && selectedIndustries.includes(company.industry)) {
+            console.log('Exact match found:', company.company_name);
+            return true;
+          }
+          // Fallback: check if company name/description mentions industry keywords
+          const matched = selectedIndustries.some(industry => {
+            const industryLower = industry.toLowerCase();
+            const keywords = industryLower.split(' ')[0]; // Get main keyword (e.g., "Technology" from "Technology / IT")
+            const nameMatch = company.company_name.toLowerCase().includes(keywords);
+            const descMatch = company.description.toLowerCase().includes(keywords);
+            if (nameMatch || descMatch) {
+              console.log('Keyword match found:', company.company_name, 'matched by:', keywords);
+            }
+            return nameMatch || descMatch;
+          });
+          return matched;
+        });
+        
+        console.log('Companies after industry filter:', filtered.map(c => ({ name: c.company_name })));
+      }
+      
+      return filtered;
+    } catch (error) {
+      console.error('Filtering error:', error);
+      return allCompanies || []; // Return all companies if filtering fails
+    }
+  }, [allCompanies, searchQuery, locationQuery, selectedLocation, selectedIndustries]);
+
+  // Update filtered companies
+  useEffect(() => {
+    setCompanies(filteredCompanies);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [filteredCompanies]);
 
   const paginatedCompanies = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -97,6 +175,8 @@ export default function Companies() {
                 type="text"
                 placeholder="Search by company name..."
                 className="w-full outline-none text-gray-700 bg-transparent"
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
               />
             </div>
             <div className="hidden md:block w-px bg-gray-200 my-2"></div>
@@ -106,6 +186,8 @@ export default function Companies() {
                 type="text"
                 placeholder="Location"
                 className="w-full outline-none text-gray-700 bg-transparent"
+                value={locationQuery}
+                onChange={(e) => { setLocationQuery(e.target.value); setCurrentPage(1); }}
               />
             </div>
             <button className="bg-[#111816] hover:bg-gray-800 text-white font-bold px-8 py-3 rounded-lg transition-colors w-full md:w-auto">
@@ -125,6 +207,11 @@ export default function Companies() {
             ].map((ind) => (
               <span
                 key={ind}
+                onClick={() => {
+                  setSearchQuery(ind);
+                  setSelectedIndustries([]);
+                  setCurrentPage(1);
+                }}
                 className="px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
               >
                 {ind}
@@ -156,6 +243,12 @@ export default function Companies() {
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
+                        checked={selectedIndustries.includes(item.name)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedIndustries([...selectedIndustries, item.name]);
+                          else setSelectedIndustries(selectedIndustries.filter(i => i !== item.name));
+                          setCurrentPage(1);
+                        }}
                         className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
                       />
                       <span className="text-gray-600 group-hover:text-gray-900">
@@ -180,6 +273,8 @@ export default function Companies() {
                   { name: "Phnom Penh", checked: false },
                   { name: "Siem Reap", checked: false },
                   { name: "Battambang", checked: false },
+                  { name: "Kompot", checked: false },
+                  { name: "Remote", checked: false },
                 ].map((item) => (
                   <label
                     key={item.name}
@@ -188,7 +283,12 @@ export default function Companies() {
                     <input
                       type="radio"
                       name="location"
-                      defaultChecked={item.checked}
+                      checked={selectedLocation === item.name}
+                      onChange={() => { 
+                          setSelectedLocation(item.name); 
+                          setLocationQuery(item.name === "All Locations" ? "" : item.name); // Also update input field
+                          setCurrentPage(1); 
+                        }}
                       className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
                     <span className="text-gray-600 group-hover:text-gray-900">
@@ -216,6 +316,12 @@ export default function Companies() {
                   >
                     <input
                       type="checkbox"
+                      checked={selectedCompanySizes.includes(item)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedCompanySizes([...selectedCompanySizes, item]);
+                        else setSelectedCompanySizes(selectedCompanySizes.filter(s => s !== item));
+                        setCurrentPage(1);
+                      }}
                       className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
                     <span className="text-gray-600 group-hover:text-gray-900">

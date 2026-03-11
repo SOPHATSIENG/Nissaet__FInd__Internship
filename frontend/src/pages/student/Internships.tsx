@@ -8,6 +8,8 @@ import {
   BookmarkCheck,
   Building2,
   Plus,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -49,7 +51,10 @@ export default function Internships() {
   const [loadingMatching, setLoadingMatching] = useState(false);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 5;
+  const [selectedSkill, setSelectedSkill] = useState<string[]>(["Python"]);
+  const [selectedLocation, setSelectedLocation] = useState("All Locations");
+  const [selectedCompensation, setSelectedCompensation] = useState("All");
 
   const goToPage = (page: number) => {
     const totalPages = Math.ceil(filteredCards.length / itemsPerPage);
@@ -123,7 +128,66 @@ export default function Internships() {
   };
 
   const cards: InternshipCard[] = useMemo(() => {
-    return internships.map((item) => {
+    // Mock data for testing - replace with real API data
+    const mockData: InternshipCard[] = [
+      {
+        id: 1,
+        title: "Frontend Developer Intern",
+        company: "Tech Corp",
+        location: "Phnom Penh",
+        pay: "$300-500",
+        tags: ["On-site", "Paid"],
+        saved: false,
+        closed: false,
+        logo: "https://picsum.photos/seed/company1/48/48",
+      },
+      {
+        id: 2,
+        title: "UI/UX Designer Intern",
+        company: "Design Studio",
+        location: "Remote",
+        pay: "$200-400",
+        tags: ["Remote", "Paid"],
+        saved: false,
+        closed: false,
+        logo: "https://picsum.photos/seed/company2/48/48",
+      },
+      {
+        id: 3,
+        title: "JavaScript Developer",
+        company: "Startup Hub",
+        location: "Siem Reap",
+        pay: "$250-450",
+        tags: ["On-site", "Paid"],
+        saved: false,
+        closed: false,
+        logo: "https://picsum.photos/seed/company3/48/48",
+      },
+      {
+        id: 4,
+        title: "Python Backend Intern",
+        company: "Data Solutions",
+        location: "Phnom Penh",
+        pay: "$350-600",
+        tags: ["Remote", "Paid"],
+        saved: false,
+        closed: false,
+        logo: "https://picsum.photos/seed/company4/48/48",
+      },
+      {
+        id: 5,
+        title: "React Developer Intern",
+        company: "Web Agency",
+        location: "Remote",
+        pay: "$400-700",
+        tags: ["Remote", "Paid"],
+        saved: false,
+        closed: false,
+        logo: "https://picsum.photos/seed/company5/48/48",
+      },
+    ];
+
+    return internships.length > 0 ? internships.map((item) => {
       const tags = [item.work_mode, salaryText(item)].filter(Boolean);
       return {
         id: item.id,
@@ -136,7 +200,7 @@ export default function Internships() {
         closed: false,
         logo: item.company_logo || `https://picsum.photos/seed/internship-${item.id}/48/48`,
       };
-    });
+    }) : mockData;
   }, [internships]);
 
   const filteredCards = useMemo(() => {
@@ -145,9 +209,15 @@ export default function Internships() {
     return cards.filter((job) => {
       const matchQuery = !q || job.title.toLowerCase().includes(q) || job.company.toLowerCase().includes(q);
       const matchLoc = !loc || job.location.toLowerCase().includes(loc);
-      return matchQuery && matchLoc;
+      const matchSkill = selectedSkill.length === 0 || selectedSkill.some(skill => 
+        job.title.toLowerCase().includes(skill.toLowerCase()) || 
+        job.tags.some(tag => tag.toLowerCase().includes(skill.toLowerCase()))
+      );
+      const matchLocationFilter = selectedLocation === "All Locations" || 
+        job.location.toLowerCase().includes(selectedLocation.toLowerCase());
+      return matchQuery && matchLoc && matchSkill && matchLocationFilter;
     });
-  }, [cards, query, locationQuery]);
+  }, [cards, query, locationQuery, selectedSkill, selectedLocation]);
 
   const recommendedInternships = matchingInternships.length > 0 ? matchingInternships.slice(0, 2) : filteredCards.slice(0, 2);
 
@@ -202,7 +272,7 @@ export default function Internships() {
               <Search className="w-5 h-5 text-gray-400 mr-3" />
               <input
                 type="text"
-                placeholder="Job title, keywords, or company"
+                placeholder="Job title, keywords, skills, or company"
                 className="w-full outline-none text-gray-700 bg-transparent"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -229,6 +299,10 @@ export default function Internships() {
             {["Frontend Developer", "Marketing Intern", "UI/UX Designer", "Accounting"].map((tag) => (
               <span
                 key={tag}
+                onClick={() => {
+                  setQuery(tag);
+                  setLocationQuery(""); // Clear location search when clicking popular tags
+                }}
                 className="px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
               >
                 {tag}
@@ -247,16 +321,26 @@ export default function Internships() {
               </h3>
               <div className="space-y-3">
                 {[
-                  { name: "Frontend Dev", count: 12, checked: false },
-                  { name: "Backend Dev", count: 8, checked: false },
-                  { name: "UI/UX Design", count: 5, checked: true },
-                  { name: "Data Science", count: 3, checked: false },
+                  { name: "JavaScript"},
+                  { name: "Python"},
+                  { name: "Node js" },
+                  { name: "React js" },
+                  { name: "JAVA" },
+                  { name: "Laravel" },
+                  { name: "PHP" },
                 ].map((item) => (
                   <label key={item.name} className="flex items-center justify-between cursor-pointer group">
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
-                        defaultChecked={item.checked}
+                        checked={selectedSkill.includes(item.name)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSkill([...selectedSkill, item.name]);
+                          } else {
+                            setSelectedSkill(selectedSkill.filter(skill => skill !== item.name));
+                          }
+                        }}
                         className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
                       />
                       <span className="text-gray-600 group-hover:text-gray-900">{item.name}</span>
@@ -273,16 +357,17 @@ export default function Internships() {
               </h3>
               <div className="space-y-3">
                 {[
-                  { name: "All Locations", checked: true },
-                  { name: "Phnom Penh", checked: false },
-                  { name: "Siem Reap", checked: false },
-                  { name: "Remote", checked: false },
+                  { name: "All Locations" },
+                  { name: "Phnom Penh" },
+                  { name: "Siem Reap" },
+                  { name: "Remote" },
                 ].map((item) => (
                   <label key={item.name} className="flex items-center gap-3 cursor-pointer group">
                     <input
                       type="radio"
                       name="location"
-                      defaultChecked={item.checked}
+                      checked={selectedLocation === item.name}
+                      onChange={() => setSelectedLocation(item.name)}
                       className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
                     <span className="text-gray-600 group-hover:text-gray-900">{item.name}</span>
@@ -296,11 +381,12 @@ export default function Internships() {
                 <DollarSign className="w-5 h-5 text-[#3b82f6]" /> Compensation
               </h3>
               <div className="flex gap-2">
-                {["All", "Paid", "Unpaid"].map((item, i) => (
+                {["All", "Paid", "Unpaid"].map((item) => (
                   <button
                     key={item}
+                    onClick={() => setSelectedCompensation(item)}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      i === 0
+                      selectedCompensation === item
                         ? "bg-[#3b82f6]/10 text-[#2563eb] border border-[#3b82f6]/30"
                         : "bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100"
                     }`}
@@ -319,112 +405,15 @@ export default function Internships() {
               </div>
             )}
 
-            <div className="mb-12">
-              <div className="flex justify-between items-end mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold">
-                    {matchingInternships.length > 0 ? "Matching Internships" : "Recommended for you"}
-                  </h2>
-                  {matchingInternships.length > 0 && (
-                    <p className="text-gray-500 text-sm mt-1">
-                      Based on your skills ({matchingInternships.length} found)
-                    </p>
-                  )}
-                </div>
-                <Link to="/internships" className="text-[#3b82f6] font-bold hover:underline">
-                  View All -&gt;
-                </Link>
-              </div>
-
-              {loadingMatching ? (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm animate-pulse">
-                      <div className="flex items-start gap-4 mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-gray-200"></div>
-                        <div className="flex-1">
-                          <div className="h-6 bg-gray-200 rounded mb-2"></div>
-                          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mb-6">
-                        <div className="h-6 bg-gray-200 rounded w-20"></div>
-                        <div className="h-6 bg-gray-200 rounded w-16"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : matchingInternships.length === 0 && !loadingMatching ? (
-                <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Code className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No registered skills found</h3>
-                  <p className="text-gray-500 mb-4">
-                    Add skills in Student Settings to get matching internships.
-                  </p>
-                  <Link 
-                    to="/settings?tab=skills" 
-                    className="inline-flex items-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Skills
-                  </Link>
-                </div>
-              ) : (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {recommendedInternships.map((job) => (
-                    <div
-                      key={job.id}
-                      className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
-                    >
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-[#3b82f6]/5 rounded-bl-full -z-10"></div>
-                      <div className="flex items-start gap-4 mb-4">
-                        <img src={job.logo} alt={job.company} className="w-12 h-12 rounded-xl object-cover" />
-                        <div>
-                          <Link
-                            to={`/internships/${job.id}`}
-                            className="font-bold text-lg leading-tight hover:text-[#3b82f6] transition-colors"
-                          >
-                            {job.title}
-                          </Link>
-                          <p className="text-gray-500 text-sm">
-                            {job.company} | {job.location}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 mb-6">
-                        {job.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="bg-gray-50 text-gray-600 text-xs px-3 py-1.5 rounded-md font-medium"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                        <span className="text-gray-400 text-xs">Posted {job.posted || ""}</span>
-                        <Link to={`/internships/${job.id}`} className="text-[#3b82f6] font-bold text-sm hover:underline">
-                          View Details
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
+            
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
                   {loading ? "Loading internships..." : `${filteredCards.length} Internships found`}
                 </h2>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <span>Sort by:</span>
-                  <select className="bg-transparent font-medium text-gray-900 outline-none cursor-pointer">
+                <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
+                  <span className="flex-shrink-0">Sort by:</span>
+                  <select className="bg-transparent font-medium text-gray-900 outline-none cursor-pointer min-w-0">
                     <option>Most Recent</option>
                     <option>Highest Paid</option>
                     <option>Most Relevant</option>
@@ -486,15 +475,15 @@ export default function Internships() {
                         </div>
                       </div>
 
-                      <div className="flex flex-row md:flex-col gap-3 justify-end items-center md:items-stretch border-t md:border-t-0 border-gray-100 pt-4 md:pt-0">
+                      <div className="flex flex-col md:flex-row gap-3 justify-end items-stretch border-t border-gray-100 pt-4">
                         {job.closed ? (
-                          <button className="flex-1 md:flex-none bg-gray-100 text-gray-500 font-bold px-6 py-2.5 rounded-xl cursor-not-allowed">
+                          <button className="w-full md:w-auto bg-gray-100 text-gray-500 font-bold px-6 py-2.5 rounded-xl cursor-not-allowed">
                             Closed
                           </button>
                         ) : (
                           <Link
                             to={`/internships/${job.id}`}
-                            className="flex-1 md:flex-none bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-bold px-6 py-2.5 rounded-xl transition-colors text-center"
+                            className="w-full md:w-auto bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-bold px-6 py-2.5 rounded-xl transition-colors text-center"
                           >
                             View Details
                           </Link>
@@ -513,50 +502,51 @@ export default function Internships() {
                 )}
               </div>
 
-              <div className="flex justify-center items-center gap-2 mt-12">
-                <button
-                  type="button"
+              {filteredCards.length > itemsPerPage && (
+              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-center">
+                <div className="flex items-center justify-center gap-2">
+                <button 
                   onClick={() => goToPage(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center w-10 h-10 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span className="sr-only">Previous</span>
-                  <span aria-hidden="true">&lt;</span>
+                  <ChevronLeft size={16} />
                 </button>
-                {visiblePages.map((page) => {
-                  if (typeof page !== "number") {
+                <div className="flex items-center gap-1">
+                  {visiblePages.map((page) => {
+                    if (typeof page !== "number") {
+                      return (
+                        <span key={page} className="px-1 text-gray-400 select-none">
+                          ...
+                        </span>
+                      );
+                    }
+                    const isActive = page === currentPage;
                     return (
-                      <span key={page} className="px-1 text-gray-400 select-none">
-                        ...
-                      </span>
+                      <button
+                        key={page}
+                        onClick={() => goToPage(page)}
+                        className={`w-10 h-10 flex items-center justify-center text-sm font-medium rounded-lg border transition-all ${
+                          isActive
+                            ? 'bg-[#3b82f6] text-white border-[#3b82f6]' 
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
                     );
-                  }
-                  const isActive = page === currentPage;
-                  return (
-                    <button
-                      key={page}
-                      type="button"
-                      onClick={() => goToPage(page)}
-                      className={`w-10 h-10 flex items-center justify-center rounded-lg font-medium transition-colors ${
-                        isActive
-                          ? "bg-[#3b82f6] text-[#111816] font-bold"
-                          : "hover:bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
+                  })}
+                </div>
+                <button 
                   onClick={() => goToPage(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center w-10 h-10 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span className="sr-only">Next</span>
-                  <span aria-hidden="true">&gt;</span>
+                  <ChevronRight size={16} />
                 </button>
               </div>
+              </div>
+              )}
             </div>
           </div>
         </div>

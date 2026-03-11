@@ -317,11 +317,9 @@ export default function Home() {
               </Link>
             ))}
           </div>
-          {!loading && !internshipsForDisplay.length && (
+          {!loading && !internshipsForDisplay.length && profileSkills.length && (
             <p className="text-sm text-gray-500 mt-4">
-              {profileSkills.length
-                ? "No internships match this student's registered skills yet."
-                : "No registered skills found for this student. Add skills in Student Settings to get matching internships."}
+              No internships match this student's registered skills yet.
             </p>
           )}
         </div>

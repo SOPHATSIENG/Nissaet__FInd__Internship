@@ -376,10 +376,12 @@ export default function Internships() {
                 <button 
                   onClick={() => goToPage(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  className="px-3 py-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
                 >
                   <ChevronLeft size={16} />
+                  Previous
                 </button>
+                
                 <div className="flex gap-1">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <button
@@ -395,11 +397,13 @@ export default function Internships() {
                     </button>
                   ))}
                 </div>
+                
                 <button 
                   onClick={() => goToPage(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  className="px-3 py-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
                 >
+                  Next
                   <ChevronRight size={16} />
                 </button>
               </div>

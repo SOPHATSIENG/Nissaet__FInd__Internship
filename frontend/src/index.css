@@ -8,6 +8,14 @@
 body {
   font-family: var(--font-sans);
   background-color: #f6f7f8;
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
+*[contenteditable] {
+  direction: ltr !important;
+  unicode-bidi: plaintext !important;
+  text-align: left !important;
 }
 
 

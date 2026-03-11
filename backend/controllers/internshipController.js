@@ -11,11 +11,12 @@ const getCompanyIdByUserId = async (userId) => {
 
 const getAllInternships = async (req, res) => {
     try {
-        const parsedLimit = Number.parseInt(req.query.limit, 10);
+        const { search, location, work_mode, salary_type, limit: queryLimit } = req.query;
+        const parsedLimit = Number.parseInt(queryLimit, 10);
         const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : null;
 
-        const internships = await db.query(
-            `SELECT
+        let query = `
+            SELECT
                 i.id,
                 i.company_id,
                 i.title,
@@ -43,9 +44,43 @@ const getAllInternships = async (req, res) => {
              FROM internships i
              JOIN companies c ON i.company_id = c.id
              WHERE i.status = 'active'
-             ORDER BY i.created_at DESC
-             ${limit ? `LIMIT ${limit}` : ''}`
-        );
+        `;
+
+        const queryParams = [];
+
+        if (search) {
+            query += ' AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)';
+            const searchPattern = `%${search}%`;
+            queryParams.push(searchPattern, searchPattern, searchPattern);
+        }
+
+        if (location) {
+            query += ' AND (i.location LIKE ? OR c.headquarters LIKE ?)';
+            const locationPattern = `%${location}%`;
+            queryParams.push(locationPattern, locationPattern);
+        }
+
+        if (work_mode && work_mode !== 'All') {
+            query += ' AND i.type = ?';
+            queryParams.push(work_mode.toLowerCase());
+        }
+
+        if (salary_type && salary_type !== 'All') {
+            if (salary_type.toLowerCase() === 'paid') {
+                query += ' AND i.stipend > 0';
+            } else if (salary_type.toLowerCase() === 'unpaid') {
+                query += ' AND i.stipend = 0';
+            }
+        }
+
+        query += ' ORDER BY i.created_at DESC';
+
+        if (limit) {
+            query += ' LIMIT ?';
+            queryParams.push(limit);
+        }
+
+        const internships = await db.query(query, queryParams);
 
         return res.json({ internships });
     } catch (error) {

@@ -1,3 +1,4 @@
+
 import {
   Search,
   MapPin,
@@ -7,7 +8,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 
 interface FeaturedCompany {
@@ -55,11 +56,15 @@ const matchesSkill = (target: string, skill: string) => {
 };
 
 export default function Home() {
+  const navigate = useNavigate();
   const [featuredCompanies, setFeaturedCompanies] = useState<FeaturedCompany[]>([]);
   const [latestInternships, setLatestInternships] = useState<Internship[]>([]);
+  const [matchingInternships, setMatchingInternships] = useState<Internship[]>([]);
   const [profileSkills, setProfileSkills] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [locationTerm, setLocationTerm] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -68,10 +73,11 @@ export default function Home() {
       try {
         setLoading(true);
         setError("");
-        const [companiesRes, internshipsRes, profileRes] = await Promise.all([
+        const [companiesRes, internshipsRes, profileRes, matchingRes] = await Promise.all([
           api.getFeaturedCompanies(4),
           api.getInternships({ limit: 100 }),
           api.getProfileSettings().catch(() => null),
+          api.getMatchingInternships().catch(() => null),
         ]);
 
         if (!isMounted) {
@@ -80,6 +86,7 @@ export default function Home() {
 
         setFeaturedCompanies(companiesRes.companies || []);
         setLatestInternships(internshipsRes.internships || []);
+        setMatchingInternships(matchingRes?.internships || []);
         setProfileSkills(
           Array.isArray(profileRes?.settings?.skills)
             ? profileRes.settings.skills
@@ -109,21 +116,37 @@ export default function Home() {
     };
   }, []);
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const params = new URLSearchParams();
+    if (searchTerm) params.append("search", searchTerm);
+    if (locationTerm) params.append("location", locationTerm);
+    navigate(`/internships?${params.toString()}`);
+  };
+
   const companiesForDisplay = useMemo(() => featuredCompanies.slice(0, 4), [featuredCompanies]);
+  
   const internshipsForDisplay = useMemo(() => {
-    if (!profileSkills.length) {
-      return [];
+    // If we have matching internships from the API, use them
+    if (matchingInternships.length > 0) {
+      return matchingInternships.slice(0, 4);
     }
 
-    return latestInternships
-      .filter((job) => {
-        const target = normalizeText(
-          `${job.title} ${job.description || ""} ${job.requirements || ""}`
-        );
-        return profileSkills.some((skill) => matchesSkill(target, skill));
-      })
-      .slice(0, 4);
-  }, [latestInternships, profileSkills]);
+    // Fallback to local matching if profile skills are available but API matching failed or returned empty
+    if (profileSkills.length > 0) {
+      return latestInternships
+        .filter((job) => {
+          const target = normalizeText(
+            `${job.title} ${job.description || ""} ${job.requirements || ""}`
+          );
+          return profileSkills.some((skill) => matchesSkill(target, skill));
+        })
+        .slice(0, 4);
+    }
+
+    // Otherwise show latest internships
+    return latestInternships.slice(0, 4);
+  }, [latestInternships, matchingInternships, profileSkills]);
 
   const salaryText = (item: Internship) => {
     if (item.salary_type === "unpaid") {
@@ -151,13 +174,15 @@ export default function Home() {
             your professional network on Nissaet.
           </p>
 
-          <div className="bg-white p-2 rounded-full shadow-lg border border-gray-100 flex flex-col md:flex-row gap-2 max-w-3xl mx-auto">
+          <form onSubmit={handleSearch} className="bg-white p-2 rounded-full shadow-lg border border-gray-100 flex flex-col md:flex-row gap-2 max-w-3xl mx-auto">
             <div className="flex-1 flex items-center px-4 py-2">
               <Search className="w-5 h-5 text-gray-400 mr-3" />
               <input
                 type="text"
                 placeholder="What internship are you looking for?"
                 className="w-full outline-none text-gray-700 bg-transparent"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <div className="hidden md:block w-px bg-gray-200 my-2"></div>
@@ -167,12 +192,14 @@ export default function Home() {
                 type="text"
                 placeholder="Location"
                 className="w-full outline-none text-gray-700 bg-transparent"
+                value={locationTerm}
+                onChange={(e) => setLocationTerm(e.target.value)}
               />
             </div>
-            <button className="bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-bold px-8 py-3 rounded-full transition-colors w-full md:w-auto">
+            <button type="submit" className="bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-bold px-8 py-3 rounded-full transition-colors w-full md:w-auto">
               Search
             </button>
-          </div>
+          </form>
         </div>
       </section>
 
@@ -274,7 +301,9 @@ export default function Home() {
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#f6f8f7]">
         <div className="max-w-[1440px] mx-auto">
           <div className="flex justify-between items-center mb-10">
-            <h2 className="text-3xl font-bold">Find Matching Internships</h2>
+            <h2 className="text-3xl font-bold">
+              {matchingInternships.length > 0 ? "Internships Matching Your Skills" : "Find Matching Internships"}
+            </h2>
             <Link
               to="/internships"
               className="text-[#3b82f6] font-bold hover:underline"
@@ -317,9 +346,11 @@ export default function Home() {
               </Link>
             ))}
           </div>
-          {!loading && !internshipsForDisplay.length && profileSkills.length && (
+          {!loading && !internshipsForDisplay.length && (
             <p className="text-sm text-gray-500 mt-4">
-              No internships match this student's registered skills yet.
+              {profileSkills.length 
+                ? "No internships match your skills yet. Check back soon!"
+                : "Browse all internships to find your perfect match."}
             </p>
           )}
         </div>

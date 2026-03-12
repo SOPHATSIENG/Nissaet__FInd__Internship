@@ -76,7 +76,13 @@ export function Login() {
         return;
       }
 
-      navigate(role === 'company' ? '/company' : '/');
+      if (role === 'admin') {
+        navigate('/admin');
+      } else if (role === 'company') {
+        navigate('/company');
+      } else {
+        navigate('/');
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Login failed.');
     } finally {
@@ -111,7 +117,13 @@ export function Login() {
         return;
       }
 
-      navigate(role === 'company' ? '/company' : '/');
+      if (role === 'admin') {
+        navigate('/admin');
+      } else if (role === 'company') {
+        navigate('/company');
+      } else {
+        navigate('/');
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Google login failed.');
     } finally {
@@ -146,7 +158,13 @@ export function Login() {
         return;
       }
 
-      navigate(role === 'company' ? '/company' : '/');
+      if (role === 'admin') {
+        navigate('/admin');
+      } else if (role === 'company') {
+        navigate('/company');
+      } else {
+        navigate('/');
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'GitHub login failed.');
     } finally {
@@ -299,7 +317,7 @@ export function Login() {
       </p>
       <p className="mt-8 text-center text-sm text-slate-500">
         Login as a Admin account?{' '}
-        <Link to="/admin/step-2" className="font-semibold text-[#137fec] transition-colors hover:text-[#137fec]/80 hover:underline">
+        <Link to="/admin/login" className="font-semibold text-[#137fec] transition-colors hover:text-[#137fec]/80 hover:underline">
           Admin
         </Link>
       </p>

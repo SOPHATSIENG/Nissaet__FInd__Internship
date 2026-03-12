@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001/api';
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {
@@ -42,7 +42,8 @@ async function request(path, options = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (error) {
-    throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Make sure backend server is running.`);
+    console.error('Network Error:', error);
+    throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Please ensure the backend server is running and accessible at this address.`);
   }
 
   const data = await response.json().catch(() => ({}));
@@ -278,6 +279,15 @@ export const api = {
 
   applyForInternship(internshipId, coverLetter) {
     return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter } });
+  },
+
+  // Admin methods
+  adminGetAllUsers() {
+    return request('/admin/users', { auth: true });
+  },
+
+  adminGetStats() {
+    return request('/admin/stats', { auth: true });
   },
 };
 

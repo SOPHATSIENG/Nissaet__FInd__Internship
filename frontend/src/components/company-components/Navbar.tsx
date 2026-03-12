@@ -95,18 +95,21 @@ export default function Navbar() {
           </div>
         </div>
         <div className="flex items-center gap-6">
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
               <Link
                 key={link.path}
                 to={link.path}
-                className={`text-sm font-medium transition-colors hover:text-slate-900 ${
+                className={`px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 hover:bg-slate-50 relative group ${
                   location.pathname === link.path || location.pathname.startsWith(`${link.path}/`)
-                    ? 'text-primary font-semibold'
-                    : 'text-slate-600'
+                    ? 'text-primary bg-primary/5 font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {link.name}
+                <span className={`absolute bottom-1.5 left-4 right-4 h-0.5 bg-primary rounded-full transition-all duration-300 transform origin-left ${
+                  location.pathname === link.path || location.pathname.startsWith(`${link.path}/`) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                }`} />
               </Link>
             ))}
           </nav>

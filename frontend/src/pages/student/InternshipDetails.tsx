@@ -1,84 +1,37 @@
-import { Bookmark, BriefcaseBusiness, Clock3, Code2, MapPin, Share2, WalletCards } from "lucide-react";
+import { Bookmark, BriefcaseBusiness, Calendar, Clock3, Code2, MapPin, Share2, WalletCards } from "lucide-react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import api from "../../api/axios";
 
-type InternshipRecord = {
-  id: string;
-  title: string;
-  company: string;
-  postedAgo: string;
-  location: string;
-  duration: string;
-  internshipType: string;
-  skills: string[];
-  description: string;
-  deadline: string;
-  heroImage: string;
-  logo: string;
+type Skill = {
+  id: number;
+  name: string;
+  category: string;
+  skill_level: string;
+  is_required: boolean;
 };
 
-const INTERNSHIPS: Record<string, InternshipRecord> = {
-  "1": {
-    id: "1",
-    title: "Software Engineering Intern",
-    company: "TechCorp Solutions",
-    postedAgo: "Posted 2 days ago",
-    location: "Remote / San Francisco",
-    duration: "12 Weeks",
-    internshipType: "Paid Internship",
-    skills: ["React", "Node.js", "TypeScript"],
-    description:
-      "Join our core engineering team to build scalable web applications. You'll work closely with senior developers to ship production-ready code, participate in sprint planning, and contribute to our design system. This is a high-impact role designed for students looking to sharpen their full-stack development skills.",
-    deadline: "October 15, 2023",
-    heroImage: "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80",
-    logo: "https://picsum.photos/seed/techcorp/120/120",
-  },
-  "2": {
-    id: "2",
-    title: "Frontend React Intern",
-    company: "DigitalWave Studio",
-    postedAgo: "Posted 1 day ago",
-    location: "Phnom Penh / Hybrid",
-    duration: "10 Weeks",
-    internshipType: "Paid Internship",
-    skills: ["React", "Tailwind CSS", "REST API"],
-    description:
-      "You will build polished, responsive UI features with React and Tailwind CSS. The internship includes mentorship, weekly feedback, and exposure to a modern product workflow from discovery to delivery.",
-    deadline: "November 01, 2023",
-    heroImage: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1600&q=80",
-    logo: "https://picsum.photos/seed/digitalwave/120/120",
-  },
-  "3": {
-    id: "3",
-    title: "Graphic Design Intern",
-    company: "Mango Tango Asia",
-    postedAgo: "Posted 3 days ago",
-    location: "Siem Reap / On-site",
-    duration: "8 Weeks",
-    internshipType: "Unpaid Internship",
-    skills: ["Adobe Illustrator", "Photoshop", "Branding"],
-    description:
-      "Work with the creative team on campaign visuals, social media assets, and brand materials. This role is ideal for students who want to build practical design portfolio projects in a fast-paced studio environment.",
-    deadline: "October 22, 2023",
-    heroImage: "https://images.unsplash.com/photo-1519337265831-281ec6cc8514?auto=format&fit=crop&w=1600&q=80",
-    logo: "https://picsum.photos/seed/mango/120/120",
-  },
-  "4": {
-    id: "4",
-    title: "Audit Assistant Intern",
-    company: "KPMG Cambodia",
-    postedAgo: "Posted 5 days ago",
-    location: "Phnom Penh / On-site",
-    duration: "12 Weeks",
-    internshipType: "Paid Internship",
-    skills: ["Accounting", "Excel", "Reporting"],
-    description:
-      "Support the audit team by preparing workpapers, analyzing financial records, and documenting findings. You will gain direct exposure to client-facing audit workflows and professional reporting standards.",
-    deadline: "November 10, 2023",
-    heroImage: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1600&q=80",
-    logo: "https://picsum.photos/seed/kpmg/120/120",
-  },
+type InternshipRecord = {
+  id: number;
+  title: string;
+  company_id: number;
+  company_name: string;
+  company_logo: string | null;
+  company_description: string | null;
+  company_website: string | null;
+  location: string;
+  description: string;
+  requirements: string | null;
+  responsibilities: string | null;
+  benefits: string | null;
+  type: string;
+  work_mode: string;
+  duration_months: number | null;
+  stipend: number | null;
+  stipend_currency: string | null;
+  application_deadline: string | null;
+  created_at: string;
+  skills?: Skill[];
 };
 
 export default function InternshipDetails() {
@@ -101,39 +54,28 @@ export default function InternshipDetails() {
       console.log('Internship response:', response);
 
       if (response.internship) {
-        // Transform API data to match expected format
-        const transformedData = {
-          id: response.internship.id,
-          title: response.internship.title,
-          company: response.internship.company_name || 'Company',
-          postedAgo: `Posted ${new Date(response.internship.created_at).toLocaleDateString()}`,
-          location: response.internship.location || 'Location TBD',
-          duration: `${response.internship.duration || '12'} Weeks`,
-          internshipType: response.internship.stipend ? 'Paid Internship' : 'Unpaid Internship',
-          skills: response.internship.requirements ? response.internship.requirements.split(',').map(s => s.trim()) : ['JavaScript', 'React'],
-          description: response.internship.description || 'No description available.',
-          deadline: response.internship.deadline ? new Date(response.internship.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'No deadline',
-          heroImage: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80',
-          logo: response.internship.company_logo || 'https://picsum.photos/seed/company/120/120'
-        };
-
-        setInternship(transformedData);
-      } else {
-        // Fallback to mock data if API fails
-        const mockData = INTERNSHIPS[id];
-        if (mockData) {
-          setInternship(mockData);
-        }
+        setInternship(response.internship);
       }
     } catch (error) {
       console.error('Error fetching internship:', error);
-      // Fallback to mock data if API fails
-      const mockData = INTERNSHIPS[id];
-      if (mockData) {
-        setInternship(mockData);
-      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const heroImage = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80';
+
+  const salaryText = () => {
+    if (!internship) return 'Unpaid';
+    if (!internship.stipend || internship.stipend === 0) return 'Unpaid';
+    return `${internship.stipend_currency || '$'}${internship.stipend}/mo`;
+  };
+
+  const getPostedTime = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return dateStr;
     }
   };
 
@@ -184,101 +126,193 @@ export default function InternshipDetails() {
             </button>
             <button
               type="button"
-              className="h-12 px-5 rounded-xl bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-2 text-lg font-medium"
+              className="h-12 px-5 rounded-xl bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-2 font-medium"
             >
               <Bookmark size={18} />
-              Save for Later
+              Save
             </button>
           </div>
         </div>
 
+        {/* Hero Banner */}
         <div className="p-6 md:p-8 border-b border-slate-200">
           <div className="relative rounded-2xl overflow-hidden">
             <img
-              src={internship.heroImage}
+              src={heroImage}
               alt={`${internship.title} banner`}
               className="w-full h-[220px] md:h-[360px] object-cover"
               referrerPolicy="no-referrer"
             />
-            <span className="absolute left-6 bottom-6 bg-indigo-700 text-white text-2xl md:text-base font-bold px-5 py-2 rounded-full uppercase tracking-wide">
-              Hiring Now
+            <span className="absolute left-6 bottom-6 bg-[#3b82f6] text-white text-base font-bold px-5 py-2 rounded-full uppercase tracking-wide shadow-lg">
+              {internship.type.replace('-', ' ')}
             </span>
           </div>
         </div>
 
+        {/* Title and Company */}
         <div className="px-6 md:px-8 py-6 border-b border-slate-200">
-          <div className="flex items-start gap-5">
+          <div className="flex flex-col md:flex-row md:items-start gap-6">
             <img
-              src={internship.logo}
-              alt={`${internship.company} logo`}
+              src={internship.company_logo || `https://picsum.photos/seed/company-${internship.company_id}/120/120`}
+              alt={`${internship.company_name} logo`}
               className="w-24 h-24 rounded-2xl object-cover border border-slate-200 shadow-sm"
               referrerPolicy="no-referrer"
             />
-            <div className="pt-1">
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 leading-tight">{internship.title}</h2>
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-2xl md:text-3xl">
-                <Link to="/companies/1" className="text-indigo-700 font-semibold hover:text-indigo-800 transition-colors">
-                  {internship.company}
+            <div className="flex-1">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight mb-2">
+                {internship.title}
+              </h2>
+              <div className="flex flex-wrap items-center gap-3 text-lg text-slate-500">
+                <Link to={`/companies/${internship.company_id}`} className="text-[#3b82f6] font-bold hover:underline transition-colors">
+                  {internship.company_name}
                 </Link>
-                <span className="text-slate-300">|</span>
-                <span className="text-slate-500">{internship.postedAgo}</span>
+                <span>•</span>
+                <span className="flex items-center gap-1.5">
+                  <Clock3 size={18} /> Posted {getPostedTime(internship.created_at)}
+                </span>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Quick Info Grid */}
         <div className="px-6 md:px-8 py-5 border-b border-slate-200 bg-slate-50">
-          <div className="flex flex-wrap gap-3">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-xl md:text-base">
-              <MapPin size={16} className="text-indigo-700" />
-              {internship.location}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                <MapPin size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Location</p>
+                <p className="text-sm font-semibold text-slate-800">{internship.location} ({internship.work_mode})</p>
+              </div>
             </div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-xl md:text-base">
-              <Clock3 size={16} className="text-indigo-700" />
-              {internship.duration}
+            
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
+                <Clock3 size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Duration</p>
+                <p className="text-sm font-semibold text-slate-800">{internship.duration_months ? `${internship.duration_months} Months` : 'Variable'}</p>
+              </div>
             </div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-xl md:text-base">
-              <WalletCards size={16} className="text-indigo-700" />
-              {internship.internshipType}
+
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+                <WalletCards size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Stipend</p>
+                <p className="text-sm font-semibold text-slate-800">{salaryText()}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+                <Calendar size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Deadline</p>
+                <p className="text-sm font-semibold text-slate-800">{internship.application_deadline ? new Date(internship.application_deadline).toLocaleDateString() : 'Open Until Filled'}</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="px-6 md:px-8 py-8 md:py-10 min-h-[360px]">
-          <div className="mb-8">
-            <h3 className="text-4xl md:text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <Code2 className="text-indigo-700" size={24} />
-              Required Skills
-            </h3>
-            <div className="mt-5 flex flex-wrap gap-3">
-              {internship.skills.map((skill) => (
-                <span
-                  key={skill}
-                  className="px-5 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 text-xl md:text-lg font-medium"
-                >
-                  {skill}
-                </span>
-              ))}
-            </div>
-          </div>
+        {/* Content Section */}
+        <div className="px-6 md:px-8 py-10">
+          <div className="grid lg:grid-cols-3 gap-12">
+            <div className="lg:col-span-2 space-y-10">
+              <section>
+                <h3 className="text-2xl font-bold text-slate-900 mb-4">About the Role</h3>
+                <div className="text-lg text-slate-600 leading-relaxed whitespace-pre-line">
+                  {internship.description}
+                </div>
+              </section>
 
-          <div>
-            <h3 className="text-4xl md:text-3xl font-bold text-slate-900">About the Role</h3>
-            <p className="mt-4 text-2xl md:text-xl text-slate-700 leading-relaxed max-w-5xl">{internship.description}</p>
+              {internship.responsibilities && (
+                <section>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-4">Responsibilities</h3>
+                  <div className="text-lg text-slate-600 leading-relaxed whitespace-pre-line">
+                    {internship.responsibilities}
+                  </div>
+                </section>
+              )}
+
+              {internship.requirements && (
+                <section>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-4">Requirements</h3>
+                  <div className="text-lg text-slate-600 leading-relaxed whitespace-pre-line">
+                    {internship.requirements}
+                  </div>
+                </section>
+              )}
+
+              {internship.benefits && (
+                <section>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-4">Benefits</h3>
+                  <div className="text-lg text-slate-600 leading-relaxed whitespace-pre-line">
+                    {internship.benefits}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            <div className="space-y-8">
+              {internship.skills && internship.skills.length > 0 && (
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 shadow-sm">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2 mb-6">
+                    <Code2 className="text-[#3b82f6]" size={22} />
+                    Skills Needed
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {internship.skills.map((skill) => (
+                      <span
+                        key={skill.id}
+                        className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${
+                          skill.is_required 
+                            ? "bg-blue-50 border-blue-100 text-blue-700" 
+                            : "bg-white border-slate-200 text-slate-600"
+                        }`}
+                        title={skill.is_required ? "Required Skill" : "Preferred Skill"}
+                      >
+                        {skill.name}
+                        {skill.is_required && <span className="ml-1 text-[10px] uppercase opacity-60">*</span>}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-xs text-slate-400 italic">* Required skills</p>
+                </div>
+              )}
+
+              <div className="bg-[#3b82f6]/5 p-6 rounded-2xl border border-[#3b82f6]/10 shadow-sm">
+                <h3 className="text-xl font-bold text-slate-900 mb-4">About the Company</h3>
+                <p className="text-slate-600 text-sm mb-6 line-clamp-4">
+                  {internship.company_description || "Information about this company is currently not available."}
+                </p>
+                <Link to={`/companies/${internship.company_id}`} className="block text-center bg-white border border-slate-200 text-slate-800 font-bold py-3 rounded-xl hover:bg-slate-50 transition-colors">
+                  View Company Profile
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="px-6 md:px-8 py-6 border-t border-slate-200 bg-white flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold tracking-[0.12em] text-slate-400 uppercase">Application Deadline</p>
-            <p className="text-2xl md:text-3xl font-semibold text-slate-900 mt-1">{internship.deadline}</p>
+        {/* Sticky-like Footer Action Bar */}
+        <div className="px-6 md:px-8 py-6 border-t border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+             <div className="hidden sm:block">
+              <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">Apply By</p>
+              <p className="text-lg font-bold text-slate-900">{internship.application_deadline ? new Date(internship.application_deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Always Open'}</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => setShowApplyModal(true)}
             className="bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xl md:text-lg px-10 py-3 rounded-2xl shadow-[0_8px_24px_rgba(67,56,202,0.35)] transition-colors"
           >
-            Apply Now
+            Apply for this Internship
           </button>
         </div>
       </div>

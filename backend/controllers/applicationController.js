@@ -32,6 +32,77 @@ const parsePagination = (query = {}) => {
     return { page, limit, offset };
 };
 
+const getMyApplications = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        if (req.user?.role !== 'student') {
+            return res.status(403).json({ message: 'Only students can view their applications' });
+        }
+
+        const studentId = await getStudentIdByUserId(userId);
+        
+        if (!studentId) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const { page, limit, offset } = parsePagination(req.query);
+
+        const applications = await db.query(
+            `SELECT
+                a.id,
+                a.student_id,
+                a.internship_id,
+                a.cover_letter,
+                a.resume_url,
+                a.status,
+                a.applied_at AS created_at,
+                a.updated_at,
+                i.title,
+                i.company_id,
+                i.location,
+                i.type AS work_mode,
+                i.stipend AS salary,
+                i.application_deadline AS deadline,
+                c.name AS company_name,
+                c.logo AS company_logo
+             FROM applications a
+             JOIN internships i ON a.internship_id = i.id
+             JOIN companies c ON i.company_id = c.id
+             WHERE a.student_id = ?
+             ORDER BY a.applied_at DESC
+             LIMIT ? OFFSET ?`,
+            [studentId, limit, offset]
+        );
+
+        const countRows = await db.query(
+            'SELECT COUNT(*) AS total FROM applications WHERE student_id = ?',
+            [studentId]
+        );
+        const total = Number(countRows[0]?.total || 0);
+        const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+        return res.json({
+            applications,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+                hasNext: page < totalPages,
+                hasPrev: page > 1
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching my applications:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const applyForInternship = async (req, res) => {
     try {
         const { internship_id, cover_letter } = req.body;
@@ -106,16 +177,16 @@ const getStudentApplications = async (req, res) => {
                 a.cover_letter,
                 a.resume_url,
                 a.status,
-                a.created_at,
+                a.applied_at AS created_at,
                 a.updated_at,
                 i.title,
                 i.company_id,
-                c.company_name
+                c.name AS company_name
              FROM applications a
              JOIN internships i ON a.internship_id = i.id
              JOIN companies c ON i.company_id = c.id
              WHERE a.student_id = ?
-             ORDER BY a.created_at DESC
+             ORDER BY a.applied_at DESC
              LIMIT ? OFFSET ?`,
             [targetStudentId, limit, offset]
         );
@@ -169,18 +240,18 @@ const getInternshipApplications = async (req, res) => {
                 a.cover_letter,
                 a.resume_url,
                 a.status,
-                a.created_at,
+                a.applied_at AS created_at,
                 a.updated_at,
                 u.full_name,
                 u.email,
                 s.phone,
                 s.university,
-                s.education
+                s.current_education_level
              FROM applications a
              JOIN students s ON a.student_id = s.id
              JOIN users u ON s.user_id = u.id
              WHERE a.internship_id = ?
-             ORDER BY a.created_at DESC
+             ORDER BY a.applied_at DESC
              LIMIT ? OFFSET ?`,
             [internshipId, limit, offset]
         );
@@ -416,6 +487,7 @@ const testDatabaseConnection = async (req, res) => {
 
 module.exports = {
     applyForInternship,
+    getMyApplications,
     getStudentApplications,
     getInternshipApplications,
     updateApplicationStatus,

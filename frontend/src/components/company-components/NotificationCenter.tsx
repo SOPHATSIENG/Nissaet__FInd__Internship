@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell, Trash2, Check, Clock, Inbox } from 'lucide-react';
-import { useNotifications } from '../contexts/NotificationContext';
+import { useNotifications } from '../../context/company-contexts/NotificationContext';
 import { formatDistanceToNow } from 'date-fns';
 
 export const NotificationCenter: React.FC = () => {

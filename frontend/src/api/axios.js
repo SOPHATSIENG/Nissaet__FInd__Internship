@@ -1,10 +1,10 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001/api';
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {
   return localStorage.getItem(AUTH_STORAGE_KEY);
 }
-
+ 
 function setStoredToken(token) {
   if (token) {
     localStorage.setItem(AUTH_STORAGE_KEY, token);
@@ -42,12 +42,19 @@ async function request(path, options = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (error) {
-    throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Make sure backend server is running.`);
+    console.error('Network Error:', error);
+    throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Please ensure the backend server is running and accessible at this address.`);
   }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = data?.message || 'Request failed.';
+    const message = data?.message || `Request failed with status ${response.status}`;
+    console.error('API Error Details:', {
+      status: response.status,
+      statusText: response.statusText,
+      url: `${API_BASE_URL}${path}`,
+      data: data
+    });
     throw new Error(message);
   }
 
@@ -61,6 +68,7 @@ export const authStorage = {
 };
 
 export const api = {
+  // Auth endpoints
   register(payload) {
     const role = payload?.role || payload?.user_type;
 
@@ -97,7 +105,7 @@ export const api = {
     return request('/auth/me', { auth: true });
   },
 
-  // FIX MARK: profile settings API used by dynamic account settings page.
+  // Profile settings endpoints
   getProfileSettings() {
     return request(`/profile/settings?ts=${Date.now()}`, { auth: true });
   },
@@ -122,7 +130,6 @@ export const api = {
     return request('/profile/company', { method: 'PUT', auth: true, body: payload });
   },
 
-  // FIX MARK: notification card API for header bell dropdown.
   getNotificationCard() {
     return request('/profile/notifications/card', { auth: true });
   },
@@ -135,8 +142,47 @@ export const api = {
     return request('/profile/security/two-factor', { method: 'PUT', auth: true, body: payload });
   },
 
+<<<<<<< HEAD
   getStudentProfile(id) {
     return request(`/profile/student/${id}`);
+=======
+  // Skills endpoint
+  getSkills(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/auth/skills${query ? `?${query}` : ''}`).then((data) => {
+      if (Array.isArray(data)) {
+        return { skills: data };
+      }
+      return data;
+    });
+  },
+
+  // Internship endpoints
+  getInternshipById(id) {
+    return request(`/internships/${id}`).then((data) => {
+      return data;
+    });
+  },
+
+  getCompanies(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/internships/companies${query ? `?${query}` : ''}`).then((data) => {
+      if (Array.isArray(data)) {
+        return { companies: data };
+      }
+      return data;
+    });
+>>>>>>> feature/phat
   },
 
   getInternships(params = {}) {
@@ -163,8 +209,15 @@ export const api = {
     });
   },
 
-  getFeaturedCompanies(limit = 8) {
-    return request(`/internships/featured-companies?limit=${limit}`).then((data) => {
+  getFeaturedCompanies(limit = 8, params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+    
+    const queryString = query ? `&${query}` : '';
+    return request(`/internships/featured-companies?limit=${limit}${queryString}`).then((data) => {
       if (Array.isArray(data)) {
         return { companies: data };
       }
@@ -172,36 +225,49 @@ export const api = {
     });
   },
 
-  // FIXED: dynamic skill lookup for registration step 3.
-  getSkills(params = {}) {
-    const query = new URLSearchParams(
-      Object.entries(params)
-        .filter(([, value]) => value !== undefined && value !== null && value !== '')
-        .map(([key, value]) => [key, String(value)])
-    ).toString();
-
-    return request(`/auth/skills${query ? `?${query}` : ''}`).then((data) => {
+  getRecommendedInternships() {
+    return request('/internships/student/recommended', { auth: true }).then((data) => {
       if (Array.isArray(data)) {
-        return { skills: data };
+        return { internships: data };
       }
       return data;
     });
+  },
+
+  getCompanyInternships() {
+    return request('/internships/company/mine', { auth: true });
   },
 
   createInternship(payload) {
     return request('/internships', { method: 'POST', auth: true, body: payload });
   },
 
-  getCompanyInternships() {
-    return request('/internships/company', { auth: true });
+  updateInternship(id, payload) {
+    return request(`/internships/${id}`, { method: 'PUT', auth: true, body: payload });
   },
 
+  deleteInternship(id) {
+    return request(`/internships/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  // Dashboard endpoints
   getDashboardStats() {
     return request('/internships/dashboard/stats', { auth: true });
   },
 
   getApplicationTrends() {
     return request('/internships/dashboard/trends', { auth: true });
+  },
+
+  // Application endpoints
+  getCompanyApplications(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/applications/company/mine${query ? `?${query}` : ''}`, { auth: true });
   },
 
   getApplicants() {
@@ -216,20 +282,17 @@ export const api = {
     return request('/applications/bulk-status', { method: 'PUT', auth: true, body: { ids, status } });
   },
 
-  getInternshipById(id) {
-    return request(`/internships/${id}`, { auth: true });
-  },
-
-  updateInternship(id, payload) {
-    return request(`/internships/${id}`, { method: 'PUT', auth: true, body: payload });
-  },
-
-  deleteInternship(id) {
-    return request(`/internships/${id}`, { method: 'DELETE', auth: true });
-  },
-
   applyForInternship(internshipId, coverLetter) {
     return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter } });
+  },
+
+  // Admin methods
+  adminGetAllUsers() {
+    return request('/admin/users', { auth: true });
+  },
+
+  adminGetStats() {
+    return request('/admin/stats', { auth: true });
   },
 };
 

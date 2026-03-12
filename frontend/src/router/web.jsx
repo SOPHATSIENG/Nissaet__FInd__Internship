@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Login } from '../pages/auth/Login';
+import { AdminLogin } from '../pages/auth/AdminLogin';
 import { ForgotPassword } from '../pages/auth/ForgotPassword';
 import { Register } from '../pages/auth/Register';
 import { StudentStep2 } from '../pages/auth/StudentStep2';
@@ -16,8 +17,6 @@ import CareerAdvice from '../pages/student/CareerAdvice';
 import AccountSettings from '../pages/account/AccountSettings';
 import { useAuth } from '../context/AuthContext';
 
-// import Applicants from '../pages/student/Applicants';
-
 import CompanyLayout from '../pages/Company/CompanyLayout';
 import Dashboard from '../pages/Company/Dashboard';
 import PostInternship from '../pages/Company/PostInternship';
@@ -30,12 +29,26 @@ import Billing from '../pages/Company/Billing';
 import StudentProfile from '../pages/Company/StudentProfile';
 import Evaluation from '../pages/Company/Evaluation';
 
+import { Sidebar as AdminSidebar } from '../components/Admin_components/Sidebar';
+import { Header as AdminHeader } from '../components/Admin_components/Header';
+import { Dashboard as AdminDashboard } from '../pages/Admine/Dashboard';
+import { UserManagement } from '../pages/Admine/UserManagement';
+import { TeamManagement } from '../pages/Admine/TeamManagement';
+import { CategoryManagement } from '../pages/Admine/CategoryManagement';
+import { Reports } from '../pages/Admine/Reports';
+import { Verification } from '../pages/Admine/Verification';
+import { SettingsPage } from '../pages/Admine/Settings';
+import { ProfileSettings } from '../pages/Admine/ProfileSettings';
+import { StudentProfile as AdminStudentProfile } from '../pages/Admine/StudentProfile';
+import { motion, AnimatePresence } from 'motion/react';
+import { ProfileProvider } from '../context/ProfileContext';
+import { Outlet } from 'react-router-dom';
+
 function RequireAuth({ children }) {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
-    // FIX MARK: block account settings route for logged-out users.
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
@@ -50,7 +63,7 @@ function RequireStudentArea({ children }) {
   }
 
   if (user?.role === 'admin') {
-    return <Navigate to="/admin/step-2" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   if (user?.role === 'company') {
@@ -75,25 +88,95 @@ function RequireCompany({ children }) {
   return children;
 }
 
+function RequireAdmin({ children }) {
+  const { isAuthenticated, user } = useAuth();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
+const PageWrapper = ({ children }) => {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ duration: 0.2 }}
+        className="flex-1 flex flex-col min-h-0"
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+const AdminLayout = () => {
+  const location = useLocation();
+
+  const getTitle = (path) => {
+    if (path.includes('/admin/users')) return 'User Management';
+    if (path.includes('/admin/team')) return 'Team Management';
+    if (path.includes('/admin/categories')) return 'Category Management';
+    if (path.includes('/admin/reports')) return 'Platform Reports';
+    if (path.includes('/admin/verification')) return 'Verification Center';
+    if (path.includes('/admin/settings')) return 'Settings';
+    if (path.includes('/admin/profile') && !path.includes('/student')) return 'Admin Profile';
+    if (path.includes('/admin/student-profile')) return 'Student Profile';
+    return 'Dashboard';
+  };
+
+  return (
+    <div className="flex h-screen w-full overflow-hidden bg-background-light">
+      <AdminSidebar />
+      <main className="flex flex-1 flex-col ml-72 overflow-hidden">
+        <AdminHeader title={getTitle(location.pathname)} />
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+          <PageWrapper>
+            <Outlet />
+          </PageWrapper>
+        </div>
+      </main>
+    </div>
+  );
+};
+
 export default function WebRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public Auth Routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/register" element={<Register />} />
+        
+        {/* Registration Steps */}
         <Route path="/register/student/step-2" element={<StudentStep2 />} />
         <Route path="/register/student/step-3" element={<StudentStep3 />} />
         <Route path="/register/company/step-2" element={<CompanyStep2 />} />
         <Route path="/register/company/step-3" element={<CompanyStep3 />} />
         <Route path="/admin/step-2" element={<AdminStep2 />} />
+
+        {/* Student/Public Area */}
         <Route
           path="/"
-          element={(
+          element={
             <RequireStudentArea>
               <Layout />
             </RequireStudentArea>
-          )}
+          }
         >
           <Route index element={<Home />} />
           <Route path="internships" element={<Internships />} />
@@ -101,26 +184,30 @@ export default function WebRouter() {
           <Route path="companies" element={<Companies />} />
           <Route path="companies/:id" element={<Companies />} />
           <Route path="career-advice" element={<CareerAdvice />} />
+<<<<<<< HEAD
           {/* <Route path="applicants" element={<Applicants />} /> */}
           <Route path="student/:id" element={<StudentProfile />} />
 
+=======
+>>>>>>> feature/phat
           <Route
             path="account-settings"
-            element={(
+            element={
               <RequireAuth>
                 <AccountSettings />
               </RequireAuth>
-            )}
+            }
           />
         </Route>
 
+        {/* Company Area */}
         <Route
           path="/company"
-          element={(
+          element={
             <RequireCompany>
               <CompanyLayout />
             </RequireCompany>
-          )}
+          }
         >
           <Route index element={<Dashboard />} />
           <Route path="post/:id?" element={<PostInternship />} />
@@ -134,6 +221,29 @@ export default function WebRouter() {
           <Route path="evaluation/:id" element={<Evaluation />} />
         </Route>
 
+        {/* Admin Area */}
+        <Route
+          path="/admin"
+          element={
+            <RequireAdmin>
+              <ProfileProvider>
+                <AdminLayout />
+              </ProfileProvider>
+            </RequireAdmin>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<UserManagement />} />
+          <Route path="team" element={<TeamManagement />} />
+          <Route path="categories" element={<CategoryManagement />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="verification" element={<Verification />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="profile" element={<ProfileSettings />} />
+          <Route path="student-profile" element={<AdminStudentProfile />} />
+        </Route>
+
+        {/* Catch-all redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

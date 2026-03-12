@@ -600,6 +600,48 @@ const getDashboardStats = async (req, res) => {
         const lastMonthPosts = lastMonthResult[0].last_month;
         const previousMonthPosts = previousMonthResult[0].previous_month;
 
+        // Get status distribution
+        const statusDistributionResult = await db.query(
+            `SELECT a.status, COUNT(*) as count
+             FROM applications a
+             JOIN internships i ON a.internship_id = i.id
+             WHERE i.company_id = ?
+             GROUP BY a.status`,
+            [companyId]
+        );
+
+        const statusDistribution = {
+            pending: 0,
+            shortlisted: 0,
+            rejected: 0
+        };
+
+        statusDistributionResult.forEach(row => {
+            const status = row.status.toLowerCase();
+            if (status === 'pending' || status === 'reviewing') statusDistribution.pending += row.count;
+            else if (status === 'shortlisted' || status === 'accepted') statusDistribution.shortlisted += row.count;
+            else if (status === 'rejected') statusDistribution.rejected += row.count;
+        });
+
+        // Get recent applicants
+        const recentApplicants = await db.query(
+            `SELECT 
+                a.id, 
+                a.student_id,
+                u.full_name as name, 
+                i.title as role, 
+                a.created_at as time,
+                u.profile_image
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN users u ON s.user_id = u.id
+             JOIN internships i ON a.internship_id = i.id
+             WHERE i.company_id = ?
+             ORDER BY a.created_at DESC
+             LIMIT 3`,
+            [companyId]
+        );
+
         // Calculate trends
         let postsTrend = 'Stable';
         if (previousMonthPosts > 0) {
@@ -612,7 +654,9 @@ const getDashboardStats = async (req, res) => {
             activePosts: activePosts,
             expiredPosts: expiredPosts,
             totalApplicants: totalApplicants,
-            postsTrend: postsTrend
+            postsTrend: postsTrend,
+            statusDistribution,
+            recentApplicants
         });
     } catch (error) {
         console.error('Error fetching dashboard stats:', error);

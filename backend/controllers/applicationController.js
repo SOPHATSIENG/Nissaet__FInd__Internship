@@ -284,6 +284,7 @@ const getCompanyApplications = async (req, res) => {
                 u.phone,
                 s.university,
                 s.education,
+                s.is_available,
                 i.title,
                 i.company_id,
                 c.company_name

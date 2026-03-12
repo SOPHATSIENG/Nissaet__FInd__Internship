@@ -161,6 +161,7 @@ const getProfileSettingsByUserId = async (userId) => {
     };
 
     const education = {
+        student_id: (student && student.id) || null,
         education: (student && student.current_education_level) || user.education || '',
         university: (student && student.university) || user.university || '',
         major: (student && student.major) || '',
@@ -708,6 +709,57 @@ const updateCompanySettings = async (req, res) => {
     }
 };
 
+const getPublicStudentProfile = async (req, res) => {
+    try {
+        const studentId = Number.parseInt(req.params.id, 10);
+        if (Number.isNaN(studentId)) {
+            return res.status(400).json({ message: 'Invalid student ID' });
+        }
+
+        const studentRows = await db.query(
+            `SELECT
+                s.id AS student_id,
+                s.user_id,
+                u.full_name,
+                u.email,
+                s.university,
+                s.current_education_level AS education,
+                s.major,
+                s.graduation_year,
+                s.gpa,
+                s.resume_url,
+                s.linkedin_url,
+                s.portfolio_url,
+                s.is_available,
+                u.profile_image
+             FROM students s
+             JOIN users u ON s.user_id = u.id
+             WHERE s.id = ? LIMIT 1`,
+            [studentId]
+        );
+
+        if (studentRows.length === 0) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const student = studentRows[0];
+        student.is_available = toBoolean(student.is_available, true);
+
+        // Get student skills
+        const skills = await getUserSkills(student.user_id);
+
+        return res.json({
+            profile: {
+                ...student,
+                skills
+            }
+        });
+    } catch (error) {
+        console.error('Get public student profile error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     getSettings,
     updatePersonalSettings,
@@ -717,5 +769,6 @@ module.exports = {
     getNotificationCard,
     updateNotificationSettings,
     updateTwoFactorSettings,
-    updatePassword
+    updatePassword,
+    getPublicStudentProfile
 };

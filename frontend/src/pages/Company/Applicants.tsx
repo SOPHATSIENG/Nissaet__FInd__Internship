@@ -716,7 +716,12 @@ export default function Applicants() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <img className="h-10 w-10 rounded-full object-cover" src={`https://picsum.photos/seed/applicant${app.id}/40/40`} alt={app.name} />
+                        <div className="relative">
+                          <img className="h-10 w-10 rounded-full object-cover" src={`https://picsum.photos/seed/applicant${app.id}/40/40`} alt={app.name} />
+                          {app.is_available && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white shadow-sm" title="Available for Internship" />
+                          )}
+                        </div>
                         <div>
                           <button 
                             onClick={() => setViewingApplicant(app)}
@@ -900,11 +905,19 @@ export default function Applicants() {
               <div className="p-8 space-y-8">
                 {/* Header Info */}
                 <div className="flex items-start gap-6">
-                  <img 
-                    className="h-24 w-24 rounded-2xl object-cover shadow-md" 
-                    src={`https://picsum.photos/seed/applicant${viewingApplicant.id}/200/200`} 
-                    alt={viewingApplicant.name} 
-                  />
+                  <div className="relative">
+                    <img 
+                      className="h-24 w-24 rounded-2xl object-cover shadow-md" 
+                      src={`https://picsum.photos/seed/applicant${viewingApplicant.id}/200/200`} 
+                      alt={viewingApplicant.name} 
+                    />
+                    {viewingApplicant.is_available && (
+                      <div className="absolute -bottom-1 inset-x-0 mx-auto w-[90%] bg-emerald-500 text-white text-[8px] font-black py-0.5 px-1 rounded shadow-lg flex items-center justify-center gap-0.5 border border-white uppercase tracking-tighter">
+                        <CheckCircle size={8} strokeWidth={3} />
+                        <span>Available</span>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-slate-900">{viewingApplicant.name}</h3>
                     <p className="text-slate-500 font-medium">{viewingApplicant.role}</p>
@@ -919,6 +932,15 @@ export default function Applicants() {
                       <span className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold bg-slate-50 text-slate-600 ring-1 ring-inset ring-slate-200">
                         Applied {viewingApplicant.date}
                       </span>
+                      {viewingApplicant.is_available ? (
+                        <span className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                          Available for Internship
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold bg-slate-50 text-slate-500 ring-1 ring-inset ring-slate-200">
+                          Not Looking
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1016,7 +1038,7 @@ export default function Applicants() {
                       Download Resume
                     </button>
                     <Link 
-                      to={`/student/${viewingApplicant.id}`}
+                      to={`/company/student/${viewingApplicant.student_id}`}
                       className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all"
                     >
                       <ExternalLink size={18} />

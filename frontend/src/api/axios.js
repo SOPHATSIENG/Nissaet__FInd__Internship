@@ -135,6 +135,10 @@ export const api = {
     return request('/profile/security/two-factor', { method: 'PUT', auth: true, body: payload });
   },
 
+  getStudentProfile(id) {
+    return request(`/profile/student/${id}`);
+  },
+
   getInternships(params = {}) {
     const query = new URLSearchParams(
       Object.entries(params)

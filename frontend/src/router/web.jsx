@@ -102,6 +102,8 @@ export default function WebRouter() {
           <Route path="companies/:id" element={<Companies />} />
           <Route path="career-advice" element={<CareerAdvice />} />
           {/* <Route path="applicants" element={<Applicants />} /> */}
+          <Route path="student/:id" element={<StudentProfile />} />
+
           <Route
             path="account-settings"
             element={(

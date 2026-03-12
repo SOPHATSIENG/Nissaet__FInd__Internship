@@ -170,7 +170,7 @@ export default function Applicants() {
     }
   };
 
-  const openConfirmation = (id: number, name: string, action: 'approve' | 'reject' | 'reconsider') => {
+  const openConfirmation = (id: number, name: string, action: 'approve' | 'Unshortlist' | 'reconsider') => {
     if (action === 'approve') {
       setModalConfig({
         isOpen: true,
@@ -180,14 +180,14 @@ export default function Applicants() {
         confirmText: 'Approve',
         onConfirm: () => handleUpdateStatus(id, 'Shortlisted'),
       });
-    } else if (action === 'reject') {
+    } else if (action === 'Unshortlist') {
       setModalConfig({
         isOpen: true,
         type: 'danger',
         title: 'Reject Applicant',
         message: `Are you sure you want to reject ${name}? This action will move them to the rejected list.`,
-        confirmText: 'Reject',
-        onConfirm: () => handleUpdateStatus(id, 'Rejected'),
+        confirmText: 'Unshortlist',
+        onConfirm: () => handleUpdateStatus(id, 'Unshortlist'),
       });
     } else if (action === 'reconsider') {
       setModalConfig({
@@ -201,7 +201,7 @@ export default function Applicants() {
     }
   };
 
-  const handleBulkAction = (action: 'approve' | 'reject' | 'download' | 'reconsider' | 'delete') => {
+  const handleBulkAction = (action: 'approve' | 'Unshortlist' | 'download' | 'reconsider' | 'delete') => {
     const selectedCount = selectedApplicants.length;
     if (selectedCount === 0) return;
 
@@ -220,7 +220,7 @@ export default function Applicants() {
           setModalConfig(prev => ({ ...prev, isOpen: false }));
         },
       });
-    } else if (action === 'reject') {
+    } else if (action === 'Unshortlist') {
       setModalConfig({
         isOpen: true,
         type: 'danger',
@@ -229,7 +229,7 @@ export default function Applicants() {
         confirmText: 'Reject All',
         onConfirm: () => {
           setApplicants(prev => prev.map(app => 
-            selectedApplicants.includes(app.id) ? { ...app, status: 'Rejected' } : app
+            selectedApplicants.includes(app.id) ? { ...app, status: 'Unshortlist' } : app
           ));
           setSelectedApplicants([]);
           setModalConfig(prev => ({ ...prev, isOpen: false }));
@@ -346,7 +346,7 @@ export default function Applicants() {
     { label: 'Total Applicants', value: applicants.length.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+12 Today' },
     { label: 'Pending Review', value: applicants.filter(a => a.status === 'Pending Review' || a.status === 'pending').length.toString(), icon: Hourglass, color: 'text-yellow-600', bg: 'bg-yellow-50' },
     { label: 'Shortlisted', value: applicants.filter(a => a.status === 'Shortlisted').length.toString(), icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Rejected', value: applicants.filter(a => a.status === 'Rejected').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
+    { label: 'Unshortlist', value: applicants.filter(a => a.status === 'Unshortlist').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
   ];
 
   return (

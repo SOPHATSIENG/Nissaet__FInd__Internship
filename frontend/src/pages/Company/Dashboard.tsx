@@ -36,6 +36,7 @@ export default function Dashboard() {
     { label: 'Expired Posts', value: '0', icon: History, color: 'text-orange-600', bg: 'bg-orange-50', trend: '0%' },
   ]);
   const [trends, setTrends] = useState([]);
+  const [activeDropdown, setActiveDropdown] = useState(null);
 
   useEffect(() => {
     console.log('Current user:', user);
@@ -122,13 +123,20 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const toggleDropdown = (jobId) => {
+    setActiveDropdown(activeDropdown === jobId ? null : jobId);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveDropdown(null);
+    };
+
+    if (activeDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [activeDropdown]);
 
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-8">
@@ -357,22 +365,51 @@ export default function Dashboard() {
                           </span>
                         </td>
                         <td className="py-4 px-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="relative">
                             <button 
-                              onClick={() => navigate(`/company/post/${job.id}`)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 hover:text-primary transition-all"
-                              title="Edit"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleDropdown(job.id);
+                              }}
+                              className="p-2 text-slate-400 hover:text-slate-600 transition-colors rounded-lg hover:bg-slate-100"
+                              title="More options"
                             >
-                              <Edit3 size={14} />
-                              Edit
+                              <MoreVertical size={18} />
                             </button>
-                            <button 
-                              onClick={() => setDeleteId(job.id)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 size={18} />
-                            </button>
+                            
+                            <AnimatePresence>
+                              {activeDropdown === job.id && (
+                                <motion.div 
+                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                  transition={{ duration: 0.15 }}
+                                  className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg border border-slate-200 shadow-lg z-50 overflow-hidden"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button 
+                                    onClick={() => {
+                                      navigate(`/company/post/${job.id}`);
+                                      setActiveDropdown(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                  >
+                                    <Edit3 size={14} />
+                                    Edit
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      setDeleteId(job.id);
+                                      setActiveDropdown(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                  >
+                                    <Trash2 size={14} />
+                                    Delete
+                                  </button>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                         </td>
                       </motion.tr>

@@ -203,8 +203,15 @@ export const api = {
     });
   },
 
-  getFeaturedCompanies(limit = 8) {
-    return request(`/internships/featured-companies?limit=${limit}`).then((data) => {
+  getFeaturedCompanies(limit = 8, params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+    
+    const queryString = query ? `&${query}` : '';
+    return request(`/internships/featured-companies?limit=${limit}${queryString}`).then((data) => {
       if (Array.isArray(data)) {
         return { companies: data };
       }

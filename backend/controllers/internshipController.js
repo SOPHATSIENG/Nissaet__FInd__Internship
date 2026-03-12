@@ -34,122 +34,79 @@ const buildInClause = (columnName, items) => {
  */
 const getAllInternships = async (req, res) => {
     try {
-        const {
-            search,
-            location,
-            type,
-            remote,
-            hybrid,
-            min_stipend,
-            max_stipend,
-            skills, // comma-separated skill IDs
-            limit = 10,
-            offset = 0,
-            sort = 'recent'
-        } = req.query;
+        const { search, location, work_mode, salary_type, limit: queryLimit } = req.query;
+        const parsedLimit = Number.parseInt(queryLimit, 10);
+        const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : null;
 
-        let whereClause = "WHERE i.status = 'active'";
-        const params = [];
-
-        // Keyword Search
-        if (search) {
-            whereClause += ` AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)`;
-            const searchVal = `%${search}%`;
-            params.push(searchVal, searchVal, searchVal);
-        }
-
-        // Location Filter
-        if (location) {
-            whereClause += ` AND (i.location LIKE ? OR c.headquarters LIKE ?)`;
-            const locVal = `%${location}%`;
-            params.push(locVal, locVal);
-        }
-
-        // Type Filter
-        if (type && type !== 'all') {
-            whereClause += ` AND i.type = ?`;
-            params.push(type);
-        }
-
-        // Work Mode Filters
-        if (remote === 'true' || remote === '1') {
-            whereClause += ` AND i.is_remote = 1`;
-        }
-        if (hybrid === 'true' || hybrid === '1') {
-            whereClause += ` AND i.is_hybrid = 1`;
-        }
-
-        // Stipend / Salary Filters
-        if (min_stipend) {
-            whereClause += ` AND i.stipend >= ?`;
-            params.push(Number(min_stipend));
-        }
-        if (max_stipend) {
-            whereClause += ` AND i.stipend <= ?`;
-            params.push(Number(max_stipend));
-        }
-
-        // Skill Filters
-        if (skills) {
-            const skillIds = String(skills).split(',').map(id => Number(id)).filter(id => !isNaN(id));
-            if (skillIds.length > 0) {
-                whereClause += ` AND i.id IN (
-                    SELECT internship_id FROM internship_skills 
-                    WHERE skill_id IN (${skillIds.map(() => '?').join(',')})
-                )`;
-                params.push(...skillIds);
-            }
-        }
-
-        // Get total count first
-        const countSql = `
-            SELECT COUNT(*) as total 
-            FROM internships i
-            JOIN companies c ON i.company_id = c.id
-            ${whereClause}
-        `;
-        const countResult = await db.query(countSql, params);
-        const total = countResult[0].total;
-
-        // Sorting
-        let orderBy = "ORDER BY i.created_at DESC";
-        switch (sort) {
-            case 'salary_desc':
-                orderBy = ` ORDER BY i.stipend DESC, i.created_at DESC`;
-                break;
-            case 'salary_asc':
-                orderBy = ` ORDER BY i.stipend ASC, i.created_at DESC`;
-                break;
-            case 'popular':
-                orderBy = ` ORDER BY i.applications_count DESC, i.created_at DESC`;
-                break;
-            case 'recent':
-            default:
-                orderBy = ` ORDER BY i.created_at DESC`;
-        }
-
-        let sql = `
+        let query = `
             SELECT
-                i.*,
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary_min,
+                i.stipend AS salary_max,
+                CASE 
+                    WHEN i.stipend > 0 THEN 'paid'
+                    ELSE 'unpaid'
+                END AS salary_type,
+                i.positions,
+                i.application_deadline AS deadline,
+                i.status AS is_active,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
                 c.name AS company_name,
                 c.logo AS company_logo,
                 c.industry AS company_industry,
                 c.headquarters AS company_location,
-                CASE 
-                    WHEN i.is_remote = 1 THEN 'Remote'
-                    WHEN i.is_hybrid = 1 THEN 'Hybrid'
-                    ELSE 'On-site'
-                END AS work_mode
-            FROM internships i
-            JOIN companies c ON i.company_id = c.id
-            ${whereClause}
-            ${orderBy}
-            LIMIT ? OFFSET ?
+                c.logo AS company_logo
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+             WHERE i.status = 'active'
         `;
-        
-        const queryParams = [...params, Number.parseInt(limit, 10), Number.parseInt(offset, 10)];
 
-        let internships;
+        const queryParams = [];
+
+        if (search) {
+            query += ' AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)';
+            const searchPattern = `%${search}%`;
+            queryParams.push(searchPattern, searchPattern, searchPattern);
+        }
+
+        if (location) {
+            query += ' AND (i.location LIKE ? OR c.headquarters LIKE ?)';
+            const locationPattern = `%${location}%`;
+            queryParams.push(locationPattern, locationPattern);
+        }
+
+        if (work_mode && work_mode !== 'All') {
+            query += ' AND i.type = ?';
+            queryParams.push(work_mode.toLowerCase());
+        }
+
+        if (salary_type && salary_type !== 'All') {
+            if (salary_type.toLowerCase() === 'paid') {
+                query += ' AND i.stipend > 0';
+            } else if (salary_type.toLowerCase() === 'unpaid') {
+                query += ' AND i.stipend = 0';
+            }
+        }
+
+        query += ' ORDER BY i.created_at DESC';
+
+        if (limit) {
+            query += ' LIMIT ?';
+            queryParams.push(limit);
+        }
+
+        let internships = await db.query(query, queryParams);
+
         try {
             internships = await db.query(sql, queryParams);
         } catch (error) {

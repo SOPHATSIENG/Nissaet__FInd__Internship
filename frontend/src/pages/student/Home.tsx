@@ -1,3 +1,4 @@
+
 import {
   Search,
   MapPin,
@@ -7,7 +8,7 @@ import {
   ArrowRight,
   Loader2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 
@@ -40,11 +41,10 @@ export default function Home() {
   const navigate = useNavigate();
   const [featuredCompanies, setFeaturedCompanies] = useState<FeaturedCompany[]>([]);
   const [latestInternships, setLatestInternships] = useState<Internship[]>([]);
-  const [recommendedInternships, setRecommendedInternships] = useState<Internship[]>([]);
+  const [matchingInternships, setMatchingInternships] = useState<Internship[]>([]);
+  const [profileSkills, setProfileSkills] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  
-  // Search state
   const [searchTerm, setSearchTerm] = useState("");
   const [locationTerm, setLocationTerm] = useState("");
 
@@ -55,22 +55,12 @@ export default function Home() {
       try {
         setLoading(true);
         setError("");
-        
-        // Fetch featured companies, latest internships and recommended if logged in
-        const requests: Promise<any>[] = [
+        const [companiesRes, internshipsRes, profileRes, matchingRes] = await Promise.all([
           api.getFeaturedCompanies(4),
-          api.getInternships({ limit: 4 }),
-        ];
-
-        // Try to fetch recommended internships (will only work if logged in as student)
-        const [companiesRes, internshipsRes] = await Promise.all(requests);
-        
-        let recommendedRes = { internships: [] };
-        try {
-          recommendedRes = await api.getRecommendedInternships();
-        } catch (e) {
-          // Ignore if not logged in or fails
-        }
+          api.getInternships({ limit: 100 }),
+          api.getProfileSettings().catch(() => null),
+          api.getMatchingInternships().catch(() => null),
+        ]);
 
         if (!isMounted) {
           return;
@@ -78,7 +68,14 @@ export default function Home() {
 
         setFeaturedCompanies(companiesRes.companies || []);
         setLatestInternships(internshipsRes.internships || []);
-        setRecommendedInternships(recommendedRes.internships || []);
+        setMatchingInternships(matchingRes?.internships || []);
+        setProfileSkills(
+          Array.isArray(profileRes?.settings?.skills)
+            ? profileRes.settings.skills
+                .map((skill: { name?: string }) => (skill?.name || "").trim().toLowerCase())
+                .filter(Boolean)
+            : []
+        );
       } catch (requestError) {
         if (!isMounted) {
           return;
@@ -108,6 +105,38 @@ export default function Home() {
     if (locationTerm) params.append("location", locationTerm);
     navigate(`/internships?${params.toString()}`);
   };
+
+  const normalizeText = (text: string) => {
+    return text.toLowerCase().trim();
+  };
+
+  const matchesSkill = (text: string, skill: string) => {
+    return text.includes(skill.toLowerCase());
+  };
+
+  const companiesForDisplay = useMemo(() => featuredCompanies.slice(0, 4), [featuredCompanies]);
+  
+  const internshipsForDisplay = useMemo(() => {
+    // If we have matching internships from the API, use them
+    if (matchingInternships.length > 0) {
+      return matchingInternships.slice(0, 4);
+    }
+
+    // Fallback to local matching if profile skills are available but API matching failed or returned empty
+    if (profileSkills.length > 0) {
+      return latestInternships
+        .filter((job) => {
+          const target = normalizeText(
+            `${job.title} ${job.description || ""} ${job.requirements || ""}`
+          );
+          return profileSkills.some((skill) => matchesSkill(target, skill));
+        })
+        .slice(0, 4);
+    }
+
+    // Otherwise show latest internships
+    return latestInternships.slice(0, 4);
+  }, [latestInternships, matchingInternships, profileSkills]);
 
   const salaryText = (item: Internship) => {
     if (item.salary_type === "unpaid" || (item.stipend === 0)) {
@@ -168,7 +197,7 @@ export default function Home() {
       </section>
 
       {/* Recommended Section (Only if available) */}
-      {recommendedInternships.length > 0 && (
+      {internshipsForDisplay.length > 0 && (
         <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
           <div className="max-w-[1440px] mx-auto">
             <div className="flex justify-between items-center mb-10">
@@ -178,7 +207,7 @@ export default function Home() {
               </Link>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
-              {recommendedInternships.map((job) => (
+              {internshipsForDisplay.map((job) => (
                 <Link
                   to={`/internships/${job.id}`}
                   key={job.id}
@@ -206,10 +235,10 @@ export default function Home() {
                         </span>
                       </div>
                     </div>
+                    <ArrowRight className="text-gray-300 group-hover:text-[#3b82f6] transition-colors" />
                   </div>
-                  <ArrowRight className="text-gray-300 group-hover:text-[#3b82f6] transition-colors" />
                 </Link>
-              ))}
+                ))}
             </div>
           </div>
         </section>
@@ -319,7 +348,9 @@ export default function Home() {
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#f6f8f7]">
         <div className="max-w-[1440px] mx-auto">
           <div className="flex justify-between items-center mb-10">
-            <h2 className="text-3xl font-bold">Find Matching Internships</h2>
+            <h2 className="text-3xl font-bold">
+              {matchingInternships.length > 0 ? "Internships Matching Your Skills" : "Find Matching Internships"}
+            </h2>
             <Link
               to="/internships"
               className="text-[#3b82f6] font-bold hover:underline"
@@ -368,8 +399,12 @@ export default function Home() {
               ))}
             </div>
           )}
-          {!loading && !latestInternships.length && (
-            <p className="text-sm text-gray-500 mt-4">No internships available yet.</p>
+            {!loading && !internshipsForDisplay.length && (
+            <p className="text-sm text-gray-500 mt-4">
+              {profileSkills.length 
+                ? "No internships match your skills yet. Check back soon!"
+                : "Browse all internships to find your perfect match."}
+            </p>
           )}
         </div>
       </section>

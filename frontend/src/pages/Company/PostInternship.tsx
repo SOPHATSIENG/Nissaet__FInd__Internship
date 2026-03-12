@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   Info, 
   DollarSign, 
@@ -39,10 +39,22 @@ export default function PostInternship() {
     deadline: ''
   });
 
-  const [loading, setLoading] = useState(isEditMode);
+  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const validate = () => {
+    if (!formData.title.trim()) return 'Title is required';
+    if (!formData.duration) return 'Duration is required';
+    if (!formData.deadline) return 'Deadline is required';
+    if (formData.salaryType !== 'unpaid' && !formData.minSalary) return 'Salary amount is required';
+    return null;
+  };
+
+  const descriptionRef = useRef(null);
+  const requirementsRef = useRef(null);
+  const [showPreview, setShowPreview] = useState({ description: false, requirements: false });
 
   useEffect(() => {
     if (isEditMode) {
@@ -91,12 +103,69 @@ export default function PostInternship() {
     }
   };
 
-  const validate = () => {
-    if (!formData.title.trim()) return 'Title is required.';
-    if (!formData.description.trim()) return 'Description is required.';
-    if (!formData.deadline) return 'Application deadline is required.';
-    if (formData.salaryType === 'paid' && !formData.minSalary) return 'Salary amount is required for paid internships.';
-    return null;
+  const formatText = (command, textareaRef) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    
+    if (!selectedText) {
+      textarea.focus();
+      return;
+    }
+
+    let newText = selectedText;
+
+    switch (command) {
+      case 'bold':
+        newText = `**${selectedText}**`;
+        break;
+      case 'italic':
+        newText = `*${selectedText}*`;
+        break;
+      case 'underline':
+        newText = `__${selectedText}__`;
+        break;
+      case 'unorderedList':
+        newText = selectedText.split('\n').map(line => `• ${line}`).join('\n');
+        break;
+      case 'orderedList':
+        newText = selectedText.split('\n').map((line, index) => `${index + 1}. ${line}`).join('\n');
+        break;
+      default:
+        return;
+    }
+
+    const newValue = textarea.value.substring(0, start) + newText + textarea.value.substring(end);
+    
+    if (textarea === descriptionRef.current) {
+      setFormData({ ...formData, description: newValue });
+    } else if (textarea === requirementsRef.current) {
+      setFormData({ ...formData, requirements: newValue });
+    }
+    
+    setTimeout(() => {
+      const newCursorPos = start + newText.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+      textarea.focus();
+    }, 0);
+  };
+
+  const renderMarkdown = (text) => {
+    if (!text) return '';
+    
+    // Simple markdown rendering
+    let html = text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/__(.*?)__/g, '<u>$1</u>')
+      .replace(/^• (.+)$/gm, '<li>$1</li>')
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    
+    return html;
   };
 
   const handleSubmit = async (e) => {
@@ -197,7 +266,7 @@ export default function PostInternship() {
               <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="title">Internship Title *</label>
               <div className="mt-2">
                 <input 
-                  className="block w-full rounded-lg border-0 py-2.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                  className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
                   id="title" 
                   placeholder="e.g. Junior Marketing Intern" 
                   type="text" 
@@ -212,7 +281,7 @@ export default function PostInternship() {
                 <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="location">Location (Province) *</label>
                 <div className="mt-2">
                   <select 
-                    className="block w-full rounded-lg border-0 py-2.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                    className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
                     id="location"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
@@ -231,7 +300,7 @@ export default function PostInternship() {
                 <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="duration">Duration (Months) *</label>
                 <div className="mt-2 relative rounded-md shadow-sm">
                   <input 
-                    className="block w-full rounded-lg border-0 py-2.5 pr-12 text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                    className="block w-full rounded-lg border-0 py-2.5 pr-12 px-3 text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
                     id="duration" 
                     placeholder="3" 
                     type="number" 
@@ -246,45 +315,147 @@ export default function PostInternship() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium leading-6 text-slate-900 mb-2">Job Description *</label>
+              <label className="block text-sm font-medium leading-6 text-slate-900 mb-2">
+                Job Description
+                <button 
+                  type="button"
+                  onClick={() => setShowPreview({ ...showPreview, description: !showPreview.description })}
+                  className="ml-2 text-xs text-primary hover:text-primary-dark transition-colors"
+                >
+                  {showPreview.description ? 'Edit' : 'Preview'}
+                </button>
+              </label>
               <div className="rounded-lg ring-1 ring-inset ring-slate-300 overflow-hidden bg-white">
                 <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-3 py-2">
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><Bold size={18} /></button>
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><Italic size={18} /></button>
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><Underline size={18} /></button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('bold', descriptionRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Bold"
+                  >
+                    <Bold size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('italic', descriptionRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Italic"
+                  >
+                    <Italic size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('underline', descriptionRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Underline"
+                  >
+                    <Underline size={18} />
+                  </button>
                   <span className="w-px h-4 bg-slate-300 mx-1"></span>
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><List size={18} /></button>
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><ListOrdered size={18} /></button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('unorderedList', descriptionRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Unordered List"
+                  >
+                    <List size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('orderedList', descriptionRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Ordered List"
+                  >
+                    <ListOrdered size={18} />
+                  </button>
                 </div>
-                <textarea 
-                  className="block w-full border-0 py-3 text-slate-900 placeholder:text-slate-400 focus:ring-0 sm:text-sm sm:leading-6 resize-none px-4" 
-                  placeholder="Describe the role and responsibilities..." 
-                  rows={4}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  required
-                ></textarea>
+                {showPreview.description ? (
+                  <div 
+                    className="block w-full border-0 py-3 px-3 text-slate-900 sm:text-sm sm:leading-6 min-h-[100px]"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(formData.description) }}
+                  />
+                ) : (
+                  <textarea 
+                    ref={descriptionRef}
+                    className="block w-full border-0 py-3 px-3 text-slate-900 placeholder:text-slate-400 focus:ring-0 sm:text-sm sm:leading-6 resize-none" 
+                    placeholder="Describe the role and responsibilities..." 
+                    rows={4}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  ></textarea>
+                )}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium leading-6 text-slate-900 mb-2">Requirements *</label>
+              <label className="block text-sm font-medium leading-6 text-slate-900 mb-2">
+                Requirements
+                <button 
+                  type="button"
+                  onClick={() => setShowPreview({ ...showPreview, requirements: !showPreview.requirements })}
+                  className="ml-2 text-xs text-primary hover:text-primary-dark transition-colors"
+                >
+                  {showPreview.requirements ? 'Edit' : 'Preview'}
+                </button>
+              </label>
               <div className="rounded-lg ring-1 ring-inset ring-slate-300 overflow-hidden bg-white">
                 <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-3 py-2">
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><Bold size={18} /></button>
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><Italic size={18} /></button>
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><Underline size={18} /></button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('bold', requirementsRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Bold"
+                  >
+                    <Bold size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('italic', requirementsRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Italic"
+                  >
+                    <Italic size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('underline', requirementsRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Underline"
+                  >
+                    <Underline size={18} />
+                  </button>
                   <span className="w-px h-4 bg-slate-300 mx-1"></span>
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><List size={18} /></button>
-                  <button type="button" className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100"><ListOrdered size={18} /></button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('unorderedList', requirementsRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Unordered List"
+                  >
+                    <List size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('orderedList', requirementsRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Ordered List"
+                  >
+                    <ListOrdered size={18} />
+                  </button>
                 </div>
-                <textarea 
-                  className="block w-full border-0 py-3 text-slate-900 placeholder:text-slate-400 focus:ring-0 sm:text-sm sm:leading-6 resize-none px-4" 
-                  placeholder="List the requirements for this position..." 
-                  rows={4}
-                  value={formData.requirements}
-                  onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-                  required
-                ></textarea>
+                {showPreview.requirements ? (
+                  <div 
+                    className="block w-full border-0 py-3 px-3 text-slate-900 sm:text-sm sm:leading-6 min-h-[100px]"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(formData.requirements) }}
+                  />
+                ) : (
+                  <textarea 
+                    ref={requirementsRef}
+                    className="block w-full border-0 py-3 px-3 text-slate-900 placeholder:text-slate-400 focus:ring-0 sm:text-sm sm:leading-6 resize-none" 
+                    placeholder="List the requirements for this position..." 
+                    rows={4}
+                    value={formData.requirements}
+                    onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
+                  ></textarea>
+                )}
               </div>
             </div>
           </div>
@@ -310,7 +481,11 @@ export default function PostInternship() {
                         checked={formData.salaryType === type.toLowerCase()}
                         onChange={(e) => setFormData({ ...formData, salaryType: e.target.value })}
                       />
-                      <div className="rounded-md border border-slate-200 px-3 py-2 text-center text-sm font-medium text-slate-600 peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary-dark transition-all">
+                      <div className={`rounded-md border px-3 py-2 text-center text-sm font-medium transition-all cursor-pointer ${
+                        formData.salaryType === type.toLowerCase()
+                          ? 'border-primary bg-primary/5 text-primary-dark'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}>
                         {type}
                       </div>
                     </label>

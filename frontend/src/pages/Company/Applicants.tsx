@@ -793,7 +793,7 @@ export default function Applicants() {
                               <CheckCircle size={20} />
                             </button>
                             <button 
-                              onClick={() => openConfirmation(app.id, app.name, 'reject')}
+                              onClick={() => openConfirmation(app.id, app.name, 'Unshortlist')}
                               className="p-1.5 text-slate-400 hover:text-red-600 transition-colors" 
                               title="Reject"
                             >

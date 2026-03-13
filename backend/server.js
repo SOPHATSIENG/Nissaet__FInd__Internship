@@ -64,6 +64,11 @@ const testDbConnection = async () => {
 };
 
 const startServer = async (port, attempt = 0) => {
+    try {
+        await db.initDatabase();
+    } catch (err) {
+        console.error('Failed to ensure database exists:', err.message);
+    }
     await testDbConnection();
     const server = app.listen(port, '0.0.0.0', () => {
         console.log(`Server running on port ${port} (all interfaces)`);

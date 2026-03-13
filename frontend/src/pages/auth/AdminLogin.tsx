@@ -44,6 +44,30 @@ export function AdminLogin() {
     }
   };
 
+  const handleQuickAccess = async () => {
+    const demoEmail = 'admin@nissaet.com';
+    const demoPassword = 'admin123'; // Standard demo password
+    
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    setFullName('Admin User');
+    
+    try {
+      setError('');
+      setIsLoading(true);
+      const session = await login(demoEmail, demoPassword);
+      if (session?.user?.role === 'admin') {
+        navigate('/admin');
+      } else {
+        setError('Quick access failed. Please use your official credentials.');
+      }
+    } catch (err) {
+      setError('Quick access failed. The demo account may not be configured with "admin123".');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <SplitLayout
       imageSrc="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80"
@@ -124,6 +148,25 @@ export function AdminLogin() {
         <Button type="submit" className="mt-2 w-full" disabled={isLoading}>
           {isLoading ? 'Authenticating...' : 'Sign In to Dashboard'}
         </Button>
+
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-slate-200"></span>
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white px-2 text-slate-400 font-medium">Or quick access</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleQuickAccess}
+          disabled={isLoading}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#137fec] bg-blue-50 py-3 text-sm font-bold text-[#137fec] shadow-sm hover:bg-blue-100 transition-all disabled:opacity-50"
+        >
+          <Shield className="h-4 w-4" />
+          Click to Join as Admin
+        </button>
       </form>
 
       <div className="mt-8 border-t border-slate-200 pt-8">

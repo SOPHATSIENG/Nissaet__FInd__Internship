@@ -105,10 +105,43 @@ const getAllInternships = async (req, res) => {
             queryParams.push(limit);
         }
 
-        let internships = await db.query(query, queryParams);
+        // Get total count before applying limit
+        let countQuery = `
+            SELECT COUNT(*) as total
+            FROM internships i
+            JOIN companies c ON i.company_id = c.id
+            WHERE i.status = 'active'
+        `;
+        const countParams = [];
+        if (search) {
+            countQuery += ' AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)';
+            const searchPattern = `%${search}%`;
+            countParams.push(searchPattern, searchPattern, searchPattern);
+        }
+        if (location) {
+            countQuery += ' AND (i.location LIKE ? OR c.headquarters LIKE ?)';
+            const locationPattern = `%${location}%`;
+            countParams.push(locationPattern, locationPattern);
+        }
+        if (work_mode && work_mode !== 'All') {
+            countQuery += ' AND i.type = ?';
+            countParams.push(work_mode.toLowerCase());
+        }
+        if (salary_type && salary_type !== 'All') {
+            if (salary_type.toLowerCase() === 'paid') {
+                countQuery += ' AND i.stipend > 0';
+            } else if (salary_type.toLowerCase() === 'unpaid') {
+                countQuery += ' AND i.stipend = 0';
+            }
+        }
+
+        let internships;
+        let total = 0;
 
         try {
-            internships = await db.query(sql, queryParams);
+            const countResult = await db.query(countQuery, countParams);
+            total = countResult[0]?.total || 0;
+            internships = await db.query(query, queryParams);
         } catch (error) {
             if (!isBadFieldError(error)) throw error;
             
@@ -117,15 +150,16 @@ const getAllInternships = async (req, res) => {
             let fallbackSql = `
                 SELECT
                     i.*,
-                    c.company_name,
+                    c.name AS company_name,
                     c.logo AS company_logo,
-                    c.location AS company_location
+                    c.headquarters AS company_location
                 FROM internships i
                 JOIN companies c ON i.company_id = c.id
-                WHERE (i.is_active = 1 OR i.status = 'active')
+                WHERE i.status = 'active'
                 ORDER BY i.created_at DESC LIMIT ?
             `;
-            internships = await db.query(fallbackSql, [Number.parseInt(limit, 10)]);
+            internships = await db.query(fallbackSql, [limit || 10]);
+            total = internships.length;
         }
 
         return res.json({ 
@@ -161,7 +195,7 @@ const getFeaturedCompanies = async (req, res) => {
                 AND i.status = 'active'
              GROUP BY c.id, c.name, c.description, c.logo, c.headquarters
              ORDER BY open_positions DESC, c.name ASC
-             LIMIT ${limit}
+             LIMIT ?
         `;
 
         let companies;

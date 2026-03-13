@@ -184,12 +184,7 @@ export default function WebRouter() {
           <Route path="companies" element={<Companies />} />
           <Route path="companies/:id" element={<Companies />} />
           <Route path="career-advice" element={<CareerAdvice />} />
-<<<<<<< HEAD
-          {/* <Route path="applicants" element={<Applicants />} /> */}
           <Route path="student/:id" element={<StudentProfile />} />
-
-=======
->>>>>>> feature/phat
           <Route
             path="account-settings"
             element={

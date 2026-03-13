@@ -34,14 +34,9 @@ const buildInClause = (columnName, items) => {
  */
 const getAllInternships = async (req, res) => {
     try {
-<<<<<<< HEAD
-        const { search, location, skills, salary_type, limit: queryLimit } = req.query;
-        
-=======
-        const { search, location, work_mode, salary_type, limit: queryLimit } = req.query;
->>>>>>> feature/phat
+        const { search, location, skills, work_mode, salary_type, limit: queryLimit } = req.query;
         const parsedLimit = Number.parseInt(queryLimit, 10);
-        const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : null;
+        const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 100;
 
         let query = `
             SELECT
@@ -69,61 +64,11 @@ const getAllInternships = async (req, res) => {
                 c.name AS company_name,
                 c.logo AS company_logo,
                 c.industry AS company_industry,
-                c.headquarters AS company_location,
-                c.logo AS company_logo
-<<<<<<< HEAD
+                c.headquarters AS company_location
             FROM internships i
             JOIN companies c ON i.company_id = c.id
             WHERE i.status = 'active'
         `;
-
-        const queryParams = [];
-
-        if (search) {
-            query += ` AND (i.title LIKE ? OR c.name LIKE ?)`;
-            queryParams.push(`%${search}%`, `%${search}%`);
-        }
-
-        if (location && location !== 'All Locations') {
-            query += ` AND i.location LIKE ?`;
-            queryParams.push(`%${location}%`);
-        }
-
-        if (salary_type && salary_type !== 'All') {
-            if (salary_type.toLowerCase() === 'paid') {
-                query += ` AND i.stipend > 0`;
-            } else if (salary_type.toLowerCase() === 'unpaid') {
-                query += ` AND i.stipend = 0`;
-            }
-        }
-
-        if (skills) {
-            const skillList = Array.isArray(skills) ? skills : [skills];
-            if (skillList.length > 0) {
-                query += ` AND i.id IN (
-                    SELECT iskill.internship_id 
-                    FROM internship_skills iskill 
-                    JOIN skills s ON iskill.skill_id = s.id 
-                    WHERE s.name IN (?)
-                )`;
-                queryParams.push(skillList);
-            }
-        }
-
-        query += ` ORDER BY i.created_at DESC`;
-
-        if (limit) {
-            query += ` LIMIT ?`;
-            queryParams.push(limit);
-        }
-
-        const internships = await db.query(query, queryParams);
-=======
-             FROM internships i
-             JOIN companies c ON i.company_id = c.id
-             WHERE i.status = 'active'
-        `;
->>>>>>> feature/phat
 
         const queryParams = [];
 
@@ -133,7 +78,7 @@ const getAllInternships = async (req, res) => {
             queryParams.push(searchPattern, searchPattern, searchPattern);
         }
 
-        if (location) {
+        if (location && location !== 'All Locations') {
             query += ' AND (i.location LIKE ? OR c.headquarters LIKE ?)';
             const locationPattern = `%${location}%`;
             queryParams.push(locationPattern, locationPattern);
@@ -152,6 +97,19 @@ const getAllInternships = async (req, res) => {
             }
         }
 
+        if (skills) {
+            const skillList = Array.isArray(skills) ? skills : [skills];
+            if (skillList.length > 0) {
+                query += ` AND i.id IN (
+                    SELECT iskill.internship_id 
+                    FROM internship_skills iskill 
+                    JOIN skills s ON iskill.skill_id = s.id 
+                    WHERE s.name IN (?)
+                )`;
+                queryParams.push(skillList);
+            }
+        }
+
         query += ' ORDER BY i.created_at DESC';
 
         if (limit) {
@@ -159,32 +117,10 @@ const getAllInternships = async (req, res) => {
             queryParams.push(limit);
         }
 
-        let internships = await db.query(query, queryParams);
-
-        try {
-            internships = await db.query(sql, queryParams);
-        } catch (error) {
-            if (!isBadFieldError(error)) throw error;
-            
-            // Fallback for legacy schema
-            console.warn('Query failed, trying legacy schema fallback...');
-            let fallbackSql = `
-                SELECT
-                    i.*,
-                    c.company_name,
-                    c.logo AS company_logo,
-                    c.location AS company_location
-                FROM internships i
-                JOIN companies c ON i.company_id = c.id
-                WHERE (i.is_active = 1 OR i.status = 'active')
-                ORDER BY i.created_at DESC LIMIT ?
-            `;
-            internships = await db.query(fallbackSql, [Number.parseInt(limit, 10)]);
-        }
+        const internships = await db.query(query, queryParams);
 
         return res.json({ 
             success: true,
-            total,
             count: internships.length,
             internships 
         });
@@ -318,6 +254,7 @@ const getInternshipById = async (req, res) => {
             // Silently fail if column doesn't exist
             db.query('UPDATE internships SET views = views + 1 WHERE id = ?', [id]).catch(() => {});
         }
+        
 
         // Get skills
         try {

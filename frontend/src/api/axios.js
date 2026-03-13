@@ -142,10 +142,10 @@ export const api = {
     return request('/profile/security/two-factor', { method: 'PUT', auth: true, body: payload });
   },
 
-<<<<<<< HEAD
   getStudentProfile(id) {
     return request(`/profile/student/${id}`);
-=======
+  },
+
   // Skills endpoint
   getSkills(params = {}) {
     const query = new URLSearchParams(
@@ -182,7 +182,6 @@ export const api = {
       }
       return data;
     });
->>>>>>> feature/phat
   },
 
   getInternships(params = {}) {

@@ -24,6 +24,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [internships, setInternships] = useState([]);
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -37,6 +39,35 @@ export default function Dashboard() {
   ]);
   const [trends, setTrends] = useState([]);
   const [activeDropdown, setActiveDropdown] = useState(null);
+
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius;
+
+  // Calculate percentages from dashboard data
+  const totalApps = dashboardData?.totalApplicants || 0;
+  const statusDist = dashboardData?.statusDistribution || { pending: 0, shortlisted: 0, rejected: 0 };
+  const pendingApps = statusDist.pending || 0;
+  const shortlistedApps = statusDist.shortlisted || 0;
+  const rejectedApps = statusDist.rejected || 0;
+
+  const pendingPercent = totalApps > 0 ? Math.round((pendingApps / totalApps) * 100) : 0;
+  const shortlistedPercent = totalApps > 0 ? Math.round((shortlistedApps / totalApps) * 100) : 0;
+  const rejectedPercent = totalApps > 0 ? Math.round((rejectedApps / totalApps) * 100) : 0;
+
+  const filteredInternships = React.useMemo(() => {
+    if (activeFilter === 'all') return internships;
+    if (activeFilter === 'active') return internships.filter((i: any) => i.status === 'active');
+    if (activeFilter === 'expired') return internships.filter((i: any) => i.status !== 'active');
+    return internships;
+  }, [internships, activeFilter]);
+
+  const handleCardClick = (filter: string) => {
+    if (filter === 'applicants') {
+      navigate('/company/applicants');
+    } else {
+      setActiveFilter(filter);
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();

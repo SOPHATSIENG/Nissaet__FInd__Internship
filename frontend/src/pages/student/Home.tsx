@@ -71,8 +71,8 @@ export default function Home() {
 
         setFeaturedCompanies(companiesRes.companies || []);
         setLatestInternships(internshipsRes.internships || []);
-<<<<<<< HEAD
-        
+        setMatchingInternships(matchingRes?.internships || []);
+
         if (profileRes?.settings) {
           setProfileSkills(
             Array.isArray(profileRes.settings.skills)
@@ -82,24 +82,14 @@ export default function Home() {
               : []
           );
           setIsAvailable(!!profileRes.settings.education?.is_available);
-          setUserName(profileRes.settings.personal?.full_name || '');
+          setUserName(profileRes.settings.personal?.full_name || "");
+          
           // Search for student_id in profile response if available, or fetch it
-          // Assuming the backend returns it in a similar structure
-          const studentRes = await api.getApplicants().catch(() => null); // Quick way to get it if they applied
+          const studentRes = await api.getApplicants().catch(() => null);
           if (studentRes?.applications?.length > 0) {
             setStudentId(studentRes.applications[0].student_id);
           }
         }
-=======
-        setMatchingInternships(matchingRes?.internships || []);
-        setProfileSkills(
-          Array.isArray(profileRes?.settings?.skills)
-            ? profileRes.settings.skills
-                .map((skill: { name?: string }) => (skill?.name || "").trim().toLowerCase())
-                .filter(Boolean)
-            : []
-        );
->>>>>>> feature/phat
       } catch (requestError) {
         if (!isMounted) {
           return;

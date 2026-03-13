@@ -373,8 +373,8 @@ export default function PostInternship() {
                   <div 
                     className="block w-full border-0 py-3 px-3 text-slate-900 sm:text-sm sm:leading-6 min-h-[100px]"
                     dangerouslySetInnerHTML={{ __html: renderMarkdown(formData.description) }}
-                  />
-                ) : (
+                  />)
+                 : (
                   <textarea 
                     ref={descriptionRef}
                     className="block w-full border-0 py-3 px-3 text-slate-900 placeholder:text-slate-400 focus:ring-0 sm:text-sm sm:leading-6 resize-none" 

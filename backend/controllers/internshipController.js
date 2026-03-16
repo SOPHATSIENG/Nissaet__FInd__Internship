@@ -107,8 +107,14 @@ const getAllInternships = async (req, res) => {
 
         let internships = await db.query(query, queryParams);
 
+        // Get total count for pagination
+        let totalQuery = query.replace(/SELECT.*?FROM/, 'SELECT COUNT(*) as total FROM').replace(/ORDER BY.*$/, '');
+        const totalResult = await db.query(totalQuery, queryParams);
+        const total = totalResult[0]?.total || 0;
+
         try {
-            internships = await db.query(sql, queryParams);
+            // Test if the query works with current schema
+            await db.query(query, queryParams);
         } catch (error) {
             if (!isBadFieldError(error)) throw error;
             

@@ -8,6 +8,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 // Public routes
 router.get('/', internshipController.getAllInternships);
 router.get('/featured-companies', internshipController.getFeaturedCompanies);
+router.get('/companies', internshipController.getAllCompanies);
 
 // Company routes (must be before /:id to avoid conflicts)
 router.get('/company', authenticate, authorize('company'), internshipController.getCompanyInternships);

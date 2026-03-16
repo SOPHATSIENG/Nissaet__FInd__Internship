@@ -539,7 +539,7 @@ export default function PostInternship() {
                       </span>
                     ))}
                     <input 
-                      className="border-0 bg-transparent p-0 text-sm placeholder:text-slate-400 focus:ring-0 flex-1 min-w-[100px]" 
+                      className="border-0 bg-transparent p-0 px-3 text-sm placeholder:text-slate-400 focus:ring-0 flex-1 min-w-[100px]" 
                       placeholder="Type and press Enter to add skills..." 
                       type="text" 
                       onKeyDown={(e) => {
@@ -582,7 +582,7 @@ export default function PostInternship() {
                   <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="deadline">Application Deadline *</label>
                   <div className="mt-2 relative">
                     <input 
-                      className="block w-full rounded-lg border-0 py-2.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                      className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
                       id="deadline" 
                       type="date" 
                       value={formData.deadline}

@@ -34,13 +34,17 @@ async function request(path, options = {}) {
     }
   }
 
+  const fullUrl = `${API_BASE_URL}${path}`;
+  console.log('Full request URL:', fullUrl);
+
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(fullUrl, {
       method,
       headers: requestHeaders,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
+    console.log('Response status:', response.status, response.statusText);
   } catch (error) {
     console.error('Network Error:', error);
     throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Please ensure the backend server is running and accessible at this address.`);
@@ -212,11 +216,17 @@ export const api = {
     ).toString();
     
     const queryString = query ? `&${query}` : '';
-    return request(`/internships/featured-companies?limit=${limit}${queryString}`).then((data) => {
+    const url = `/internships/featured-companies?limit=${limit}${queryString}`;
+    console.log('Making request to:', `${API_BASE_URL}${url}`);
+    return request(url).then((data) => {
+      console.log('Response received:', data);
       if (Array.isArray(data)) {
         return { companies: data };
       }
       return data;
+    }).catch((error) => {
+      console.error('Error in getFeaturedCompanies:', error);
+      throw error;
     });
   },
 

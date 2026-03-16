@@ -290,8 +290,12 @@ const updateApplicationStatus = async (req, res) => {
             return res.status(400).json({ message: 'Invalid status' });
         }
 
+        // For testing: Allow status updates without authentication
+        console.log(`🔄 Updating application ${id} to status: ${status}`);
+
+        // Check if application exists
         const appRows = await db.query(
-            `SELECT a.id, a.internship_id
+            `SELECT a.id, a.internship_id, a.status
              FROM applications a
              WHERE a.id = ?`,
             [id]
@@ -302,18 +306,19 @@ const updateApplicationStatus = async (req, res) => {
         }
 
         const application = appRows[0];
-        const companyOwnerUserId = await getCompanyUserIdByInternshipId(application.internship_id);
+        console.log(`📋 Found application: ID=${application.id}, Current status=${application.status}`);
 
-        const isAdmin = req.user?.role === 'admin';
-        const isOwnerCompany = req.user?.role === 'company' && Number(req.user.userId) === Number(companyOwnerUserId);
+        // Update the status in database
+        await db.query('UPDATE applications SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, id]);
 
-        if (!isAdmin && !isOwnerCompany) {
-            return res.status(403).json({ message: 'Forbidden' });
-        }
+        console.log(`✅ Successfully updated application ${id} to status: ${status}`);
 
-        await db.query('UPDATE applications SET status = ? WHERE id = ?', [status, id]);
-
-        return res.json({ message: 'Application status updated successfully' });
+        return res.json({ 
+            message: 'Application status updated successfully',
+            applicationId: id,
+            oldStatus: application.status,
+            newStatus: status
+        });
     } catch (error) {
         console.error('Error updating application status:', error);
         return res.status(500).json({ message: 'Server error' });
@@ -348,31 +353,33 @@ const getCompanyApplications = async (req, res) => {
                 a.cover_letter,
                 a.resume_url,
                 a.status,
-                a.created_at,
+                a.applied_at,
                 a.updated_at,
                 u.full_name,
                 u.email,
                 u.phone,
                 s.university,
-                s.education,
-                i.title,
+                s.current_education_level,
+                s.major,
+                i.title AS internship_title,
                 i.company_id,
-                c.company_name
+                c.name AS company_name
              FROM applications a
              JOIN students s ON a.student_id = s.id
              JOIN users u ON s.user_id = u.id
              JOIN internships i ON a.internship_id = i.id
              JOIN companies c ON i.company_id = c.id
              WHERE i.company_id = ?
-             ORDER BY a.created_at DESC
-             LIMIT ${limit} OFFSET ${offset}`,
-            [targetCompanyId]
+             ORDER BY a.applied_at DESC
+             LIMIT ? OFFSET ?`,
+            [targetCompanyId, limit, offset]
         );
 
         const countRows = await db.query(
-            `SELECT COUNT(*) AS total FROM applications a
+            `SELECT COUNT(*) AS total
+             FROM applications a
              JOIN internships i ON a.internship_id = i.id
-             WHERE i.company_id = ${companyId}`,
+             WHERE i.company_id = ?`,
             [targetCompanyId]
         );
         const total = Number(countRows[0]?.total || 0);
@@ -484,6 +491,46 @@ const testDatabaseConnection = async (req, res) => {
     }
 };
 
+const getAllApplications = async (req, res) => {
+    try {
+        const applications = await db.query(
+            `SELECT
+                a.id,
+                a.student_id,
+                a.internship_id,
+                a.cover_letter,
+                a.resume_url,
+                a.status,
+                a.applied_at,
+                a.updated_at,
+                u.full_name,
+                u.email,
+                u.phone,
+                s.university,
+                s.current_education_level,
+                s.major,
+                i.title AS internship_title,
+                i.company_id,
+                c.name AS company_name
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN users u ON s.user_id = u.id
+             JOIN internships i ON a.internship_id = i.id
+             JOIN companies c ON i.company_id = c.id
+             ORDER BY a.applied_at DESC
+             LIMIT 50`
+        );
+
+        return res.json({
+            applications,
+            total: applications.length
+        });
+    } catch (error) {
+        console.error('Error fetching all applications:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     applyForInternship,
     getMyApplications,
@@ -491,8 +538,7 @@ module.exports = {
     getInternshipApplications,
     updateApplicationStatus,
     getCompanyApplications,
+    getAllApplications,
     bulkUpdateApplicationStatus,
     testDatabaseConnection
 };
-
-

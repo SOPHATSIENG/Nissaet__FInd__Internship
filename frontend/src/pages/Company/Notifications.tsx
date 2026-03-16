@@ -94,7 +94,7 @@ export default function Notifications() {
             onClick={() => setActiveTab('activity')}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
               activeTab === 'activity' 
-                ? 'bg-white text-primary shadow-sm' 
+                ? 'bg-white text-blue-600 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -105,7 +105,7 @@ export default function Notifications() {
             onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
               activeTab === 'settings' 
-                ? 'bg-white text-primary shadow-sm' 
+                ? 'bg-white text-blue-600 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -126,7 +126,7 @@ export default function Notifications() {
                   to={item.path}
                   className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
                     isActive 
-                      ? 'bg-white text-primary shadow-sm border border-slate-200' 
+                      ? 'bg-white text-blue-600 shadow-sm border border-slate-200' 
                       : 'text-slate-600 hover:bg-white hover:text-slate-900'
                   }`}
                 >

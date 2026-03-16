@@ -592,7 +592,7 @@ export const TeamManagement = () => {
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 px-6 py-3 rounded-xl bg-primary text-surface-dark text-sm font-bold hover:bg-emerald-400 transition-all shadow-lg shadow-primary/20"
+                    className="flex-1 px-6 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
                   >
                     Save Changes
                   </button>

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5003/api';
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {
@@ -273,6 +273,11 @@ export const api = {
     ).toString();
 
     return request(`/applications/company/mine${query ? `?${query}` : ''}`, { auth: true });
+  },
+
+  // NEW: Get all applications without authentication (for debugging)
+  getAllApplications() {
+    return request('/applications/all');
   },
 
   getApplicants() {

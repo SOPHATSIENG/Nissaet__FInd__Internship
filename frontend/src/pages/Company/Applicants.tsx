@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Download, 
@@ -28,13 +28,12 @@ import {
   ExternalLink,
   Star
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
 import api from '../../api/axios';
 
 export default function Applicants() {
-  const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -51,6 +50,24 @@ export default function Applicants() {
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const normalizeStatus = (status?: string) => {
+    if (!status) return 'Pending Review';
+    const value = status.toLowerCase();
+    if (value === 'accepted') return 'Shortlisted';
+    if (value === 'reviewing') return 'Pending Review';
+    if (value === 'pending') return 'Pending Review';
+    if (value === 'rejected') return 'Rejected';
+    if (value === 'withdrawn') return 'Withdrawn';
+    return status;
+  };
+
+  const toApiStatus = (status: string) => {
+    if (status === 'Shortlisted') return 'accepted';
+    if (status === 'Pending Review') return 'pending';
+    if (status === 'Rejected') return 'rejected';
+    return status.toLowerCase();
+  };
+
   useEffect(() => {
     // Check current user first
     const checkCurrentUser = async () => {
@@ -58,8 +75,17 @@ export default function Applicants() {
         const userResponse = await api.getCurrentUser();
         console.log('Current user:', userResponse);
         console.log('User role:', userResponse.user?.role);
+        console.log('User ID:', userResponse.user?.id);
+        
+        // Check if user is company
+        if (userResponse.user?.role !== 'company') {
+          console.error('User is not a company user! Role:', userResponse.user?.role);
+          alert('You must be logged in as a company user to view applicants.');
+          return;
+        }
       } catch (error) {
         console.error('Error getting current user:', error);
+        alert('Error: Please log in again.');
       }
     };
     
@@ -70,47 +96,52 @@ export default function Applicants() {
   const fetchApplicants = async () => {
     try {
       setLoading(true);
-      console.log('Fetching applicants...');
-      const response = await api.getApplicants();
-      console.log('Applicants response:', response);
-      
-      // Check if response has applications data
-      if (!response || !response.applications) {
-        console.log('No applications data in response:', response);
-        setApplicants([]);
-        return;
-      }
-      
-      console.log('Raw applications data:', response.applications);
-      
-      // Transform database data to match frontend structure
-      const transformedApplicants = (response.applications || []).map(app => ({
-        ...app,
-        name: app.full_name || app.name,
-        role: app.internship_title || app.role || 'Unknown Role',
-        date: app.applied_at ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : app.date,
-        phone: app.phone || '+855 12 345 678',
-        location: 'Phnom Penh, Cambodia', // Default location
-        skills: ['JavaScript', 'React', 'Node.js'], // Default skills
-        education: [
-          { 
-            school: app.university || 'University', 
-            degree: app.major || 'Bachelor Degree', 
-            period: '2020 - Present' 
-          }
-        ],
-        experience: [
-          { 
-            company: 'Previous Company', 
-            role: 'Previous Role', 
-            period: '2022 - 2023' 
-          }
-        ],
-        resumeUrl: app.resume_url || '#'
-      }));
-      
+      console.log('Fetching applicants from database...');
+
+      const response = await api.getCompanyApplications({ page: 1, limit: 200 });
+      const applications = response?.applications || [];
+      console.log('Company applications response:', response);
+
+      const transformedApplicants = applications.map(app => {
+        const skills = Array.isArray(app.skills)
+          ? app.skills.map((skill) => (typeof skill === 'string' ? skill : skill?.name)).filter(Boolean)
+          : [];
+
+        const education = [];
+        if (app.university || app.major || app.current_education_level) {
+          const degreeParts = [app.major, app.current_education_level].filter(Boolean);
+          education.push({
+            school: app.university || '',
+            degree: degreeParts.join(' · '),
+            period: ''
+          });
+        }
+
+        const experience = Array.isArray(app.experience)
+          ? app.experience
+          : [];
+
+        return {
+          ...app,
+          name: app.full_name || app.name || 'Unknown Applicant',
+          role: app.internship_title || app.role || 'Unknown Role',
+          date: app.applied_at
+            ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : (app.date || ''),
+          status: normalizeStatus(app.status),
+          phone: app.phone || '',
+          location: app.location || '',
+          skills,
+          education,
+          experience,
+          resumeUrl: app.resume_url || ''
+        };
+      });
+
       console.log('Transformed applicants:', transformedApplicants);
+      console.log('About to set applicants with:', transformedApplicants.length, 'items');
       setApplicants(transformedApplicants);
+      console.log('Applicants set successfully');
     } catch (error) {
       console.error('Error fetching applicants:', error);
       // Show more detailed error information
@@ -160,14 +191,115 @@ export default function Applicants() {
 
   const handleUpdateStatus = async (id: number, newStatus: string) => {
     try {
-      await api.updateApplicationStatus(id, newStatus);
+      console.log(`[UPDATE] Updating application ${id} to status: ${newStatus}`);
+
+      // Update UI immediately for better experience
       setApplicants(prev => prev.map(app => 
         app.id === id ? { ...app, status: newStatus } : app
       ));
+
+      // Close modal
       setModalConfig(prev => ({ ...prev, isOpen: false }));
+
+      // Convert status for database
+      const apiStatus = toApiStatus(newStatus);
+
+      // Try to save to database
+      try {
+        await api.updateApplicationStatus(id, apiStatus);
+        console.log('[OK] Saved to database successfully');
+        alert(`Applicant status updated to ${newStatus}`);
+      } catch (dbError) {
+        console.log('[WARN] Database error, but UI updated:', dbError);
+        alert(`Applicant status updated to ${newStatus} (Local only)`);
+      }
+
+      console.log(`[OK] Applicant ${id} status changed to ${newStatus}`);
+
     } catch (error) {
-      console.error('Error updating application status:', error);
+      console.error('[ERROR] Error:', error);
+      alert('Failed to update status');
     }
+  };
+
+  const showNotification = (message: string, type: 'success' | 'warning' | 'error' | 'info') => {
+    // Create notification styles if not already added
+    if (!document.getElementById('notification-styles')) {
+      const style = document.createElement('style');
+      style.id = 'notification-styles';
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(100%); opacity: 0; }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Remove any existing notifications
+    const existingNotifications = document.querySelectorAll('[data-notification]');
+    existingNotifications.forEach(n => n.remove());
+    
+    // Create notification
+    const notification = document.createElement('div');
+    notification.setAttribute('data-notification', 'true');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      z-index: 9999;
+      animation: slideIn 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      max-width: 300px;
+      ${type === 'success' ? 'background: #4caf50;' : ''}
+      ${type === 'warning' ? 'background: #ff9800;' : ''}
+      ${type === 'error' ? 'background: #f44336;' : ''}
+      ${type === 'info' ? 'background: #2196f3; animation: slideIn 0.3s ease, pulse 1s infinite;' : ''}
+    `;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-dismiss after delay
+    const dismissDelay = type === 'info' ? 10000 : 3000;
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+      }
+    }, dismissDelay);
+  };
+
+  const updateDashboardStats = () => {
+    // Force re-render of statistics
+    setApplicants(prev => [...prev]);
+    
+    // Recalculate statistics
+    const stats = applicants.reduce((acc, app) => {
+      if (app.status === 'Pending Review') acc.pending++;
+      else if (app.status === 'Shortlisted') acc.shortlisted++;
+      else if (app.status === 'Rejected') acc.rejected++;
+      return acc;
+    }, { pending: 0, shortlisted: 0, rejected: 0 });
+    
+    console.log('[STATS] Dynamic Dashboard Stats:', stats);
+    
+    // Update page title dynamically
+    document.title = `Applicants (${applicants.length}) - Nissaet Internship`;
+    
+    return stats;
   };
 
   const openConfirmation = (id: number, name: string, action: 'approve' | 'reject' | 'reconsider') => {
@@ -1032,3 +1164,5 @@ export default function Applicants() {
     </div>
   );
 }
+
+

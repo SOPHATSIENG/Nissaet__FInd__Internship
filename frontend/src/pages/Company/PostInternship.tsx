@@ -213,7 +213,7 @@ export default function PostInternship() {
   if (loading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -222,7 +222,7 @@ export default function PostInternship() {
     <div className="max-w-[1000px] mx-auto px-4 py-8 md:px-6 flex flex-col gap-8">
       {isEditMode && loading ? (
         <div className="flex justify-center items-center py-20">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
       ) : (
         <>
@@ -258,7 +258,7 @@ export default function PostInternship() {
       <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 md:p-8">
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <Info size={20} className="text-primary" />
+            <Info size={20} className="text-blue-600" />
             Basic Information
           </h3>
           <div className="space-y-6">
@@ -266,7 +266,7 @@ export default function PostInternship() {
               <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="title">Internship Title *</label>
               <div className="mt-2">
                 <input 
-                  className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                  className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6" 
                   id="title" 
                   placeholder="e.g. Junior Marketing Intern" 
                   type="text" 
@@ -281,7 +281,7 @@ export default function PostInternship() {
                 <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="location">Location (Province) *</label>
                 <div className="mt-2">
                   <select 
-                    className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                    className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6" 
                     id="location"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
@@ -300,7 +300,7 @@ export default function PostInternship() {
                 <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="duration">Duration (Months) *</label>
                 <div className="mt-2 relative rounded-md shadow-sm">
                   <input 
-                    className="block w-full rounded-lg border-0 py-2.5 pr-12 px-3 text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                    className="block w-full rounded-lg border-0 py-2.5 pr-12 px-3 text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6" 
                     id="duration" 
                     placeholder="3" 
                     type="number" 
@@ -320,7 +320,7 @@ export default function PostInternship() {
                 <button 
                   type="button"
                   onClick={() => setShowPreview({ ...showPreview, description: !showPreview.description })}
-                  className="ml-2 text-xs text-primary hover:text-primary-dark transition-colors"
+                  className="ml-2 text-xs text-blue-600 hover:text-blue-700 transition-colors"
                 >
                   {showPreview.description ? 'Edit' : 'Preview'}
                 </button>
@@ -392,7 +392,7 @@ export default function PostInternship() {
                 <button 
                   type="button"
                   onClick={() => setShowPreview({ ...showPreview, requirements: !showPreview.requirements })}
-                  className="ml-2 text-xs text-primary hover:text-primary-dark transition-colors"
+                  className="ml-2 text-xs text-blue-600 hover:text-blue-700 transition-colors"
                 >
                   {showPreview.requirements ? 'Edit' : 'Preview'}
                 </button>
@@ -464,7 +464,7 @@ export default function PostInternship() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 md:p-8 flex flex-col h-full">
             <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <DollarSign size={20} className="text-primary" />
+              <DollarSign size={20} className="text-blue-600" />
               Compensation
             </h3>
             <div className="space-y-6">
@@ -483,7 +483,7 @@ export default function PostInternship() {
                       />
                       <div className={`rounded-md border px-3 py-2 text-center text-sm font-medium transition-all cursor-pointer ${
                         formData.salaryType === type.toLowerCase()
-                          ? 'border-primary bg-primary/5 text-primary-dark'
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                       }`}>
                         {type}
@@ -501,7 +501,7 @@ export default function PostInternship() {
                         <span className="text-slate-500 sm:text-sm">$</span>
                       </div>
                       <input 
-                        className="block w-full rounded-lg border-0 py-2.5 pl-7 text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                        className="block w-full rounded-lg border-0 py-2.5 pl-7 text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6" 
                         id="min-salary" 
                         placeholder="150" 
                         type="number" 
@@ -518,19 +518,19 @@ export default function PostInternship() {
 
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 md:p-8 flex flex-col h-full">
             <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Brain size={20} className="text-primary" />
+              <Brain size={20} className="text-blue-600" />
               Skills & Logistics
             </h3>
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium leading-6 text-slate-900">Required Skills</label>
                 <div className="mt-2 relative">
-                  <div className="min-h-[46px] w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-primary flex flex-wrap gap-2">
+                  <div className="min-h-[46px] w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-blue-600 flex flex-wrap gap-2">
                     {formData.skills.map(skill => (
-                      <span key={skill} className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary-dark">
+                      <span key={skill} className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
                         {skill}
                         <button 
-                          className="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-primary/20" 
+                          className="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-blue-200" 
                           type="button"
                           onClick={() => setFormData({ ...formData, skills: formData.skills.filter(s => s !== skill) })}
                         >
@@ -582,7 +582,7 @@ export default function PostInternship() {
                   <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="deadline">Application Deadline *</label>
                   <div className="mt-2 relative">
                     <input 
-                      className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" 
+                      className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6" 
                       id="deadline" 
                       type="date" 
                       value={formData.deadline}
@@ -606,7 +606,7 @@ export default function PostInternship() {
             Cancel
           </button>
           <button 
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all disabled:opacity-50" 
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-all disabled:opacity-50" 
             type="submit"
             disabled={submitting}
           >

@@ -21,6 +21,8 @@ import CompanyLayout from '../pages/Company/CompanyLayout';
 import Dashboard from '../pages/Company/Dashboard';
 import PostInternship from '../pages/Company/PostInternship';
 import Applicants from '../pages/Company/Applicants';
+import AllApplicants from '../pages/Company/AllApplicants';
+import RealApplicants from '../pages/Company/RealApplicants';
 import MyApplications from '../pages/Company/MyApplications';
 import Settings from '../pages/Company/Settings';
 import Security from '../pages/Company/Security';
@@ -206,6 +208,8 @@ export default function WebRouter() {
           <Route index element={<Dashboard />} />
           <Route path="post/:id?" element={<PostInternship />} />
           <Route path="applicants" element={<Applicants />} />
+          <Route path="all-applicants" element={<AllApplicants />} />
+          <Route path="real-applicants" element={<RealApplicants />} />
           <Route path="my-applications" element={<MyApplications />} />
           <Route path="settings" element={<Settings />} />
           <Route path="security" element={<Security />} />

@@ -573,7 +573,7 @@ export const CategoryManagement = () => {
                   </button>
                   <button 
                     type="submit"
-                    className="px-8 py-2.5 rounded-xl bg-primary text-white text-sm font-black shadow-lg hover:opacity-90 hover:shadow-xl transition-all transform active:scale-95"
+                    className="px-8 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all transform active:scale-95"
                   >
                     {editingItem ? 'Save Changes' : `Create ${activeTab.slice(0, -1)}`}
                   </button>

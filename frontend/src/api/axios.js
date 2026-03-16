@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {
@@ -192,11 +192,41 @@ export const api = {
     ).toString();
 
     return request(`/internships${query ? `?${query}` : ''}`).then((data) => {
+      if (data && data.success === false) {
+        throw new Error(data.message || 'Failed to fetch internships');
+      }
       if (Array.isArray(data)) {
         return { internships: data };
       }
       return data;
     });
+  },
+
+  getSavedInternships() {
+    return request('/internships/saved', { auth: true }).then((data) => {
+      if (Array.isArray(data)) {
+        return { internships: data };
+      }
+      return data;
+    });
+  },
+
+  saveInternship(internshipId) {
+    return request(`/internships/${internshipId}/save`, { method: 'POST', auth: true });
+  },
+
+  unsaveInternship(internshipId) {
+    return request(`/internships/${internshipId}/save`, { method: 'DELETE', auth: true });
+  },
+
+  getMyApplications(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/applications/my${query ? `?${query}` : ''}`, { auth: true });
   },
 
   getMatchingInternships() {

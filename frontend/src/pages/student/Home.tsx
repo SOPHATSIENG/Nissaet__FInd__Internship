@@ -170,53 +170,6 @@ export default function Home() {
 
   return (
     <div className="flex flex-col">
-      {userName && (
-        <section className="bg-slate-50 border-b border-slate-100 py-6 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-background-dark font-bold text-xl shadow-sm">
-                {userName.charAt(0)}
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Welcome back, {userName}!</h2>
-                <p className="text-sm text-slate-500">Manage your profile and find the perfect internship.</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-slate-600">Current Status:</span>
-              {isAvailable ? (
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200">
-                  <CheckCircle2 size={14} />
-                  Available for Internship
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-600 rounded-full text-xs font-bold border border-slate-300">
-                  Not Looking
-                </div>
-              )}
-              <Link 
-                to="/account" 
-                className="text-xs font-bold text-primary hover:underline ml-2"
-              >
-                Change Status
-              </Link>
-              {studentId && (
-                <>
-                  <div className="h-4 w-px bg-slate-200 mx-1"></div>
-                  <Link 
-                    to={`/student/${studentId}`}
-                    className="text-xs font-bold text-slate-600 hover:text-primary transition-colors"
-                  >
-                    View Public Profile
-                  </Link>
-                </>
-              )}
-              </div>
-
-          </div>
-        </section>
-      )}
-
       <section className="bg-white py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-100">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6">

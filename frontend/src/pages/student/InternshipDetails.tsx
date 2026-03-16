@@ -67,9 +67,14 @@ export default function InternshipDetails() {
 
   const salaryText = () => {
     if (!internship) return 'Unpaid';
-    if (!internship.stipend || internship.stipend === 0) return 'Unpaid';
+    const stipend = Number(internship.stipend);
+    if (!stipend || stipend === 0) return 'Unpaid';
     return `${internship.stipend_currency || '$'}${internship.stipend}/mo`;
   };
+
+  const internshipType = internship?.work_mode || internship?.type || 'Internship';
+  const internshipDuration = internship?.duration_months ?? internship?.duration ?? 'Variable';
+  const applicationDeadline = internship?.application_deadline || internship?.deadline;
 
   const getPostedTime = (dateStr: string) => {
     try {
@@ -144,7 +149,7 @@ export default function InternshipDetails() {
               referrerPolicy="no-referrer"
             />
             <span className="absolute left-6 bottom-6 bg-[#3b82f6] text-white text-base font-bold px-5 py-2 rounded-full uppercase tracking-wide shadow-lg">
-              {internship.type.replace('-', ' ')}
+              {internshipType.replace('-', ' ')}
             </span>
           </div>
         </div>
@@ -171,6 +176,9 @@ export default function InternshipDetails() {
                   <Clock3 size={18} /> Posted {getPostedTime(internship.created_at)}
                 </span>
               </div>
+              <div className="mt-2 text-sm text-slate-500">
+                {internshipType.replace('-', ' ')} • {internship.location}
+              </div>
             </div>
           </div>
         </div>
@@ -184,17 +192,17 @@ export default function InternshipDetails() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Location</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.location} ({internship.work_mode})</p>
+                <p className="text-sm font-semibold text-slate-800">{internship.location} ({internship.work_mode || internship.type})</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
                 <Clock3 size={20} />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Duration</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.duration_months ? `${internship.duration_months} Months` : 'Variable'}</p>
+                <p className="text-sm font-semibold text-slate-800">{internshipDuration && internshipDuration !== 'Variable' ? `${internshipDuration} Months` : 'Variable'}</p>
               </div>
             </div>
 
@@ -214,11 +222,13 @@ export default function InternshipDetails() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Deadline</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.application_deadline ? new Date(internship.application_deadline).toLocaleDateString() : 'Open Until Filled'}</p>
+                <p className="text-sm font-semibold text-slate-800">{applicationDeadline ? new Date(applicationDeadline).toLocaleDateString() : 'Open Until Filled'}</p>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Content Section */}
 
         {/* Content Section */}
         <div className="px-6 md:px-8 py-10">
@@ -304,7 +314,7 @@ export default function InternshipDetails() {
           <div className="flex items-center gap-4">
              <div className="hidden sm:block">
               <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">Apply By</p>
-              <p className="text-lg font-bold text-slate-900">{internship.application_deadline ? new Date(internship.application_deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Always Open'}</p>
+              <p className="text-lg font-bold text-slate-900">{applicationDeadline ? new Date(applicationDeadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Always Open'}</p>
             </div>
           </div>
           <button

@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
+    host: process.env.DB_HOST || '127.0.0.1',
     port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
@@ -32,12 +32,18 @@ const createDatabaseIfNotExists = async () => {
     const tempConfig = { ...dbConfig, database: undefined };
     let connection;
     try {
+        console.log(`Connecting to MySQL at ${tempConfig.host}:${tempConfig.port} to ensure database exists...`);
         connection = await mysql.createConnection(tempConfig);
         await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
         console.log(`Database '${dbConfig.database}' ensured to exist`);
         await connection.end();
     } catch (error) {
-        console.error('Error creating database:', error.message);
+        console.error('Error in createDatabaseIfNotExists:', error.message);
+        if (error.code === 'ETIMEDOUT') {
+            console.error('CONNECTION TIMEOUT: Is the MySQL server running?');
+        } else if (error.code === 'ECONNREFUSED') {
+            console.error('CONNECTION REFUSED: Check if MySQL is running on port ' + dbConfig.port);
+        }
         if (connection) await connection.end();
     }
 };

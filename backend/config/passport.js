@@ -7,10 +7,11 @@ let usersColumnsPromise;
 
 async function getUsersColumns() {
   if (!usersColumnsPromise) {
-    // Use queryRaw to get [results, fields] format
-    const [rows] = await db.queryRaw("SHOW COLUMNS FROM users");
-    
-    usersColumnsPromise = Promise.resolve(new Set(rows.map((row) => row.Field)))
+    usersColumnsPromise = db
+      .query("SHOW COLUMNS FROM users")
+      .then(([rows]) => {
+        return new Set(rows.map((row) => row.Field));
+      })
       .catch((error) => {
         // Avoid caching a rejected promise forever after transient DB failures.
         usersColumnsPromise = null;
@@ -43,8 +44,7 @@ async function upsertOAuthUser({ name, email, googleId = null, githubId = null }
     throw new Error("Missing users.name/full_name column. Add one to your database schema.");
   }
 
-  // Use queryRaw to get [rows, fields] format
-  let [rows] = await db.queryRaw(
+  let [rows] = await db.query(
     `SELECT * FROM users WHERE ${idField} = ?`,
     [idValue]
   );
@@ -54,7 +54,7 @@ async function upsertOAuthUser({ name, email, googleId = null, githubId = null }
   }
 
   if (email) {
-    [rows] = await db.queryRaw("SELECT * FROM users WHERE email = ?", [email]);
+    [rows] = await db.query("SELECT * FROM users WHERE email = ?", [email]);
     if (rows.length > 0) {
       const user = rows[0];
       await db.query(
@@ -82,8 +82,7 @@ async function upsertOAuthUser({ name, email, googleId = null, githubId = null }
   }
 
   const placeholders = insertFields.map(() => "?").join(", ");
-  // Use query (not queryRaw) for INSERT - returns result object directly
-  const result = await db.query(
+  const [result] = await db.query(
     `INSERT INTO users (${insertFields.join(", ")}) VALUES (${placeholders})`,
     insertValues
   );
@@ -154,9 +153,8 @@ passport.serializeUser((user, done) => {
 });
 
 passport.deserializeUser(async (id, done) => {
-    // Use queryRaw to get [rows, fields] format
-    const [rows] = await db.queryRaw("SELECT * FROM users WHERE id = ?", [id]);
-    done(null, rows[0]);
+  let [rows] = await db.query("SELECT * FROM users WHERE id = ?", [id]);
+  done(null, rows[0]);
 });
 
 module.exports = passport;

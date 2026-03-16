@@ -17,13 +17,6 @@ class MigrationRunner {
 
     async connect() {
         try {
-            // First, try to connect without database to create it if needed
-            const tempConfig = { ...this.dbConfig, database: undefined };
-            const tempConn = await mysql.createConnection(tempConfig);
-            await tempConn.execute(`CREATE DATABASE IF NOT EXISTS \`${this.dbConfig.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-            await tempConn.end();
-            console.log(`✅ Database '${this.dbConfig.database}' ensured to exist`);
-
             this.connection = await mysql.createConnection(this.dbConfig);
             console.log('✅ Connected to database');
         } catch (error) {
@@ -83,7 +76,7 @@ class MigrationRunner {
             await this.connection.beginTransaction();
             
             // Execute the migration SQL
-            await this.connection.query(sql);
+            await this.connection.execute(sql);
             
             // Record the migration
             await this.connection.execute(

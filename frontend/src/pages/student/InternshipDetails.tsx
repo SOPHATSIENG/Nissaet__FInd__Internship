@@ -67,7 +67,8 @@ export default function InternshipDetails() {
 
   const salaryText = () => {
     if (!internship) return 'Unpaid';
-    if (!internship.stipend || internship.stipend === 0) return 'Unpaid';
+    const stipend = Number(internship.stipend);
+    if (!stipend || stipend === 0) return 'Unpaid';
     return `${internship.stipend_currency || '$'}${internship.stipend}/mo`;
   };
 

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   LayoutGrid, 
   X, 
@@ -18,11 +19,12 @@ import {
   Settings2,
   Tag,
   Clock,
-  ExternalLink,
-  Check
+  DollarSign,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import api from '../../api/axios';
 
 const AVAILABLE_ICONS = [
   { name: 'LayoutGrid', icon: LayoutGrid },
@@ -35,47 +37,68 @@ const AVAILABLE_ICONS = [
   { name: 'Database', icon: Database },
   { name: 'PenTool', icon: PenTool },
   { name: 'Search', icon: SearchIcon },
+  { name: 'DollarSign', icon: DollarSign },
+  { name: 'Shield', icon: Shield },
 ];
 
-const INITIAL_JOB_CATEGORIES = [
-  { id: '1', name: 'Software Development', description: 'Web, mobile, and desktop app development.', icon: 'Code', count: 145 },
-  { id: '2', name: 'Digital Marketing', description: 'SEO, SEM, social media, and content strategy.', icon: 'Megaphone', count: 82 },
-  { id: '3', name: 'Business Admin', description: 'Management, HR, and office operations.', icon: 'Briefcase', count: 64 },
-  { id: '4', name: 'UI/UX Design', description: 'User interface and experience design.', icon: 'Palette', count: 42 },
-  { id: '5', name: 'Data Science', description: 'Machine learning and data analysis.', icon: 'Database', count: 28 },
-  { id: '6', name: 'Cybersecurity', description: 'Network security and ethical hacking.', icon: 'Shield', count: 15 },
-];
+const normalizeIconName = (value?: string) => {
+  if (!value) return 'LayoutGrid';
+  const normalized = value
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/_/g, '-')
+    .toLowerCase();
 
-const INITIAL_SKILLS = [
-  { id: '1', name: 'React.js', category: 'Software Development', popularity: 'High' },
-  { id: '2', name: 'Node.js', category: 'Software Development', popularity: 'High' },
-  { id: '3', name: 'SEO', category: 'Digital Marketing', popularity: 'Medium' },
-  { id: '4', name: 'Figma', category: 'UI/UX Design', popularity: 'High' },
-  { id: '5', name: 'Project Management', category: 'Business Admin', popularity: 'Medium' },
-  { id: '6', name: 'Python', category: 'Software Development', popularity: 'High' },
-  { id: '7', name: 'Adobe XD', category: 'UI/UX Design', popularity: 'Medium' },
-  { id: '8', name: 'Google Ads', category: 'Digital Marketing', popularity: 'High' },
-];
+  const map: Record<string, string> = {
+    'layoutgrid': 'LayoutGrid',
+    'layout-grid': 'LayoutGrid',
+    'code': 'Code',
+    'megaphone': 'Megaphone',
+    'briefcase': 'Briefcase',
+    'palette': 'Palette',
+    'cpu': 'Cpu',
+    'globe': 'Globe',
+    'database': 'Database',
+    'pen-tool': 'PenTool',
+    'pentool': 'PenTool',
+    'search': 'Search',
+    'dollar-sign': 'DollarSign',
+    'dollarsign': 'DollarSign',
+    'shield': 'Shield',
+  };
 
-const INITIAL_JOB_TYPES = [
-  { id: '1', name: 'Full-time', description: 'Standard 40-hour work week.' },
-  { id: '2', name: 'Part-time', description: 'Less than 30 hours per week.' },
-  { id: '3', name: 'Internship', description: 'Temporary position for students.' },
-  { id: '4', name: 'Remote', description: 'Work from anywhere.' },
-  { id: '5', name: 'Contract', description: 'Project-based employment.' },
-];
+  if (map[normalized]) return map[normalized];
+
+  const matched = AVAILABLE_ICONS.find(
+    (icon) => icon.name.toLowerCase() === normalized
+  );
+  return matched ? matched.name : 'LayoutGrid';
+};
+
+const formatDateLabel = (value?: string) => {
+  if (!value) return 'No update data';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'No update data';
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+};
 
 export const CategoryManagement = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'Job Categories' | 'Skills' | 'Job Types'>('Job Categories');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [relatedItems, setRelatedItems] = useState<any[]>([]);
+  const [isRelatedLoading, setIsRelatedLoading] = useState(false);
   
   // Data States
-  const [jobCategories, setJobCategories] = useState(INITIAL_JOB_CATEGORIES);
-  const [skills, setSkills] = useState(INITIAL_SKILLS);
-  const [jobTypes, setJobTypes] = useState(INITIAL_JOB_TYPES);
+  const [jobCategories, setJobCategories] = useState<any[]>([]);
+  const [skills, setSkills] = useState<any[]>([]);
+  const [jobTypes, setJobTypes] = useState<any[]>([]);
 
   // Form States for New Category
   const [newName, setNewName] = useState('');
@@ -84,67 +107,166 @@ export const CategoryManagement = () => {
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [newSkillCategory, setNewSkillCategory] = useState('Software Development');
 
+  const fetchAllData = async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      const [categoriesRes, skillsRes, jobTypesRes] = await Promise.all([
+        api.adminGetCategories(),
+        api.adminGetSkills(),
+        api.adminGetJobTypes(),
+      ]);
+
+      const categories = (categoriesRes?.categories || []).map((item: any) => ({
+        ...item,
+        id: String(item.id),
+        icon: normalizeIconName(item.icon),
+        count: Number(item.listings_count || 0),
+      }));
+
+      const skillsData = (skillsRes?.skills || []).map((item: any) => ({
+        ...item,
+        id: String(item.id),
+        popularity: item.popularity || 'Low',
+      }));
+
+      const types = (jobTypesRes?.jobTypes || []).map((item: any) => ({
+        ...item,
+        id: String(item.id || item.name),
+        name: item.name ? item.name.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase()) : '',
+        count: Number(item.count || 0),
+      }));
+
+      setJobCategories(categories);
+      setSkills(skillsData);
+      setJobTypes(types);
+
+      if (categories.length > 0) {
+        setNewSkillCategory((prev) => {
+          const exists = categories.some((cat: any) => cat.name === prev);
+          return exists ? prev : categories[0].name;
+        });
+      }
+    } catch (error: any) {
+      setErrorMessage(error?.message || 'Failed to load category data.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  useEffect(() => {
+    const loadRelated = async () => {
+      if (!selectedDetailItem) return;
+      if (activeTab !== 'Job Categories' && activeTab !== 'Skills') return;
+
+      setIsRelatedLoading(true);
+      try {
+        if (activeTab === 'Job Categories') {
+          const res = await api.adminGetCategoryInternships(selectedDetailItem.id);
+          setRelatedItems(res?.internships || []);
+        } else if (activeTab === 'Skills') {
+          const res = await api.adminGetSkillInternships(selectedDetailItem.id);
+          setRelatedItems(res?.internships || []);
+        }
+      } catch (error) {
+        setRelatedItems([]);
+      } finally {
+        setIsRelatedLoading(false);
+      }
+    };
+
+    loadRelated();
+  }, [activeTab, selectedDetailItem]);
+
   const filteredData = useMemo(() => {
     const query = searchQuery.toLowerCase();
     if (activeTab === 'Job Categories') {
-      return jobCategories.filter(c => c.name.toLowerCase().includes(query) || c.description.toLowerCase().includes(query));
+      return jobCategories.filter(c => c.name.toLowerCase().includes(query) || (c.description || '').toLowerCase().includes(query));
     } else if (activeTab === 'Skills') {
-      return skills.filter(s => s.name.toLowerCase().includes(query) || s.category.toLowerCase().includes(query));
+      return skills.filter(s => s.name.toLowerCase().includes(query) || (s.category || '').toLowerCase().includes(query));
     } else {
-      return jobTypes.filter(t => t.name.toLowerCase().includes(query) || t.description.toLowerCase().includes(query));
+      return jobTypes.filter(t => (t.name || '').toLowerCase().includes(query) || (t.description || '').toLowerCase().includes(query));
     }
   }, [activeTab, searchQuery, jobCategories, skills, jobTypes]);
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName) return;
+    if (!newName || activeTab === 'Job Types') return;
 
-    if (editingItem) {
-      // Update existing item
-      if (activeTab === 'Job Categories') {
-        setJobCategories(jobCategories.map(c => c.id === editingItem.id ? { ...c, name: newName, description: newDescription, icon: selectedIconName } : c));
-      } else if (activeTab === 'Skills') {
-        setSkills(skills.map(s => s.id === editingItem.id ? { ...s, name: newName, category: newSkillCategory } : s));
+    setIsSaving(true);
+    setErrorMessage('');
+    try {
+      if (editingItem) {
+        if (activeTab === 'Job Categories') {
+          await api.adminUpdateCategory(editingItem.id, {
+            name: newName,
+            description: newDescription,
+            icon: selectedIconName,
+          });
+        } else if (activeTab === 'Skills') {
+          await api.adminUpdateSkill(editingItem.id, {
+            name: newName,
+            description: newDescription,
+            category: newSkillCategory,
+          });
+        }
       } else {
-        setJobTypes(jobTypes.map(t => t.id === editingItem.id ? { ...t, name: newName, description: newDescription } : t));
+        if (activeTab === 'Job Categories') {
+          await api.adminCreateCategory({
+            name: newName,
+            description: newDescription,
+            icon: selectedIconName,
+          });
+        } else if (activeTab === 'Skills') {
+          await api.adminCreateSkill({
+            name: newName,
+            description: newDescription,
+            category: newSkillCategory,
+          });
+        }
       }
-    } else {
-      // Create new item
-      const id = Math.random().toString(36).substr(2, 9);
-      if (activeTab === 'Job Categories') {
-        setJobCategories([...jobCategories, { id, name: newName, description: newDescription, icon: selectedIconName, count: 0 }]);
-      } else if (activeTab === 'Skills') {
-        setSkills([...skills, { id, name: newName, category: newSkillCategory, popularity: 'Low' }]);
-      } else {
-        setJobTypes([...jobTypes, { id, name: newName, description: newDescription }]);
-      }
+
+      await fetchAllData();
+      setSelectedDetailItem(null);
+      setNewName('');
+      setNewDescription('');
+      setSelectedIconName('LayoutGrid');
+      setIsAddModalOpen(false);
+      setEditingItem(null);
+    } catch (error: any) {
+      setErrorMessage(error?.message || 'Unable to save changes.');
+    } finally {
+      setIsSaving(false);
     }
-
-    // Reset Form
-    setNewName('');
-    setNewDescription('');
-    setSelectedIconName('LayoutGrid');
-    setIsAddModalOpen(false);
-    setEditingItem(null);
   };
 
   const handleEdit = (item: any) => {
     setEditingItem(item);
     setNewName(item.name);
     setNewDescription(item.description || '');
-    setSelectedIconName(item.icon || 'LayoutGrid');
+    setSelectedIconName(normalizeIconName(item.icon || 'LayoutGrid'));
     setNewSkillCategory(item.category || 'Software Development');
     setIsAddModalOpen(true);
     setSelectedDetailItem(null);
   };
 
-  const handleDelete = (id: string) => {
-    if (activeTab === 'Job Categories') {
-      setJobCategories(jobCategories.filter(c => c.id !== id));
-    } else if (activeTab === 'Skills') {
-      setSkills(skills.filter(s => s.id !== id));
-    } else {
-      setJobTypes(jobTypes.filter(t => t.id !== id));
+  const handleDelete = async (id: string) => {
+    if (activeTab === 'Job Types') return;
+    setErrorMessage('');
+    try {
+      if (activeTab === 'Job Categories') {
+        await api.adminDeleteCategory(id);
+      } else if (activeTab === 'Skills') {
+        await api.adminDeleteSkill(id);
+      }
+      await fetchAllData();
+      setSelectedDetailItem(null);
+    } catch (error: any) {
+      setErrorMessage(error?.message || 'Unable to delete item.');
     }
   };
 
@@ -158,8 +280,20 @@ export const CategoryManagement = () => {
           <p className="text-text-secondary text-base">Manage job industries, required skills, and employment types.</p>
         </div>
         <button 
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-all shadow-md transform active:scale-95"
+          onClick={() => {
+            setEditingItem(null);
+            setNewName('');
+            setNewDescription('');
+            setSelectedIconName('LayoutGrid');
+            setIsAddModalOpen(true);
+          }}
+          disabled={activeTab === 'Job Types'}
+          className={cn(
+            "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md transform active:scale-95",
+            activeTab === 'Job Types'
+              ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          )}
         >
           <Plus className="size-4" />
           Add New {activeTab.slice(0, -1)}
@@ -220,10 +354,27 @@ export const CategoryManagement = () => {
         </button>
       </div>
 
+      {errorMessage && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {errorMessage}
+        </div>
+      )}
+
       {/* Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <AnimatePresence mode="popLayout">
-          {filteredData.map((item: any) => (
+        {isLoading ? (
+          <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4 text-center">
+            <div className="size-16 rounded-full bg-background border border-border flex items-center justify-center">
+              <LayoutGrid className="size-8 text-text-secondary opacity-40" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h3 className="text-lg font-bold text-text-primary">Loading categories...</h3>
+              <p className="text-sm text-text-secondary">Fetching the latest data from your database.</p>
+            </div>
+          </div>
+        ) : (
+          <AnimatePresence mode="popLayout">
+            {filteredData.map((item: any) => (
             <motion.div
               layout
               key={item.id}
@@ -251,13 +402,25 @@ export const CategoryManagement = () => {
                 <div className="flex items-center gap-1">
                   <button 
                     onClick={() => handleEdit(item)}
-                    className="p-2 text-text-secondary hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
+                    disabled={activeTab === 'Job Types'}
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      activeTab === 'Job Types'
+                        ? "text-text-secondary/40 cursor-not-allowed"
+                        : "text-text-secondary hover:text-primary hover:bg-primary/5"
+                    )}
                   >
                     <Edit2 className="size-4" />
                   </button>
                   <button 
                     onClick={() => handleDelete(item.id)}
-                    className="p-2 text-text-secondary hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    disabled={activeTab === 'Job Types'}
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      activeTab === 'Job Types'
+                        ? "text-text-secondary/40 cursor-not-allowed"
+                        : "text-text-secondary hover:text-red-500 hover:bg-red-50"
+                    )}
                   >
                     <Trash2 className="size-4" />
                   </button>
@@ -284,19 +447,28 @@ export const CategoryManagement = () => {
                 )}
               </div>
 
-              <div className="mt-auto pt-4 border-t border-border flex items-center justify-between">
+                <div className="mt-auto pt-4 border-t border-border flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {activeTab === 'Job Categories' ? (
                     <>
                       <Briefcase className="size-3 text-text-secondary" />
                       <span className="text-xs font-bold text-text-primary">{item.count} Listings</span>
                     </>
+                  ) : activeTab === 'Job Types' ? (
+                    <span className="text-xs text-text-secondary italic">{item.count} Active Listings</span>
                   ) : (
                     <span className="text-xs text-text-secondary italic">Active in system</span>
                   )}
                 </div>
                 <button 
-                  onClick={() => setSelectedDetailItem(item)}
+                  onClick={() => {
+                    if (activeTab === 'Job Categories') {
+                      navigate(`/admin/categories/details_list?categoryId=${item.id}`);
+                      return;
+                    }
+                    setRelatedItems([]);
+                    setSelectedDetailItem(item);
+                  }}
                   className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
                 >
                   View Details
@@ -304,10 +476,11 @@ export const CategoryManagement = () => {
                 </button>
               </div>
             </motion.div>
-          ))}
-        </AnimatePresence>
+            ))}
+          </AnimatePresence>
+        )}
 
-        {filteredData.length === 0 && (
+        {!isLoading && filteredData.length === 0 && (
           <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4 text-center">
             <div className="size-16 rounded-full bg-background border border-border flex items-center justify-center">
               <SearchIcon className="size-8 text-text-secondary opacity-20" />
@@ -328,7 +501,10 @@ export const CategoryManagement = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedDetailItem(null)}
+              onClick={() => {
+                setSelectedDetailItem(null);
+                setRelatedItems([]);
+              }}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
             />
             <motion.div 
@@ -364,7 +540,10 @@ export const CategoryManagement = () => {
                     </p>
                   </div>
                   <button 
-                    onClick={() => setSelectedDetailItem(null)}
+                    onClick={() => {
+                      setSelectedDetailItem(null);
+                      setRelatedItems([]);
+                    }}
                     className="p-2 text-text-secondary hover:text-text-primary hover:bg-background rounded-xl transition-all"
                   >
                     <X className="size-5" />
@@ -375,8 +554,10 @@ export const CategoryManagement = () => {
                   <div className="p-4 rounded-2xl bg-background border border-border flex flex-col gap-1">
                     <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Status</span>
                     <div className="flex items-center gap-2">
-                      <div className="size-2 rounded-full bg-primary animate-pulse" />
-                      <span className="text-sm font-bold text-text-primary">Active</span>
+                      <div className={cn("size-2 rounded-full animate-pulse", selectedDetailItem.is_active === 0 ? "bg-amber-500" : "bg-primary")} />
+                      <span className="text-sm font-bold text-text-primary">
+                        {selectedDetailItem.is_active === 0 ? 'Inactive' : 'Active'}
+                      </span>
                     </div>
                   </div>
                   <div className="p-4 rounded-2xl bg-background border border-border flex flex-col gap-1">
@@ -407,15 +588,95 @@ export const CategoryManagement = () => {
                   </div>
                 )}
 
+                {(activeTab === 'Job Categories' || activeTab === 'Skills') && (
+                  <div className="flex flex-col gap-4">
+                    <h3 className="text-xs font-black text-text-secondary uppercase tracking-widest flex items-center gap-2">
+                      <Briefcase className="size-3" />
+                      {activeTab === 'Job Categories' ? 'Active Internships in Category' : 'Internships Using This Skill'}
+                    </h3>
+                    <div className="rounded-2xl border border-border bg-background p-4">
+                      {isRelatedLoading ? (
+                        <p className="text-xs text-text-secondary">Loading internships...</p>
+                      ) : relatedItems.length === 0 ? (
+                        <p className="text-xs text-text-secondary italic">No internships found.</p>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {relatedItems.map((item) => (
+                            <div key={item.id} className="flex items-start justify-between gap-3">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold text-text-primary">{item.title}</span>
+                                <span className="text-[11px] text-text-secondary">
+                                  {item.company_name} • {item.location || 'No location'}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border border-border bg-surface text-text-secondary">
+                                {item.type || 'n/a'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'Job Categories' && (
+                  <div className="flex flex-col gap-4">
+                    <h3 className="text-xs font-black text-text-secondary uppercase tracking-widest flex items-center gap-2">
+                      <LayoutGrid className="size-3" /> All Job Categories
+                    </h3>
+                    <div className="rounded-2xl border border-border bg-background p-4">
+                      {jobCategories.length === 0 ? (
+                        <p className="text-xs text-text-secondary italic">No categories available.</p>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {jobCategories.map((cat) => (
+                            <div key={cat.id} className="flex items-start justify-between gap-3">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold text-text-primary">{cat.name}</span>
+                                <span className="text-[11px] text-text-secondary">
+                                  {cat.description || 'No description'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleEdit(cat)}
+                                  className="p-2 rounded-lg border border-border text-text-secondary hover:text-primary hover:bg-primary/5 transition-all"
+                                >
+                                  <Edit2 className="size-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(cat.id)}
+                                  className="p-2 rounded-lg border border-border text-text-secondary hover:text-red-500 hover:bg-red-50 transition-all"
+                                >
+                                  <Trash2 className="size-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-auto pt-6 border-t border-border flex items-center justify-between">
                   <div className="flex items-center gap-2 text-text-secondary">
                     <Clock className="size-3.5" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Last updated 2 days ago</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest">
+                      Last updated {formatDateLabel(selectedDetailItem.updated_at || selectedDetailItem.created_at)}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => handleEdit(selectedDetailItem)}
-                      className="p-2 rounded-xl border border-border hover:bg-background transition-all text-text-secondary hover:text-primary"
+                      disabled={activeTab === 'Job Types'}
+                      className={cn(
+                        "p-2 rounded-xl border border-border transition-all",
+                        activeTab === 'Job Types'
+                          ? "text-text-secondary/40 cursor-not-allowed"
+                          : "hover:bg-background text-text-secondary hover:text-primary"
+                      )}
                     >
                       <Edit2 className="size-4" />
                     </button>
@@ -424,7 +685,13 @@ export const CategoryManagement = () => {
                         handleDelete(selectedDetailItem.id);
                         setSelectedDetailItem(null);
                       }}
-                      className="p-2 rounded-xl border border-border hover:bg-red-50 transition-all text-text-secondary hover:text-red-500"
+                      disabled={activeTab === 'Job Types'}
+                      className={cn(
+                        "p-2 rounded-xl border border-border transition-all",
+                        activeTab === 'Job Types'
+                          ? "text-text-secondary/40 cursor-not-allowed"
+                          : "hover:bg-red-50 text-text-secondary hover:text-red-500"
+                      )}
                     >
                       <Trash2 className="size-4" />
                     </button>
@@ -466,6 +733,7 @@ export const CategoryManagement = () => {
                     setEditingItem(null);
                     setNewName('');
                     setNewDescription('');
+                    setShowIconPicker(false);
                   }}
                   className="p-2 text-text-secondary hover:text-text-primary hover:bg-background rounded-lg transition-all"
                 >
@@ -485,18 +753,18 @@ export const CategoryManagement = () => {
                   />
                 </div>
 
-                {activeTab !== 'Skills' ? (
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold text-text-primary">Description</label>
-                    <textarea 
-                      className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all shadow-inner resize-none" 
-                      placeholder="Explain what this covers..." 
-                      rows={3}
-                      value={newDescription}
-                      onChange={(e) => setNewDescription(e.target.value)}
-                    />
-                  </div>
-                ) : (
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-bold text-text-primary">Description</label>
+                  <textarea 
+                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all shadow-inner resize-none" 
+                    placeholder="Explain what this covers..." 
+                    rows={3}
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                  />
+                </div>
+
+                {activeTab === 'Skills' && (
                   <div className="flex flex-col gap-2">
                     <label className="text-sm font-bold text-text-primary">Associated Category</label>
                     <select 
@@ -566,16 +834,26 @@ export const CategoryManagement = () => {
                 <div className="flex items-center justify-end gap-3 mt-2">
                   <button 
                     type="button"
-                    onClick={() => setIsAddModalOpen(false)}
+                    onClick={() => {
+                      setIsAddModalOpen(false);
+                      setEditingItem(null);
+                      setNewName('');
+                      setNewDescription('');
+                      setShowIconPicker(false);
+                    }}
                     className="px-6 py-2.5 rounded-xl text-sm font-bold text-text-secondary hover:bg-background transition-colors"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="px-8 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all transform active:scale-95"
+                    disabled={isSaving}
+                    className={cn(
+                      "px-8 py-2.5 rounded-xl text-sm font-black shadow-lg transition-all transform active:scale-95",
+                      isSaving ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-primary text-white hover:opacity-90 hover:shadow-xl"
+                    )}
                   >
-                    {editingItem ? 'Save Changes' : `Create ${activeTab.slice(0, -1)}`}
+                    {isSaving ? 'Saving...' : (editingItem ? 'Save Changes' : `Create ${activeTab.slice(0, -1)}`)}
                   </button>
                 </div>
               </form>

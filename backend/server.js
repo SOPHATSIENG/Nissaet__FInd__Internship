@@ -42,12 +42,14 @@ const internshipRoutes = require('./routes/internshipRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const verificationRoutes = require('./routes/verificationRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/internships', internshipRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/verification', verificationRoutes);
 
 const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 5001;
 const PORT_RETRY_COUNT = Number.parseInt(process.env.PORT_RETRY_COUNT, 10) || 10;
@@ -64,6 +66,11 @@ const testDbConnection = async () => {
 };
 
 const startServer = async (port, attempt = 0) => {
+    try {
+        await db.initDatabase();
+    } catch (err) {
+        console.error('Failed to ensure database exists:', err.message);
+    }
     await testDbConnection();
     const server = app.listen(port, '0.0.0.0', () => {
         console.log(`Server running on port ${port} (all interfaces)`);

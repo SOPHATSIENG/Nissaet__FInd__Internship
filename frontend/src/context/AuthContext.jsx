@@ -8,7 +8,7 @@ const USER_STORAGE_KEY = 'nissaet_auth_user';
 
 const normalizeUser = (rawUser) => {
   if (!rawUser) return null;
-  const role = rawUser.role || rawUser.user_type || 'student';
+  const role = String(rawUser.role || rawUser.user_type || 'student').toLowerCase();
   return { ...rawUser, role, user_type: role };
 };
 
@@ -60,6 +60,17 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const syncUserFromApi = async () => {
+    try {
+      const data = await api.getCurrentUser();
+      const normalized = persistUser(data.user || data);
+      setUser(normalized);
+      return normalized;
+    } catch (error) {
+      return null;
+    }
+  };
+
   useEffect(() => {
     const restoreSession = async () => {
       const token = authStorage.getToken() || localStorage.getItem('token');
@@ -72,6 +83,9 @@ export const AuthProvider = ({ children }) => {
       const storedUser = getStoredUser();
       if (storedUser) {
         setUser(storedUser);
+        if (storedUser.role === 'company' && !storedUser.company_profile) {
+          await syncUserFromApi();
+        }
         setLoading(false);
         return;
       }
@@ -95,6 +109,7 @@ export const AuthProvider = ({ children }) => {
     const data = await api.login({ email, password });
     const normalizedUser = storeSession(data.token, data.user);
     setUser(normalizedUser);
+    await syncUserFromApi();
     return { user: normalizedUser, token: data.token };
   };
 
@@ -106,6 +121,7 @@ export const AuthProvider = ({ children }) => {
       
       const normalizedUser = storeSession(data.token, data.user);
       setUser(normalizedUser);
+      await syncUserFromApi();
       
       if (typeof navigate === 'function') {
         navigate('/login');
@@ -122,6 +138,7 @@ export const AuthProvider = ({ children }) => {
     const data = await api.socialLogin({ provider, ...payload });
     const normalizedUser = storeSession(data.token, data.user);
     setUser(normalizedUser);
+    await syncUserFromApi();
     return { user: normalizedUser, token: data.token };
   };
 

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { Login } from '../pages/auth/Login';
 import { AdminLogin } from '../pages/auth/AdminLogin';
 import { ForgotPassword } from '../pages/auth/ForgotPassword';
@@ -16,6 +17,7 @@ import Companies from '../pages/student/Companies';
 import CareerAdvice from '../pages/student/CareerAdvice';
 import AccountSettings from '../pages/account/AccountSettings';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
 
 import CompanyLayout from '../pages/Company/CompanyLayout';
 import Dashboard from '../pages/Company/Dashboard';
@@ -30,6 +32,7 @@ import Notifications from '../pages/Company/Notifications';
 import Billing from '../pages/Company/Billing';
 import StudentProfile from '../pages/Company/StudentProfile';
 import Evaluation from '../pages/Company/Evaluation';
+import VerificationPending from '../pages/Company/VerificationPending';
 
 import { Sidebar as AdminSidebar } from '../components/Admin_components/Sidebar';
 import { Header as AdminHeader } from '../components/Admin_components/Header';
@@ -37,6 +40,7 @@ import { Dashboard as AdminDashboard } from '../pages/Admine/Dashboard';
 import { UserManagement } from '../pages/Admine/UserManagement';
 import { TeamManagement } from '../pages/Admine/TeamManagement';
 import { CategoryManagement } from '../pages/Admine/CategoryManagement';
+import { CategoryDetailsList } from '../pages/Admine/CategoryDetailsList';
 import { Reports } from '../pages/Admine/Reports';
 import { Verification } from '../pages/Admine/Verification';
 import { SettingsPage } from '../pages/Admine/Settings';
@@ -76,8 +80,10 @@ function RequireStudentArea({ children }) {
 }
 
 function RequireCompany({ children }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, updateUser } = useAuth();
   const location = useLocation();
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
@@ -85,6 +91,47 @@ function RequireCompany({ children }) {
 
   if (user?.role !== 'company') {
     return <Navigate to="/" replace />;
+  }
+
+  const isVerified = user?.company_profile?.is_verified === 1 || user?.company_profile?.is_verified === true;
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'company') return;
+    if (isVerified || checked) return;
+
+    let isMounted = true;
+    const refreshStatus = async () => {
+      try {
+        setChecking(true);
+        const data = await api.getCurrentUser();
+        if (!isMounted) return;
+        updateUser(data.user || data);
+      } catch (error) {
+        // leave user as-is, verification page can still show status
+      } finally {
+        if (isMounted) {
+          setChecking(false);
+          setChecked(true);
+        }
+      }
+    };
+
+    refreshStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, user?.role, isVerified, checked, updateUser]);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#137fec]"></div>
+      </div>
+    );
+  }
+
+  if (!isVerified && location.pathname !== '/company/verification') {
+    return <Navigate to="/company/verification" replace />;
   }
 
   return children;
@@ -130,6 +177,7 @@ const AdminLayout = () => {
   const getTitle = (path) => {
     if (path.includes('/admin/users')) return 'User Management';
     if (path.includes('/admin/team')) return 'Team Management';
+    if (path.includes('/admin/categories/details_list')) return 'Category Details';
     if (path.includes('/admin/categories')) return 'Category Management';
     if (path.includes('/admin/reports')) return 'Platform Reports';
     if (path.includes('/admin/verification')) return 'Verification Center';
@@ -217,6 +265,7 @@ export default function WebRouter() {
           <Route path="billing" element={<Billing />} />
           <Route path="student/:id" element={<StudentProfile />} />
           <Route path="evaluation/:id" element={<Evaluation />} />
+          <Route path="verification" element={<VerificationPending />} />
         </Route>
 
         {/* Admin Area */}
@@ -234,6 +283,7 @@ export default function WebRouter() {
           <Route path="users" element={<UserManagement />} />
           <Route path="team" element={<TeamManagement />} />
           <Route path="categories" element={<CategoryManagement />} />
+          <Route path="categories/details_list" element={<CategoryDetailsList />} />
           <Route path="reports" element={<Reports />} />
           <Route path="verification" element={<Verification />} />
           <Route path="settings" element={<SettingsPage />} />

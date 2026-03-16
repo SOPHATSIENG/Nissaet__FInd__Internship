@@ -17,7 +17,8 @@ const getJwtSecret = () => {
 
 const normalizeRole = (role) => {
     if (!role) return DEFAULT_ROLE;
-    return VALID_ROLES.has(role) ? role : DEFAULT_ROLE;
+    const normalized = String(role).toLowerCase();
+    return VALID_ROLES.has(normalized) ? normalized : DEFAULT_ROLE;
 };
 
 const normalizeSkillLevel = (skillLevel) => {
@@ -192,6 +193,23 @@ const createStudentProfile = async (conn, userId, payload = {}) => {
     }
 };
 
+const getStudentIdByUserId = async (conn, userId) => {
+    try {
+        const [rows] = await conn.execute(
+            'SELECT id FROM students WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+            [userId]
+        );
+        return rows[0]?.id || null;
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+        const [rows] = await conn.execute(
+            'SELECT id FROM students WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+            [userId]
+        );
+        return rows[0]?.id || null;
+    }
+};
+
 const createCompanyProfile = async (conn, userId, payload = {}) => {
     const companySize = VALID_COMPANY_SIZES.has(payload.company_size) ? payload.company_size : null;
     try {
@@ -231,6 +249,145 @@ const createCompanyProfile = async (conn, userId, payload = {}) => {
                 payload.contact_phone || payload.phone || null
             ]
         );
+    }
+};
+
+const getCompanyIdByUserId = async (conn, userId) => {
+    try {
+        const [rows] = await conn.execute(
+            'SELECT id FROM companies WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+            [userId]
+        );
+        return rows[0]?.id || null;
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+        const [rows] = await conn.execute(
+            'SELECT id FROM companies WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+            [userId]
+        );
+        return rows[0]?.id || null;
+    }
+};
+
+const getCompanyDetailsById = async (conn, companyId) => {
+    try {
+        const [rows] = await conn.execute(
+            `SELECT
+                name AS company_name,
+                industry,
+                website,
+                headquarters AS location
+             FROM companies
+             WHERE id = ?
+             LIMIT 1`,
+            [companyId]
+        );
+        return rows[0] || {};
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+        const [rows] = await conn.execute(
+            `SELECT
+                company_name,
+                industry,
+                website,
+                location
+             FROM companies
+             WHERE id = ?
+             LIMIT 1`,
+            [companyId]
+        );
+        return rows[0] || {};
+    }
+};
+
+const createCompanyVerificationRequest = async (conn, userId, payload = {}) => {
+    try {
+        const companyId = await getCompanyIdByUserId(conn, userId);
+        if (!companyId) return;
+
+        const [existing] = await conn.execute(
+            `SELECT id, status FROM company_verifications
+             WHERE company_id = ?
+             ORDER BY submitted_at DESC
+             LIMIT 1`,
+            [companyId]
+        );
+
+        if (existing?.[0] && existing[0].status === 'pending') {
+            return;
+        }
+
+        const companyDetails = await getCompanyDetailsById(conn, companyId);
+        const documents = Array.isArray(payload.documents) ? payload.documents : [];
+        await conn.execute(
+            `INSERT INTO company_verifications
+             (company_id, user_id, status, documents, notes, company_name, industry, website, location, contact_email, contact_person)
+             VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                companyId,
+                userId,
+                JSON.stringify(documents),
+                payload.notes || null,
+                payload.company_name || payload.name || payload.full_name || companyDetails.company_name || null,
+                payload.industry || companyDetails.industry || null,
+                payload.website || companyDetails.website || null,
+                payload.location || companyDetails.location || null,
+                payload.email || null,
+                payload.contact_person || payload.full_name || null
+            ]
+        );
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return;
+        }
+        throw error;
+    }
+};
+
+const createStudentVerificationRequest = async (conn, userId, payload = {}) => {
+    try {
+        const studentId = await getStudentIdByUserId(conn, userId);
+        if (!studentId) return;
+
+        const [existing] = await conn.execute(
+            `SELECT id, status FROM student_verifications
+             WHERE student_id = ?
+             ORDER BY submitted_at DESC
+             LIMIT 1`,
+            [studentId]
+        );
+
+        if (existing?.[0] && existing[0].status === 'pending') {
+            return;
+        }
+
+        const [studentDetailsRows] = await conn.execute(
+            'SELECT university, major, graduation_year FROM students WHERE id = ? LIMIT 1',
+            [studentId]
+        );
+        const studentDetails = studentDetailsRows?.[0] || {};
+        const documents = Array.isArray(payload.documents) ? payload.documents : [];
+        await conn.execute(
+            `INSERT INTO student_verifications
+             (student_id, user_id, status, documents, notes, student_name, university, major, graduation_year, contact_email)
+             VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                studentId,
+                userId,
+                JSON.stringify(documents),
+                payload.notes || null,
+                payload.full_name || payload.name || null,
+                payload.university || studentDetails.university || null,
+                payload.major || studentDetails.major || null,
+                payload.graduation_year || studentDetails.graduation_year || null,
+                payload.email || null
+            ]
+        );
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return;
+        }
+        throw error;
     }
 };
 
@@ -291,8 +448,10 @@ const register = async (req, res) => {
 
         if (normalizedRole === 'student') {
             await createStudentProfile(conn, userId, req.body);
+            await createStudentVerificationRequest(conn, userId, req.body);
         } else if (normalizedRole === 'company') {
             await createCompanyProfile(conn, userId, req.body);
+            await createCompanyVerificationRequest(conn, userId, req.body);
         }
 
         await conn.commit();
@@ -346,6 +505,7 @@ const registerStudentComplete = async (req, res) => {
 
         const userId = userResult.insertId;
         await createStudentProfile(conn, userId, req.body);
+        await createStudentVerificationRequest(conn, userId, req.body);
 
         if (Array.isArray(skills) && skills.length > 0) {
             for (const skill of skills) {
@@ -427,6 +587,7 @@ const registerCompanyComplete = async (req, res) => {
 
         const userId = userResult.insertId;
         await createCompanyProfile(conn, userId, req.body);
+        await createCompanyVerificationRequest(conn, userId, req.body);
 
         await conn.commit();
 
@@ -597,8 +758,14 @@ const socialLogin = async (req, res) => {
 
         if (normalizedRole === 'student') {
             await createStudentProfile(conn, userId, req.body);
+            await createStudentVerificationRequest(conn, userId, req.body);
         } else if (normalizedRole === 'company') {
             await createCompanyProfile(conn, userId, {
+                ...req.body,
+                company_name: companyName || req.body.company_name,
+                location
+            });
+            await createCompanyVerificationRequest(conn, userId, {
                 ...req.body,
                 company_name: companyName || req.body.company_name,
                 location

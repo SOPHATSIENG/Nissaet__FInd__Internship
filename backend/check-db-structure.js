@@ -12,7 +12,14 @@ async function checkDBStructure() {
     
     console.log('\nChecking actual application data...');
     const appData = await db.query(`
-      SELECT a.*, u.full_name, u.email, u.phone, s.university, i.title as internship_title, c.company_name
+      SELECT
+        a.*,
+        u.full_name,
+        u.email,
+        u.phone,
+        s.university,
+        i.title as internship_title,
+        COALESCE(c.name, c.company_name) AS company_name
       FROM applications a 
       JOIN students s ON a.student_id = s.id
       JOIN users u ON s.user_id = u.id

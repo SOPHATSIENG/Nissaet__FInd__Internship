@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Filter, MoreVertical, Edit2, ShieldAlert, CheckCircle, Eye, Check, X, ChevronDown, Activity, ArrowUpDown, ArrowUp, ArrowDown, Shield, Lock, Unlock, Save, Calendar, Clock, Trash2, ShieldCheck, ShieldX, User, Building2, UserCheck, UserX, Fingerprint, Key, Download, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../api/axios';
 
@@ -40,6 +40,7 @@ const INITIAL_ROLE_PERMISSIONS: Record<string, string[]> = {
 
 export const UserManagement = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [userList, setUserList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -75,6 +76,7 @@ export const UserManagement = () => {
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -126,11 +128,19 @@ export const UserManagement = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (userToDelete) {
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
+    try {
+      setIsDeleting(true);
+      await api.adminDeleteUser(userToDelete.id);
       setUserList(prev => prev.filter(user => user.id !== userToDelete.id));
       setIsDeleteModalOpen(false);
       setUserToDelete(null);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to delete user.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -206,6 +216,17 @@ export const UserManagement = () => {
     setCurrentPage(1);
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const role = params.get('role');
+    if (!role) return;
+
+    const normalized = role.toLowerCase();
+    if (normalized === 'student') handleTabChange('Students');
+    if (normalized === 'company') handleTabChange('Companies');
+    if (normalized === 'admin') handleTabChange('Admins');
+  }, [location.search]);
+
   const filteredAndSortedUsers = useMemo(() => {
     let result = userList.filter(user => {
       const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -227,7 +248,7 @@ export const UserManagement = () => {
     });
 
     return result;
-  }, [searchQuery, selectedRoles, selectedStatuses, sortBy]);
+  }, [userList, searchQuery, selectedRoles, selectedStatuses, sortBy]);
 
   const paginatedUsers = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -1008,9 +1029,10 @@ export const UserManagement = () => {
                   </button>
                   <button 
                     onClick={confirmDelete}
+                    disabled={isDeleting}
                     className="flex-1 px-6 py-3 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
                   >
-                    Delete User
+                    {isDeleting ? 'Deleting...' : 'Delete User'}
                   </button>
                 </div>
               </div>

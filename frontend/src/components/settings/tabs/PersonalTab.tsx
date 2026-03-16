@@ -227,7 +227,7 @@ export function PersonalTab({data, onSaved}: PersonalTabProps) {
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="bg-emerald-500 disabled:opacity-70 hover:bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-emerald-500/20"
+                className="bg-blue-600 disabled:opacity-70 hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-blue-600/20"
               >
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>

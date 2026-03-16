@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {
@@ -34,13 +34,17 @@ async function request(path, options = {}) {
     }
   }
 
+  const fullUrl = `${API_BASE_URL}${path}`;
+  console.log('Full request URL:', fullUrl);
+
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(fullUrl, {
       method,
       headers: requestHeaders,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
+    console.log('Response status:', response.status, response.statusText);
   } catch (error) {
     console.error('Network Error:', error);
     throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Please ensure the backend server is running and accessible at this address.`);
@@ -216,11 +220,17 @@ export const api = {
     ).toString();
     
     const queryString = query ? `&${query}` : '';
-    return request(`/internships/featured-companies?limit=${limit}${queryString}`).then((data) => {
+    const url = `/internships/featured-companies?limit=${limit}${queryString}`;
+    console.log('Making request to:', `${API_BASE_URL}${url}`);
+    return request(url).then((data) => {
+      console.log('Response received:', data);
       if (Array.isArray(data)) {
         return { companies: data };
       }
       return data;
+    }).catch((error) => {
+      console.error('Error in getFeaturedCompanies:', error);
+      throw error;
     });
   },
 
@@ -268,6 +278,20 @@ export const api = {
 
     return request(`/applications/company/mine${query ? `?${query}` : ''}`, { auth: true });
   },
+  getMyApplications(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/applications/my${query ? `?${query}` : ''}`, { auth: true });
+  },
+
+  // NEW: Get all applications without authentication (for debugging)
+  getAllApplications() {
+    return request('/applications/all');
+  },
 
   getApplicants() {
     return request('/applications', { auth: true });
@@ -292,6 +316,94 @@ export const api = {
 
   adminGetStats() {
     return request('/admin/stats', { auth: true });
+  },
+
+  adminDeleteUser(id) {
+    return request(`/admin/users/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  adminGetCompanyVerifications() {
+    return request('/admin/verifications/company', { auth: true });
+  },
+
+  adminUpdateCompanyVerification(id, payload) {
+    return request(`/admin/verifications/company/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminGetStudentVerifications() {
+    return request('/admin/verifications/student', { auth: true });
+  },
+
+  adminUpdateStudentVerification(id, payload) {
+    return request(`/admin/verifications/student/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminGetCategories() {
+    return request('/admin/categories', { auth: true });
+  },
+
+  adminCreateCategory(payload) {
+    return request('/admin/categories', { method: 'POST', auth: true, body: payload });
+  },
+
+  adminUpdateCategory(id, payload) {
+    return request(`/admin/categories/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminDeleteCategory(id) {
+    return request(`/admin/categories/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  adminGetCategoryInternships(id) {
+    return request(`/admin/categories/${id}/internships`, { auth: true });
+  },
+
+  adminGetSkills() {
+    return request('/admin/skills', { auth: true });
+  },
+
+  adminCreateSkill(payload) {
+    return request('/admin/skills', { method: 'POST', auth: true, body: payload });
+  },
+
+  adminUpdateSkill(id, payload) {
+    return request(`/admin/skills/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminDeleteSkill(id) {
+    return request(`/admin/skills/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  adminGetSkillInternships(id) {
+    return request(`/admin/skills/${id}/internships`, { auth: true });
+  },
+
+  adminGetInternship(id) {
+    return request(`/admin/internships/${id}`, { auth: true });
+  },
+
+  adminUpdateInternship(id, payload) {
+    return request(`/admin/internships/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminFlagInternship(id, payload = {}) {
+    return request(`/admin/internships/${id}/flag`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminUnflagInternship(id) {
+    return request(`/admin/internships/${id}/unflag`, { method: 'PUT', auth: true });
+  },
+
+  adminGetJobTypes() {
+    return request('/admin/job-types', { auth: true });
+  },
+
+  companyCreateVerification(payload) {
+    return request('/verification/company', { method: 'POST', auth: true, body: payload });
+  },
+
+  companyGetVerificationRequests() {
+    return request('/verification/company/mine', { auth: true });
   },
 };
 

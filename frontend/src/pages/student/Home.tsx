@@ -58,42 +58,74 @@ export default function Home() {
       try {
         setLoading(true);
         setError("");
-        const [companiesRes, internshipsRes, profileRes, matchingRes] = await Promise.all([
-          api.getFeaturedCompanies(4),
-          api.getInternships({ limit: 100 }),
-          api.getProfileSettings().catch(() => null),
-          api.getMatchingInternships().catch(() => null),
-        ]);
-
-        if (!isMounted) {
-          return;
+        console.log('Starting to load dashboard data...');
+        
+        // Try each API call separately to identify which one fails
+        try {
+          console.log('Fetching featured companies...');
+          const companiesRes = await api.getFeaturedCompanies(4);
+          console.log('Featured companies response:', companiesRes);
+          setFeaturedCompanies(companiesRes.companies || []);
+        } catch (err) {
+          console.error('Featured companies failed:', err);
+          throw new Error(`Failed to load featured companies: ${err.message}`);
         }
 
-        setFeaturedCompanies(companiesRes.companies || []);
-        setLatestInternships(internshipsRes.internships || []);
-        setMatchingInternships(matchingRes?.internships || []);
+        try {
+          console.log('Fetching internships...');
+          const internshipsRes = await api.getInternships({ limit: 100 });
+          console.log('Internships response:', internshipsRes);
+          setLatestInternships(internshipsRes.internships || []);
+        } catch (err) {
+          console.error('Internships failed:', err);
+          throw new Error(`Failed to load internships: ${err.message}`);
+        }
 
-        if (profileRes?.settings) {
+        try {
+          console.log('Fetching profile settings...');
+          const profileRes = await api.getProfileSettings().catch(() => null);
+          console.log('Profile response:', profileRes);
           setProfileSkills(
-            Array.isArray(profileRes.settings.skills)
+            Array.isArray(profileRes?.settings?.skills)
               ? profileRes.settings.skills
                   .map((skill: { name?: string }) => (skill?.name || "").trim().toLowerCase())
                   .filter(Boolean)
               : []
           );
-          setIsAvailable(!!profileRes.settings.education?.is_available);
-          setUserName(profileRes.settings.personal?.full_name || "");
-          
-          // Search for student_id in profile response if available, or fetch it
-          const studentRes = await api.getApplicants().catch(() => null);
-          if (studentRes?.applications?.length > 0) {
-            setStudentId(studentRes.applications[0].student_id);
+
+          if (profileRes?.settings) {
+            setIsAvailable(!!profileRes.settings.education?.is_available);
+            setUserName(profileRes.settings.personal?.full_name || "");
+
+            try {
+              const studentRes = await api.getApplicants().catch(() => null);
+              if (studentRes?.applications?.length > 0) {
+                setStudentId(studentRes.applications[0].student_id);
+              }
+            } catch {
+              // Ignore if student ID lookup fails
+            }
           }
+        } catch (err) {
+          console.error('Profile settings failed:', err);
+          // Don't throw error for profile, it's optional
         }
+
+        try {
+          console.log('Fetching matching internships...');
+          const matchingRes = await api.getMatchingInternships().catch(() => null);
+          console.log('Matching internships response:', matchingRes);
+          setMatchingInternships(matchingRes?.internships || []);
+        } catch (err) {
+          console.error('Matching internships failed:', err);
+          // Don't throw error for matching, it's optional
+        }
+
       } catch (requestError) {
         if (!isMounted) {
           return;
         }
+        console.error('Dashboard data load failed:', requestError);
         setError(
           requestError instanceof Error
             ? requestError.message
@@ -131,26 +163,32 @@ export default function Home() {
   const companiesForDisplay = useMemo(() => featuredCompanies.slice(0, 4), [featuredCompanies]);
   
   const internshipsForDisplay = useMemo(() => {
-    // If we have matching internships from the API, use them
-    if (matchingInternships.length > 0) {
-      return matchingInternships.slice(0, 4);
+    console.log('Profile Skills:', profileSkills);
+    console.log('Latest Internships:', latestInternships);
+    
+    // Only show internships if student has registered skills
+    if (profileSkills.length === 0) {
+      console.log('No skills registered, showing empty list');
+      return []; // Don't show any internships if no skills are registered
     }
 
-    // Fallback to local matching if profile skills are available but API matching failed or returned empty
-    if (profileSkills.length > 0) {
-      return latestInternships
-        .filter((job) => {
-          const target = normalizeText(
-            `${job.title} ${job.description || ""} ${job.requirements || ""}`
-          );
-          return profileSkills.some((skill) => matchesSkill(target, skill));
-        })
-        .slice(0, 4);
-    }
-
-    // Otherwise show latest internships
-    return latestInternships.slice(0, 4);
-  }, [latestInternships, matchingInternships, profileSkills]);
+    // Always use local matching based on student's registered skills
+    const matched = latestInternships
+      .filter((job) => {
+        const target = normalizeText(
+          `${job.title} ${job.description || ""} ${job.requirements || ""}`
+        );
+        const hasMatch = profileSkills.some((skill) => matchesSkill(target, skill));
+        if (hasMatch) {
+          console.log(`Match found: ${job.title} matches skill`);
+        }
+        return hasMatch;
+      })
+      .slice(0, 4);
+    
+    console.log('Matched internships:', matched);
+    return matched;
+  }, [latestInternships, profileSkills]);
 
   const salaryText = (item: Internship) => {
     if (item.salary_type === "unpaid" || (item.stipend === 0)) {
@@ -257,54 +295,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Recommended Section (Only if available) */}
-      {internshipsForDisplay.length > 0 && (
-        <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
-          <div className="max-w-[1440px] mx-auto">
-            <div className="flex justify-between items-center mb-10">
-              <h2 className="text-3xl font-bold">Recommended for You</h2>
-              <Link to="/internships" className="text-[#3b82f6] font-bold hover:underline">
-                View All Matching
-              </Link>
-            </div>
-            <div className="grid md:grid-cols-2 gap-6">
-              {internshipsForDisplay.map((job) => (
-                <Link
-                  to={`/internships/${job.id}`}
-                  key={job.id}
-                  className="bg-[#f6f8f7] p-6 rounded-2xl border border-gray-100 hover:border-[#3b82f6] transition-colors flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={job.company_logo || `https://picsum.photos/seed/rec-${job.id}/48/48`}
-                      alt={job.company_name}
-                      className="w-12 h-12 rounded-lg object-cover"
-                    />
-                    <div>
-                      <h3 className="font-bold text-lg group-hover:text-[#3b82f6] transition-colors">
-                        {job.title}
-                      </h3>
-                      <p className="text-gray-500 text-sm mb-2">
-                        {job.company_name} | {job.location}
-                      </p>
-                      <div className="flex gap-2">
-                        <span className="bg-white text-gray-600 text-xs px-2 py-1 rounded">
-                          {salaryText(job)}
-                        </span>
-                        <span className="bg-white text-gray-600 text-xs px-2 py-1 rounded">
-                          {job.work_mode}
-                        </span>
-                      </div>
-                    </div>
-                    <ArrowRight className="text-gray-300 group-hover:text-[#3b82f6] transition-colors" />
-                  </div>
-                </Link>
-                ))}
-            </div>
-          </div>
-        </section>
-      )}
-
+      
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#f6f8f7]">
         <div className="max-w-[1440px] mx-auto text-center">
           <h2 className="text-3xl font-bold mb-3">How Nissaet Works</h2>
@@ -410,7 +401,7 @@ export default function Home() {
         <div className="max-w-[1440px] mx-auto">
           <div className="flex justify-between items-center mb-10">
             <h2 className="text-3xl font-bold">
-              {matchingInternships.length > 0 ? "Internships Matching Your Skills" : "Find Matching Internships"}
+              {profileSkills.length > 0 ? "Internships Matching Your Skills" : "Register Skills to Find Matching Internships"}
             </h2>
             <Link
               to="/internships"
@@ -424,9 +415,9 @@ export default function Home() {
             <div className="flex justify-center py-10">
               <Loader2 className="w-10 h-10 animate-spin text-[#3b82f6]" />
             </div>
-          ) : (
+          ) : internshipsForDisplay.length > 0 ? (
             <div className="grid md:grid-cols-2 gap-6">
-              {latestInternships.map((job) => (
+              {internshipsForDisplay.map((job) => (
                 <Link
                   to={`/internships/${job.id}`}
                   key={job.id}
@@ -459,12 +450,11 @@ export default function Home() {
                 </Link>
               ))}
             </div>
-          )}
-            {!loading && !internshipsForDisplay.length && (
+          ) : (
             <p className="text-sm text-gray-500 mt-4">
               {profileSkills.length 
-                ? "No internships match your skills yet. Check back soon!"
-                : "Browse all internships to find your perfect match."}
+                ? "No internships match your registered skills. Try adding more skills or check back later!"
+                : "Please register your skills in your profile to see matching internships."}
             </p>
           )}
         </div>

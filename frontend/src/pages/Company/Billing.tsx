@@ -35,7 +35,7 @@ export default function Billing() {
           <p className="text-slate-500 mt-1">Manage your subscription plan, payment methods, and view billing history.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium border border-green-200">
+          <div className="hidden md:flex items-center px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium border border-green-200">
             <CheckCircle2 size={14} className="mr-1" />
             Verified Account
           </div>
@@ -53,7 +53,7 @@ export default function Billing() {
                   to={item.path}
                   className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
                     isActive 
-                      ? 'bg-white text-primary shadow-sm border border-slate-200' 
+                      ? 'bg-white text-blue-600 shadow-sm border border-slate-200' 
                       : 'text-slate-600 hover:bg-white hover:text-slate-900'
                   }`}
                 >
@@ -107,7 +107,7 @@ export default function Billing() {
                 <button className="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-all">
                   Cancel Subscription
                 </button>
-                <button className="px-4 py-2 text-sm font-semibold text-background-dark bg-primary rounded-lg shadow-sm hover:bg-primary-dark transition-all">
+                <button className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700 transition-all">
                   Change Plan
                 </button>
               </div>

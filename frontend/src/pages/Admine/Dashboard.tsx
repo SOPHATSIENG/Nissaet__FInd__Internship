@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Users, 
-  Building2, 
-  Briefcase, 
+import { useNavigate } from 'react-router-dom';
+import {
+  Users,
+  Building2,
+  Briefcase,
   CheckCircle,
   TrendingUp,
   ArrowRight
 } from 'lucide-react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   AreaChart,
   Area
@@ -41,23 +42,27 @@ const growthData = [
 
 export const Dashboard = () => {
   const { settings } = useProfile();
+  const navigate = useNavigate();
   const [stats, setStats] = useState([
-    { label: 'Total Students', value: '0', trend: '0%', icon: Users },
-    { label: 'Total Companies', value: '0', trend: '0%', icon: Building2 },
-    { label: 'Active Internships', value: '0', trend: '0%', icon: Briefcase },
-    { label: 'Total Placed', value: '0', trend: '0%', icon: CheckCircle },
+    { label: 'Total Students', value: '0', trend: '0%', icon: Users, link: '/admin/users?role=student' },
+    { label: 'Total Companies', value: '0', trend: '0%', icon: Building2, link: '/admin/users?role=company' },
+    { label: 'Active Internships', value: '0', trend: '0%', icon: Briefcase, link: '/admin/reports' },
+    { label: 'Total Users', value: '0', trend: '0%', icon: CheckCircle, link: '/admin/users' },
   ]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pendingCompanies, setPendingCompanies] = useState<any[]>([]);
+  const [isPendingLoading, setIsPendingLoading] = useState(true);
+  const [pendingError, setPendingError] = useState('');
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const data = await api.adminGetStats();
         setStats([
-          { label: 'Total Students', value: data.students.toLocaleString(), trend: '12%', icon: Users },
-          { label: 'Total Companies', value: data.companies.toLocaleString(), trend: '5%', icon: Building2 },
-          { label: 'Active Internships', value: data.internships.toLocaleString(), trend: '8%', icon: Briefcase },
-          { label: 'Total Users', value: data.totalUsers.toLocaleString(), trend: '15%', icon: CheckCircle },
+          { label: 'Total Students', value: data.students.toLocaleString(), trend: '12%', icon: Users, link: '/admin/users?role=student' },
+          { label: 'Total Companies', value: data.companies.toLocaleString(), trend: '5%', icon: Building2, link: '/admin/users?role=company' },
+          { label: 'Active Internships', value: data.internships.toLocaleString(), trend: '8%', icon: Briefcase, link: '/admin/reports' },
+          { label: 'Total Users', value: data.totalUsers.toLocaleString(), trend: '15%', icon: CheckCircle, link: '/admin/users' },
         ]);
       } catch (error) {
         console.error('Failed to fetch stats:', error);
@@ -67,7 +72,27 @@ export const Dashboard = () => {
     };
     fetchStats();
   }, []);
-  
+
+  useEffect(() => {
+    const fetchPending = async () => {
+      try {
+        setIsPendingLoading(true);
+        setPendingError('');
+        const data = await api.adminGetCompanyVerifications();
+        const pending = Array.isArray(data)
+          ? data.filter((item) => item.status === 'pending')
+          : [];
+        setPendingCompanies(pending);
+      } catch (error) {
+        console.error('Failed to fetch pending verifications:', error);
+        setPendingError('Failed to load pending verifications.');
+      } finally {
+        setIsPendingLoading(false);
+      }
+    };
+    fetchPending();
+  }, []);
+
   const colorMap: Record<string, string> = {
     emerald: '#10b981',
     blue: '#3b82f6',
@@ -76,8 +101,31 @@ export const Dashboard = () => {
     rose: '#f43f5e',
     amber: '#f59e0b',
   };
-  
+
   const accentHex = colorMap[settings.accentColor] || colorMap.emerald;
+
+  const handlePendingAction = async (id: number, status: 'approved' | 'rejected') => {
+    try {
+      await api.adminUpdateCompanyVerification(id, { status });
+      setPendingCompanies(prev => prev.filter(item => item.id !== id));
+    } catch (error) {
+      console.error('Failed to update verification:', error);
+      setPendingError('Failed to update verification.');
+    }
+  };
+
+  const pendingCompaniesDisplay = pendingCompanies.map((company) => {
+    const name = company.company_name || company.user_name || 'Company';
+    return {
+      id: company.id,
+      name,
+      date: company.submitted_at
+        ? new Date(company.submitted_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+        : 'Unknown date',
+      initial: name.charAt(0).toUpperCase(),
+      color: 'bg-slate-200'
+    };
+  });
 
   return (
     <div className="flex flex-col gap-6 p-8 overflow-y-auto no-scrollbar">
@@ -88,7 +136,11 @@ export const Dashboard = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5 shadow-sm hover:shadow-md transition-shadow">
+          <button
+            key={stat.label}
+            onClick={() => stat.link && navigate(stat.link)}
+            className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5 shadow-sm hover:shadow-md transition-shadow text-left"
+          >
             <div className="flex justify-between items-start">
               <p className="text-text-secondary text-sm font-medium">{stat.label}</p>
               <stat.icon className="text-primary size-6" />
@@ -99,7 +151,7 @@ export const Dashboard = () => {
                 <TrendingUp className="size-3 mr-0.5" /> {stat.trend}
               </span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -153,34 +205,49 @@ export const Dashboard = () => {
         <div className="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-border bg-surface shadow-sm">
           <div className="flex items-center justify-between p-6 border-b border-border">
             <h3 className="text-text-primary text-lg font-bold">Pending Company Verifications</h3>
-            <button className="text-sm font-medium text-primary hover:opacity-80 transition-colors">View All</button>
+            <button
+              onClick={() => navigate('/admin/verification')}
+              className="text-sm font-medium text-primary hover:opacity-80 transition-colors"
+            >
+              View All
+            </button>
           </div>
           <div className="flex flex-col p-2">
-            {[
-              { name: 'Khmer Tech Solutions', date: 'Oct 24, 2023', initial: 'K', color: 'bg-slate-200' },
-              { name: 'Angkor Digital Agency', date: 'Oct 23, 2023', initial: 'A', color: 'bg-indigo-100' },
-              { name: 'Phnom Penh Logistics', date: 'Oct 22, 2023', initial: 'P', color: 'bg-orange-100' },
-            ].map((company) => (
-              <div key={company.name} className="flex items-center justify-between p-4 hover:bg-background rounded-lg transition-colors group">
-                <div className="flex items-center gap-4">
-                  <div className={cn("size-10 rounded-full flex items-center justify-center text-slate-600 font-bold text-lg", company.color)}>
-                    {company.initial}
+            {isPendingLoading ? (
+              <div className="p-4 text-sm text-text-secondary">Loading pending verifications...</div>
+            ) : pendingError ? (
+              <div className="p-4 text-sm text-rose-600">{pendingError}</div>
+            ) : pendingCompaniesDisplay.length === 0 ? (
+              <div className="p-4 text-sm text-text-secondary">No pending company verifications.</div>
+            ) : (
+              pendingCompaniesDisplay.map((company) => (
+                <div key={company.id} className="flex items-center justify-between p-4 hover:bg-background rounded-lg transition-colors group">
+                  <div className="flex items-center gap-4">
+                    <div className={cn("size-10 rounded-full flex items-center justify-center text-slate-600 font-bold text-lg", company.color)}>
+                      {company.initial}
+                    </div>
+                    <div className="flex flex-col">
+                      <p className="text-sm font-bold text-text-primary">{company.name}</p>
+                      <p className="text-xs text-text-secondary">Applied on {company.date}</p>
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <p className="text-sm font-bold text-text-primary">{company.name}</p>
-                    <p className="text-xs text-text-secondary">Applied on {company.date}</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handlePendingAction(company.id, 'rejected')}
+                      className="size-8 flex items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+                    >
+                      <span className="text-xs font-bold">x</span>
+                    </button>
+                    <button
+                      onClick={() => handlePendingAction(company.id, 'approved')}
+                      className="size-8 flex items-center justify-center rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
+                    >
+                      <span className="text-xs font-bold">v</span>
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button className="size-8 flex items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors">
-                    <span className="text-xs font-bold">✕</span>
-                  </button>
-                  <button className="size-8 flex items-center justify-center rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-colors">
-                    <span className="text-xs font-bold">✓</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 

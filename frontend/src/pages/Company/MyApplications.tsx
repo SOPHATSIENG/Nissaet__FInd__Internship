@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Briefcase, 
   Calendar, 
@@ -13,57 +13,58 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
+import api from '../../api/axios';
 
 export default function MyApplications() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
 
-  const [applications] = useState([
-    {
-      id: 1,
-      internshipTitle: 'Marketing Intern',
-      company: 'ABA Bank',
-      location: 'Phnom Penh',
-      appliedDate: 'Oct 24, 2023',
-      status: 'Pending Review',
-      duration: '3 Months',
-      type: 'Full-time',
-      logo: 'https://picsum.photos/seed/aba/100/100'
-    },
-    {
-      id: 2,
-      internshipTitle: 'Web Developer',
-      company: 'Smart Axiata',
-      location: 'Remote',
-      appliedDate: 'Oct 20, 2023',
-      status: 'Shortlisted',
-      duration: '6 Months',
-      type: 'Part-time',
-      logo: 'https://picsum.photos/seed/smart/100/100'
-    },
-    {
-      id: 3,
-      internshipTitle: 'Graphic Designer',
-      company: 'Canadia Bank',
-      location: 'Siem Reap',
-      appliedDate: 'Oct 15, 2023',
-      status: 'Rejected',
-      duration: '3 Months',
-      type: 'Internship',
-      logo: 'https://picsum.photos/seed/canadia/100/100'
-    },
-    {
-      id: 4,
-      internshipTitle: 'Data Analyst',
-      company: 'Chip Mong Group',
-      location: 'Phnom Penh',
-      appliedDate: 'Oct 10, 2023',
-      status: 'Pending Review',
-      duration: '4 Months',
-      type: 'Full-time',
-      logo: 'https://picsum.photos/seed/chipmong/100/100'
-    }
-  ]);
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const normalizeStatus = (status?: string) => {
+    if (!status) return 'Open';
+    const value = status.toLowerCase();
+    if (value === 'active') return 'Open';
+    if (value === 'inactive' || value === 'closed') return 'Closed';
+    return status;
+  };
+
+  useEffect(() => {
+    const fetchMyApplications = async () => {
+      try {
+        setLoading(true);
+        const response = await api.getCompanyInternships();
+        const apps = response?.internships || [];
+        const mapped = apps.map((app) => {
+          const postedAt = app.created_at;
+          const postedDate = postedAt
+            ? new Date(postedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '';
+          const companyName = app.company_name || 'Your Company';
+          return {
+            id: app.id,
+            internshipTitle: app.title,
+            company: companyName,
+            location: app.location || 'Remote',
+            appliedDate: postedDate,
+            status: normalizeStatus(app.status),
+            duration: app.duration_months ? `${app.duration_months} Months` : 'N/A',
+            type: app.type || 'Internship',
+            logo: app.company_logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&background=0D8ABC&color=fff`
+          };
+        });
+        setApplications(mapped);
+      } catch (error) {
+        console.error('Error fetching applications:', error);
+        setApplications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMyApplications();
+  }, []);
 
   const filteredApplications = applications.filter(app => {
     const matchesSearch = app.internshipTitle.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -74,14 +75,14 @@ export default function MyApplications() {
 
   const getStatusStyles = (status: string) => {
     switch (status) {
-      case 'Shortlisted':
+      case 'Open':
         return {
           bg: 'bg-emerald-50',
           text: 'text-emerald-700',
           ring: 'ring-emerald-600/20',
           icon: CheckCircle
         };
-      case 'Rejected':
+      case 'Closed':
         return {
           bg: 'bg-red-50',
           text: 'text-red-700',
@@ -102,8 +103,8 @@ export default function MyApplications() {
     <div className="max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-8">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">My Applications</h1>
-          <p className="text-slate-500 mt-1">Track the status of your internship applications in one place.</p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">My Internship Posts</h1>
+          <p className="text-slate-500 mt-1">Track all internships your company has posted.</p>
         </div>
       </div>
 
@@ -114,7 +115,7 @@ export default function MyApplications() {
           </div>
           <input 
             type="text"
-            placeholder="Search by role or company..."
+            placeholder="Search by internship title..."
             className="block w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-primary focus:border-primary"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -128,15 +129,22 @@ export default function MyApplications() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="All">All Statuses</option>
-            <option value="Pending Review">Pending Review</option>
-            <option value="Shortlisted">Shortlisted</option>
-            <option value="Rejected">Rejected</option>
+            <option value="Open">Open</option>
+            <option value="Closed">Closed</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {filteredApplications.length > 0 ? (
+        {loading ? (
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-12 text-center">
+            <div className="h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+              <Briefcase size={32} />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">Loading applications...</h3>
+            <p className="text-slate-500 mt-1">Please wait a moment.</p>
+          </div>
+        ) : filteredApplications.length > 0 ? (
           filteredApplications.map((app, index) => {
             const styles = getStatusStyles(app.status);
             const StatusIcon = styles.icon;
@@ -180,7 +188,7 @@ export default function MyApplications() {
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Calendar size={16} className="text-slate-400" />
-                        Applied on {app.appliedDate}
+                        Posted on {app.appliedDate}
                       </div>
                     </div>
                   </div>
@@ -191,7 +199,7 @@ export default function MyApplications() {
                     </button>
                     <Link 
                       to={`/evaluation/${app.id}`}
-                      className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-background-dark bg-primary rounded-lg shadow-sm hover:bg-primary-dark transition-all"
+                      className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700 transition-all"
                     >
                       Check Evaluation
                       <ChevronRight size={16} />
@@ -206,7 +214,7 @@ export default function MyApplications() {
             <div className="h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
               <Briefcase size={32} />
             </div>
-            <h3 className="text-lg font-bold text-slate-900">No applications found</h3>
+            <h3 className="text-lg font-bold text-slate-900">No internship posts found</h3>
             <p className="text-slate-500 mt-1">Try adjusting your search or filter to find what you're looking for.</p>
             <button 
               onClick={() => {

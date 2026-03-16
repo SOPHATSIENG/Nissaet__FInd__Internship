@@ -670,11 +670,14 @@ const getCompanyInternships = async (req, res) => {
         const sql = `
             SELECT
                 i.*,
+                c.name AS company_name,
+                c.logo AS company_logo,
                 COUNT(a.id) AS applicant_count
             FROM internships i
+            JOIN companies c ON i.company_id = c.id
             LEFT JOIN applications a ON i.id = a.internship_id
             WHERE i.company_id = ?
-            GROUP BY i.id
+            GROUP BY i.id, c.name, c.logo
             ORDER BY i.created_at DESC
         `;
 

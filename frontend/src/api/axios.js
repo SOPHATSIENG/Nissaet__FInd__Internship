@@ -274,6 +274,15 @@ export const api = {
 
     return request(`/applications/company/mine${query ? `?${query}` : ''}`, { auth: true });
   },
+  getMyApplications(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/applications/my${query ? `?${query}` : ''}`, { auth: true });
+  },
 
   // NEW: Get all applications without authentication (for debugging)
   getAllApplications() {

@@ -66,6 +66,7 @@ const getMyApplications = async (req, res) => {
                 i.company_id,
                 i.location,
                 i.type AS work_mode,
+                i.duration_months AS duration,
                 i.stipend AS salary,
                 i.application_deadline AS deadline,
                 c.name AS company_name,

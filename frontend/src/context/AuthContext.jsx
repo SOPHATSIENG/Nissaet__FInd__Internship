@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import api, { authStorage } from '../api/axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+
 const AuthContext = createContext();
 const USER_STORAGE_KEY = 'nissaet_auth_user';
 
@@ -96,16 +98,24 @@ export const AuthProvider = ({ children }) => {
     return { user: normalizedUser, token: data.token };
   };
 
-  const register = async (payload) => {
-    const data = await api.register(payload);
-    const normalizedUser = storeSession(data.token, data.user);
-    setUser(normalizedUser);
-
-    localStorage.removeItem('registrationStep1');
-    localStorage.removeItem('registrationStep2');
-    localStorage.removeItem('registrationRole');
-
-    return { user: normalizedUser, token: data.token };
+  const register = async (userData, navigate) => {
+    console.log('Starting registration with data:', userData);
+    try {
+      const data = await api.register(userData);
+      console.log('Registration response:', data);
+      
+      const normalizedUser = storeSession(data.token, data.user);
+      setUser(normalizedUser);
+      
+      if (typeof navigate === 'function') {
+        navigate('/login');
+      }
+      
+      return { user: normalizedUser, token: data.token };
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
   };
 
   const socialLogin = async (provider, payload) => {

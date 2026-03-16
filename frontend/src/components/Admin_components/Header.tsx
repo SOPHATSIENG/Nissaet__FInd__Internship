@@ -109,14 +109,14 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
       <div className="flex items-center gap-6">
         {children || (
           <>
-            <div className="relative group hidden md:block">
+            {/* <div className="relative group hidden md:block">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary size-5 transition-colors group-focus-within:text-primary" />
               <input 
                 className="h-11 w-72 rounded-2xl border border-border bg-background pl-12 pr-4 text-sm text-text-primary placeholder:text-text-secondary outline-none transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 placeholder="Search anything..." 
                 type="text"
               />
-            </div>
+            </div> */}
             
             {/* Notification Dropdown */}
             <div className="relative" ref={notificationRef}>

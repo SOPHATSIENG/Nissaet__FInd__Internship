@@ -30,27 +30,30 @@ export const Sidebar = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
 
+  const navBase =
+    "flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[15px] font-semibold transition-all duration-200 group";
+  const navActive = "bg-blue-600 text-white shadow-lg shadow-blue-600/30";
+  const navInactive = "text-slate-500 hover:bg-slate-50 hover:text-slate-700";
+
   return (
-    <aside className="w-72 bg-white border-r border-gray-200 flex flex-col h-full shrink-0 fixed left-0 top-0 z-20">
+    <aside className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col h-full shrink-0 fixed left-0 top-0 z-20">
       <div className="p-8">
         <div className="flex items-center gap-3">
-          <div className="size-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/20">
-            <ShieldCheck className="text-white size-6" />
+          <div className="size-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+            <ShieldCheck className="text-blue-600 size-6" />
           </div>
           <span className="text-xl font-black text-gray-800 tracking-tight">ADMIN PRO</span>
         </div>
       </div>
 
-      <nav className="flex-1 px-4 py-4 flex flex-col gap-1.5 overflow-y-auto no-scrollbar">
+      <nav className="flex flex-1 min-h-0 flex-col gap-3 px-4 py-4 overflow-y-auto no-scrollbar">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) => cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 group",
-              isActive
-                ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
-                : "text-gray-500 hover:bg-slate-50 hover:text-gray-800 hover:shadow-sm hover:shadow-black/5 hover:scale-[1.02]"
+              navBase,
+              isActive ? navActive : navInactive
             )}
           >
             <item.icon className="size-5" />

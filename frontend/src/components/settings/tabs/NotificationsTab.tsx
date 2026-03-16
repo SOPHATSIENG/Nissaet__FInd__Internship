@@ -114,7 +114,7 @@ export function NotificationsTab({data, onSaved}: NotificationsTabProps) {
                   </div>
                   <button
                     className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
-                      form[section.emailKey] ? 'bg-emerald-500' : 'bg-slate-200'
+                      form[section.emailKey] ? 'bg-blue-600' : 'bg-slate-200'
                     }`}
                     onClick={() => toggleValue(section.emailKey)}
                     type="button"
@@ -135,7 +135,7 @@ export function NotificationsTab({data, onSaved}: NotificationsTabProps) {
                   </div>
                   <button
                     className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
-                      form[section.inAppKey] ? 'bg-emerald-500' : 'bg-slate-200'
+                      form[section.inAppKey] ? 'bg-blue-600' : 'bg-slate-200'
                     }`}
                     onClick={() => toggleValue(section.inAppKey)}
                     type="button"
@@ -162,7 +162,7 @@ export function NotificationsTab({data, onSaved}: NotificationsTabProps) {
                         onClick={() => setForm((previous) => ({...previous, frequency}))}
                         className={`px-8 py-2 text-sm font-medium rounded-lg transition-all ${
                           frequency === form.frequency
-                            ? 'bg-white text-emerald-600 shadow-sm'
+                            ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
                         }`}
                       >
@@ -185,7 +185,7 @@ export function NotificationsTab({data, onSaved}: NotificationsTabProps) {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="bg-emerald-500 disabled:opacity-70 hover:bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-emerald-500/20"
+            className="bg-blue-600 disabled:opacity-70 hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-blue-600/20"
           >
             {saving ? 'Saving...' : 'Save Preferences'}
           </button>

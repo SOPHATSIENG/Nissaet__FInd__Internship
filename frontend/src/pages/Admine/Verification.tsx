@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Filter, 
   ArrowUpDown, 
@@ -21,43 +21,18 @@ import {
   Eye,
   GraduationCap,
   Briefcase,
-  ArrowLeft
+  ArrowLeft,
+  MapPin,
+  User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useProfile } from '@/context/ProfileContext';
-
-const queue = [
-  { type: 'company', name: 'Tech Innovations Cambodia', id: '#CMP-2023-001', industry: 'Software Dev', date: 'Oct 24, 2023', time: '10:30 AM', docs: ['Business License', 'Tax ID'], initial: 'T', color: 'bg-indigo-500/10 text-indigo-500', status: 'pending', email: 'hr@techinnovations.kh' },
-  { type: 'student', name: 'Sok Chamroeun', id: '#STU-2023-442', industry: 'Computer Science', date: 'Oct 23, 2023', time: '02:15 PM', docs: ['Student ID', 'Enrollment Letter'], initial: 'S', color: 'bg-emerald-500/10 text-emerald-500', status: 'pending', email: 'sok.chamroeun@itc.edu.kh', university: 'Institute of Technology of Cambodia' },
-  { type: 'company', name: 'Khmer Organic Farms', id: '#CMP-2023-042', industry: 'Agriculture', date: 'Oct 23, 2023', time: '02:15 PM', docs: ['Registration'], initial: 'K', color: 'bg-orange-500/10 text-orange-500', status: 'approved', email: 'contact@khmerorganic.com' },
-  { type: 'student', name: 'Keo Sophea', id: '#STU-2023-551', industry: 'Digital Economy', date: 'Oct 22, 2023', time: '09:45 AM', docs: ['ID Card'], initial: 'K', color: 'bg-blue-500/10 text-blue-500', status: 'pending', email: 'sophea.keo@niptict.edu.kh', university: 'NIPTICT' },
-  { type: 'company', name: 'Royal Angkor Media', id: '#CMP-2023-055', industry: 'Marketing', date: 'Oct 22, 2023', time: '09:45 AM', docs: ['Docs.zip'], initial: 'R', color: 'bg-purple-500/10 text-purple-500', status: 'pending', email: 'admin@royalangkor.media' },
-  { type: 'student', name: 'Lim Veasna', id: '#STU-2023-889', industry: 'Finance', date: 'Oct 21, 2023', time: '04:10 PM', docs: ['Transcript'], initial: 'L', color: 'bg-rose-500/10 text-rose-500', status: 'pending', email: 'veasna.lim@rupp.edu.kh', university: 'Royal University of Phnom Penh' },
-  { type: 'company', name: 'Sihanoukville Logistics', id: '#CMP-2023-089', industry: 'Logistics', date: 'Oct 21, 2023', time: '04:10 PM', docs: ['Permit', 'ID'], initial: 'S', color: 'bg-rose-500/10 text-rose-500', status: 'rejected', email: 'info@shvlogistics.kh' },
-  { type: 'company', name: 'Battambang Finance', id: '#CMP-2023-092', industry: 'Finance', date: 'Oct 20, 2023', time: '11:00 AM', docs: [], initial: 'B', color: 'bg-teal-500/10 text-teal-500', status: 'pending', email: 'support@btbfinance.com' },
-];
-
-const recentlyVerified = [
-  { name: 'Phnom Penh Daily', initial: 'P', color: 'bg-blue-500/10 text-blue-500', admin: 'Sophea', time: '2 hours ago' },
-  { name: 'Cambodia Beer Co.', initial: 'C', color: 'bg-red-500/10 text-red-500', admin: 'Dara', time: 'Yesterday' },
-  { name: 'Smart Axiata', initial: 'S', color: 'bg-emerald-500/10 text-emerald-500', admin: 'System', time: 'Oct 20, 2023' },
-  { name: 'Vattanak Bank', initial: 'V', color: 'bg-slate-500/10 text-slate-500', admin: 'Sophea', time: 'Oct 19, 2023' },
-];
-
-const verificationHistory = [
-  { id: 'H1', entity: 'Phnom Penh Daily', type: 'company', action: 'approved', admin: 'Sophea', date: 'Mar 05, 2026', time: '02:30 PM', notes: 'All documents verified and tax ID matches records.' },
-  { id: 'H2', entity: 'Cambodia Beer Co.', type: 'company', action: 'rejected', admin: 'Dara', date: 'Mar 04, 2026', time: '11:15 AM', notes: 'Missing tax compliance certificate and business license expired.' },
-  { id: 'H3', entity: 'Smart Axiata', type: 'company', action: 'approved', admin: 'System', date: 'Mar 02, 2026', time: '09:00 AM', notes: 'Auto-approved via government API integration.' },
-  { id: 'H4', entity: 'Vattanak Bank', type: 'company', action: 'approved', admin: 'Sophea', date: 'Mar 01, 2026', time: '04:45 PM', notes: 'Manual review completed. All credentials valid.' },
-  { id: 'H5', entity: 'Sok Chamroeun', type: 'student', action: 'rejected', admin: 'Dara', date: 'Feb 28, 2026', time: '10:20 AM', notes: 'Student ID expired. Requested new document.' },
-  { id: 'H6', entity: 'Lim Veasna', type: 'student', action: 'approved', admin: 'Sophea', date: 'Feb 27, 2026', time: '03:15 PM', notes: 'Transcript verified with RUPP database.' },
-  { id: 'H7', entity: 'Royal Angkor Media', type: 'company', action: 'approved', admin: 'Dara', date: 'Feb 26, 2026', time: '01:40 PM', notes: 'Marketing permit verified.' },
-];
+import { useAuth } from '@/context/AuthContext';
+import api from '../../api/axios';
 
 const INDUSTRIES = ['Software Dev', 'Agriculture', 'Marketing', 'Logistics', 'Finance', 'Education', 'Healthcare'];
 const STATUSES = ['pending', 'approved', 'rejected'];
-const COMPANIES = Array.from(new Set(queue.map(item => item.name)));
 
 const SORT_OPTIONS = [
   { label: 'Newest First', value: 'date-desc' },
@@ -66,8 +41,28 @@ const SORT_OPTIONS = [
   { label: 'Company Name (Z-A)', value: 'name-desc' },
 ];
 
+const formatDate = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+};
+
+const formatTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+};
+
 export const Verification = () => {
+  const { user } = useAuth();
   const { settings } = useProfile();
+  const isCompanyUser = user?.role === 'company';
+  const [companyQueue, setCompanyQueue] = useState<any[]>([]);
+  const [studentQueue, setStudentQueue] = useState<any[]>([]);
+  const [isQueueLoading, setIsQueueLoading] = useState(true);
+  const [queueError, setQueueError] = useState('');
   const [activeType, setActiveType] = useState<'student' | 'company'>('company');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
@@ -78,39 +73,107 @@ export const Verification = () => {
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [isCompanyFilterOpen, setIsCompanyFilterOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
-  const [historyList, setHistoryList] = useState(verificationHistory);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
   const [historyFilterAction, setHistoryFilterAction] = useState<'all' | 'approved' | 'rejected'>('all');
   const [historyFilterType, setHistoryFilterType] = useState<'all' | 'student' | 'company'>('all');
-  const [selectedItem, setSelectedItem] = useState<typeof queue[0] | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isCompanyUser) {
+      setActiveType('company');
+      setSelectedItem(null);
+    }
+  }, [isCompanyUser]);
+
+  useEffect(() => {
+    const fetchVerifications = async () => {
+      try {
+        setIsQueueLoading(true);
+        setQueueError('');
+        const [companyResult, studentResult] = await Promise.allSettled([
+          api.adminGetCompanyVerifications(),
+          api.adminGetStudentVerifications()
+        ]);
+
+        if (companyResult.status === 'fulfilled') {
+          setCompanyQueue(Array.isArray(companyResult.value) ? companyResult.value : []);
+        }
+        if (studentResult.status === 'fulfilled') {
+          setStudentQueue(Array.isArray(studentResult.value) ? studentResult.value : []);
+        }
+
+        if (companyResult.status === 'rejected' && studentResult.status === 'rejected') {
+          setQueueError('Failed to load verification requests.');
+        }
+      } catch (error) {
+        console.error(error);
+        setQueueError('Failed to load verification requests.');
+      } finally {
+        setIsQueueLoading(false);
+      }
+    };
+
+    fetchVerifications();
+  }, []);
 
   const handleAction = (action: 'approve' | 'reject') => {
     setConfirmAction(action);
   };
 
-  const confirmFinalAction = () => {
+  const confirmFinalAction = async () => {
     if (confirmAction === 'reject' && !rejectionReason.trim()) {
       return;
     }
     
     // Add to history
     if (selectedItem) {
-      const now = new Date();
-      const newHistoryItem = {
-        id: `H${Date.now()}`,
-        entity: selectedItem.name,
-        type: selectedItem.type,
-        action: confirmAction === 'approve' ? 'approved' : 'rejected',
-        admin: 'Sophea', // Assuming current user
-        date: now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        notes: confirmAction === 'approve' ? 'Manual review completed. All credentials valid.' : rejectionReason
-      };
-      setHistoryList(prev => [newHistoryItem, ...prev]);
+      const nextStatus = confirmAction === 'approve' ? 'approved' : 'rejected';
+      if (selectedItem.type === 'company' && selectedItem.rawId) {
+        try {
+          await api.adminUpdateCompanyVerification(selectedItem.rawId, {
+            status: nextStatus,
+            rejection_reason: rejectionReason
+          });
+          setCompanyQueue(prev =>
+            prev.map(item => (item.id === selectedItem.rawId
+              ? {
+                  ...item,
+                  status: nextStatus,
+                  reviewed_at: new Date().toISOString(),
+                  reviewed_by_name: settings?.name || 'Admin'
+                }
+              : item))
+          );
+        } catch (error) {
+          console.error(error);
+        }
+      }
+      if (selectedItem.type === 'student' && selectedItem.rawId) {
+        try {
+          await api.adminUpdateStudentVerification(selectedItem.rawId, {
+            status: nextStatus,
+            rejection_reason: rejectionReason
+          });
+          setStudentQueue(prev =>
+            prev.map(item => (item.id === selectedItem.rawId
+              ? {
+                  ...item,
+                  status: nextStatus,
+                  reviewed_at: new Date().toISOString(),
+                  reviewed_by_name: settings?.name || 'Admin'
+                }
+              : item))
+          );
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      setSelectedItem(prev => (prev ? { ...prev, status: nextStatus } : prev));
     }
     
     // In a real app, we would call an API here
@@ -125,9 +188,145 @@ export const Verification = () => {
     }, 3000);
   };
 
+  const normalizedCompanyQueue = useMemo(() => {
+    return companyQueue.map(item => {
+      const name = item.company_name || item.user_name || 'Company';
+      return {
+        id: `#CMP-${item.id}`,
+        rawId: item.id,
+        type: 'company',
+        name,
+        industry: item.industry || 'General',
+        date: formatDate(item.submitted_at),
+        time: formatTime(item.submitted_at),
+        docs: Array.isArray(item.documents) ? item.documents : [],
+        initial: name.charAt(0).toUpperCase(),
+        color: item.status === 'approved'
+          ? 'bg-emerald-500/10 text-emerald-500'
+          : item.status === 'rejected'
+          ? 'bg-rose-500/10 text-rose-500'
+          : 'bg-blue-500/10 text-blue-500',
+        status: item.status,
+        email: item.contact_email || item.user_email || '',
+        contact_person: item.contact_person || item.user_name || '',
+        website: item.website || '',
+        location: item.location || '',
+        notes: item.notes || '',
+        rejection_reason: item.rejection_reason || '',
+        reviewed_at: item.reviewed_at || '',
+        reviewed_by_name: item.reviewed_by_name || '',
+        submitted_at_raw: item.submitted_at || '',
+        reviewed_at_raw: item.reviewed_at || ''
+      };
+    });
+  }, [companyQueue]);
+
+  const normalizedStudentQueue = useMemo(() => {
+    return studentQueue.map(item => {
+      const name = item.student_name || item.user_name || 'Student';
+      const major = item.major || item.university || 'General';
+      return {
+        id: `#STU-${item.id}`,
+        rawId: item.id,
+        type: 'student',
+        name,
+        industry: major,
+        date: formatDate(item.submitted_at),
+        time: formatTime(item.submitted_at),
+        docs: Array.isArray(item.documents) ? item.documents : [],
+        initial: name.charAt(0).toUpperCase(),
+        color: item.status === 'approved'
+          ? 'bg-emerald-500/10 text-emerald-500'
+          : item.status === 'rejected'
+          ? 'bg-rose-500/10 text-rose-500'
+          : 'bg-emerald-500/10 text-emerald-500',
+        status: item.status,
+        email: item.contact_email || item.user_email || '',
+        university: item.university || '',
+        major: item.major || '',
+        graduation_year: item.graduation_year || '',
+        notes: item.notes || '',
+        rejection_reason: item.rejection_reason || '',
+        reviewed_at: item.reviewed_at || '',
+        reviewed_by_name: item.reviewed_by_name || '',
+        submitted_at_raw: item.submitted_at || '',
+        reviewed_at_raw: item.reviewed_at || ''
+      };
+    });
+  }, [studentQueue]);
+
+  const historyItems = useMemo(() => {
+    const merged = [...normalizedCompanyQueue, ...normalizedStudentQueue]
+      .filter(item => item.status !== 'pending')
+      .map(item => {
+        const reviewedAt = item.reviewed_at || '';
+        const date = reviewedAt ? formatDate(reviewedAt) : item.date;
+        const time = reviewedAt ? formatTime(reviewedAt) : item.time;
+        return {
+          id: `H-${item.type}-${item.rawId}`,
+          entity: item.name,
+          type: item.type,
+          action: item.status,
+          admin: item.reviewed_by_name || settings?.name || 'Admin',
+          date,
+          time,
+          notes: item.status === 'rejected'
+            ? (item.rejection_reason || 'Rejected by reviewer.')
+            : (item.notes || 'Manual review completed.')
+        };
+      });
+
+    return merged.sort((a, b) => {
+      const ad = new Date(`${a.date} ${a.time}`).getTime();
+      const bd = new Date(`${b.date} ${b.time}`).getTime();
+      return bd - ad;
+    });
+  }, [normalizedCompanyQueue, normalizedStudentQueue, settings?.name]);
+
+  const visibleQueue = useMemo(() => {
+    const mergedQueue = [
+      ...normalizedStudentQueue,
+      ...normalizedCompanyQueue
+    ];
+
+    if (!isCompanyUser) return mergedQueue;
+
+    let result = mergedQueue.filter(item => item.type === 'company');
+    if (user?.email) {
+      const email = user.email.toLowerCase();
+      result = result.filter(item => (item.email || '').toLowerCase() === email);
+    }
+    return result;
+  }, [normalizedCompanyQueue, normalizedStudentQueue, isCompanyUser, user?.email]);
+
+  const stats = useMemo(() => {
+    const scoped = visibleQueue.filter(item => item.type === activeType);
+    const totalVerified = scoped.filter(item => item.status === 'approved').length;
+    const totalRejected = scoped.filter(item => item.status === 'rejected').length;
+    const totalPending = scoped.filter(item => item.status === 'pending').length;
+
+    const reviewedItems = scoped.filter(item => item.reviewed_at_raw);
+    const totalHours = reviewedItems.reduce((sum, item) => {
+      const submittedAt = new Date(item.submitted_at_raw);
+      const reviewedAt = new Date(item.reviewed_at_raw);
+      if (Number.isNaN(submittedAt.getTime()) || Number.isNaN(reviewedAt.getTime())) {
+        return sum;
+      }
+      return sum + (reviewedAt.getTime() - submittedAt.getTime()) / (1000 * 60 * 60);
+    }, 0);
+    const avgHours = reviewedItems.length > 0 ? totalHours / reviewedItems.length : 0;
+
+    return {
+      totalVerified,
+      totalRejected,
+      totalPending,
+      avgResponse: reviewedItems.length > 0 ? `${avgHours.toFixed(1)}h` : '—'
+    };
+  }, [visibleQueue, activeType]);
+
   const ENTITIES = useMemo(() => {
-    return Array.from(new Set(queue.filter(item => item.type === activeType).map(item => item.name)));
-  }, [activeType]);
+    return Array.from(new Set(visibleQueue.filter(item => item.type === activeType).map(item => item.name)));
+  }, [visibleQueue, activeType]);
 
   const toggleFilter = (list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, item: string) => {
     setList(prev => 
@@ -136,7 +335,7 @@ export const Verification = () => {
   };
 
   const filteredAndSortedQueue = useMemo(() => {
-    let result = queue.filter(item => {
+    let result = visibleQueue.filter(item => {
       const matchesType = item.type === activeType;
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             item.id.toLowerCase().includes(searchQuery.toLowerCase());
@@ -155,7 +354,7 @@ export const Verification = () => {
     });
 
     return result;
-  }, [searchQuery, selectedIndustries, selectedStatuses, selectedCompanies, sortBy, activeType]);
+  }, [visibleQueue, searchQuery, selectedIndustries, selectedStatuses, selectedCompanies, sortBy, activeType]);
 
   return (
     <div className="flex flex-col h-full max-w-7xl mx-auto w-full p-8 gap-8 overflow-y-auto no-scrollbar">
@@ -173,7 +372,7 @@ export const Verification = () => {
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-end">
             <span className="text-2xl font-black text-text-primary tracking-tight">
-              {queue.filter(i => i.type === activeType && i.status === 'pending').length} Pending
+              {visibleQueue.filter(i => i.type === activeType && i.status === 'pending').length} Pending
             </span>
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Awaiting Review</span>
           </div>
@@ -190,10 +389,10 @@ export const Verification = () => {
       {/* Stats Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Total Verified', value: '1,240', icon: BadgeCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-          { label: 'Pending Review', value: queue.filter(i => i.type === activeType && i.status === 'pending').length.toString(), icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-          { label: 'Rejected', value: '45', icon: X, color: 'text-rose-500', bg: 'bg-rose-500/10' },
-          { label: 'Avg. Response', value: '4.2h', icon: AlertCircle, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+          { label: 'Total Verified', value: stats.totalVerified.toString(), icon: BadgeCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+          { label: 'Pending Review', value: stats.totalPending.toString(), icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+          { label: 'Rejected', value: stats.totalRejected.toString(), icon: X, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+          { label: 'Avg. Response', value: stats.avgResponse, icon: AlertCircle, color: 'text-blue-500', bg: 'bg-blue-500/10' },
         ].map((stat) => (
           <div key={stat.label} className="flex items-center gap-4 p-5 rounded-3xl border border-border bg-surface shadow-sm">
             <div className={cn("size-12 rounded-2xl flex items-center justify-center shrink-0", stat.bg, stat.color)}>
@@ -209,31 +408,35 @@ export const Verification = () => {
 
       {/* Type Toggle Filters */}
       <div className="flex items-center gap-2 p-1.5 bg-surface border border-border rounded-2xl w-fit self-center shadow-sm">
-        <button 
-          onClick={() => {
-            setActiveType('student');
-            setSelectedItem(null);
-          }}
-          className={cn(
-            "px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center gap-3 relative overflow-hidden group",
-            activeType === 'student' 
-              ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 ring-1 ring-emerald-400" 
-              : "text-text-secondary hover:bg-emerald-50 hover:text-emerald-600"
-          )}
-        >
-          <div className={cn(
-            "p-2 rounded-lg transition-colors",
-            activeType === 'student' ? "bg-white/20" : "bg-emerald-100/50 text-emerald-600 group-hover:bg-emerald-100"
-          )}>
-            <GraduationCap className="size-5" />
-          </div>
-          <div className="flex flex-col items-start leading-none gap-1">
-            <span className={cn("text-[10px] font-bold uppercase tracking-widest", activeType === 'student' ? "text-emerald-100" : "text-text-secondary/60")}>Individual</span>
-            <span>Student</span>
-          </div>
-        </button>
-        
-        <div className="w-px h-8 bg-border mx-1"></div>
+        {!isCompanyUser && (
+          <>
+            <button 
+              onClick={() => {
+                setActiveType('student');
+                setSelectedItem(null);
+              }}
+              className={cn(
+                "px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center gap-3 relative overflow-hidden group",
+                activeType === 'student' 
+                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 ring-1 ring-emerald-400" 
+                  : "text-text-secondary hover:bg-emerald-50 hover:text-emerald-600"
+              )}
+            >
+              <div className={cn(
+                "p-2 rounded-lg transition-colors",
+                activeType === 'student' ? "bg-white/20" : "bg-emerald-100/50 text-emerald-600 group-hover:bg-emerald-100"
+              )}>
+                <GraduationCap className="size-5" />
+              </div>
+              <div className="flex flex-col items-start leading-none gap-1">
+                <span className={cn("text-[10px] font-bold uppercase tracking-widest", activeType === 'student' ? "text-emerald-100" : "text-text-secondary/60")}>Individual</span>
+                <span>Student</span>
+              </div>
+            </button>
+            
+            <div className="w-px h-8 bg-border mx-1"></div>
+          </>
+        )}
 
         <button 
           onClick={() => {
@@ -488,15 +691,28 @@ export const Verification = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filteredAndSortedQueue.map((item) => (
-                    <tr 
-                      key={item.id} 
-                      className={cn(
-                        "group hover:bg-background/50 transition-colors cursor-pointer",
-                        selectedItem?.id === item.id && "bg-primary/5"
-                      )}
-                      onClick={() => setSelectedItem(item)}
-                    >
+                  {isQueueLoading ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-text-secondary text-sm font-bold">
+                        Loading verification requests...
+                      </td>
+                    </tr>
+                  ) : queueError ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-rose-600 text-sm font-bold">
+                        {queueError}
+                      </td>
+                    </tr>
+                  ) : filteredAndSortedQueue.length > 0 ? (
+                    filteredAndSortedQueue.map((item) => (
+                      <tr 
+                        key={item.id} 
+                        className={cn(
+                          "group hover:bg-background/50 transition-colors cursor-pointer",
+                          selectedItem?.id === item.id && "bg-primary/5"
+                        )}
+                        onClick={() => setSelectedItem(item)}
+                      >
                       <td className="p-5">
                         <div className="flex items-center gap-4">
                           <div className={cn("size-12 rounded-2xl flex items-center justify-center font-black text-xl shrink-0 shadow-sm", item.color)}>
@@ -555,8 +771,15 @@ export const Verification = () => {
                           </button>
                         </div>
                       </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-text-secondary text-sm font-bold">
+                        No verification requests found.
+                      </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -565,7 +788,7 @@ export const Verification = () => {
             <div className="flex items-center justify-between border-t border-border bg-background/30 p-5">
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">
-                  Showing <span className="text-text-primary">{filteredAndSortedQueue.length}</span> of <span className="text-text-primary">{queue.length}</span> entities
+                  Showing <span className="text-text-primary">{filteredAndSortedQueue.length}</span> of <span className="text-text-primary">{visibleQueue.length}</span> entities
                 </span>
                 {(selectedIndustries.length > 0 || selectedStatuses.length > 0 || selectedCompanies.length > 0) && (
                   <button 
@@ -637,13 +860,54 @@ export const Verification = () => {
                       </div>
                     </div>
                     {selectedItem.type === 'student' && (
-                      <div className="flex items-center gap-4 p-4 rounded-2xl bg-background border border-border">
-                        <Building2 className="size-5 text-primary shrink-0" />
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">University</span>
-                          <span className="text-sm font-bold text-text-primary truncate">{(selectedItem as any).university}</span>
+                      <>
+                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-background border border-border">
+                          <Building2 className="size-5 text-primary shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">University</span>
+                            <span className="text-sm font-bold text-text-primary truncate">{(selectedItem as any).university || 'Not provided'}</span>
+                          </div>
                         </div>
-                      </div>
+                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-background border border-border">
+                          <Briefcase className="size-5 text-primary shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Major</span>
+                            <span className="text-sm font-bold text-text-primary truncate">{(selectedItem as any).major || 'Not provided'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-background border border-border">
+                          <Calendar className="size-5 text-primary shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Graduation Year</span>
+                            <span className="text-sm font-bold text-text-primary truncate">{(selectedItem as any).graduation_year || 'Not provided'}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {selectedItem.type === 'company' && (
+                      <>
+                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-background border border-border">
+                          <User className="size-5 text-primary shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Contact Person</span>
+                            <span className="text-sm font-bold text-text-primary truncate">{(selectedItem as any).contact_person || 'Not provided'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-background border border-border">
+                          <MapPin className="size-5 text-primary shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Location</span>
+                            <span className="text-sm font-bold text-text-primary truncate">{(selectedItem as any).location || 'Not provided'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-background border border-border">
+                          <ExternalLink className="size-5 text-primary shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Website</span>
+                            <span className="text-sm font-bold text-text-primary truncate">{(selectedItem as any).website || 'Not provided'}</span>
+                          </div>
+                        </div>
+                      </>
                     )}
                     <div className="flex items-center gap-4 p-4 rounded-2xl bg-background border border-border">
                       <Calendar className="size-5 text-primary shrink-0" />
@@ -859,7 +1123,7 @@ export const Verification = () => {
 
                   {/* History List */}
                   <div className="flex flex-col gap-4">
-                    {historyList
+                    {historyItems
                       .filter(h => {
                         const matchesSearch = h.entity.toLowerCase().includes(historySearch.toLowerCase()) || 
                                               h.admin.toLowerCase().includes(historySearch.toLowerCase());
@@ -867,7 +1131,7 @@ export const Verification = () => {
                         const matchesType = historyFilterType === 'all' || h.type === historyFilterType;
                         return matchesSearch && matchesAction && matchesType;
                       }).length > 0 ? (
-                      historyList
+                      historyItems
                         .filter(h => {
                           const matchesSearch = h.entity.toLowerCase().includes(historySearch.toLowerCase()) || 
                                                 h.admin.toLowerCase().includes(historySearch.toLowerCase());

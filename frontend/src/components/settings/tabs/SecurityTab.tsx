@@ -123,7 +123,7 @@ export function SecurityTab({data, onSaved}: SecurityTabProps) {
               type="button"
               onClick={handleUpdatePassword}
               disabled={savingPassword}
-              className="bg-emerald-500 disabled:opacity-70 hover:bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-emerald-500/20"
+              className="bg-blue-600 disabled:opacity-70 hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-blue-600/20"
             >
               {savingPassword ? 'Updating...' : 'Update Password'}
             </button>
@@ -142,7 +142,7 @@ export function SecurityTab({data, onSaved}: SecurityTabProps) {
             onClick={handleToggleTwoFactor}
             disabled={saving2FA}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-              twoFactorEnabled ? 'bg-emerald-500' : 'bg-slate-200'
+              twoFactorEnabled ? 'bg-blue-600' : 'bg-slate-200'
             }`}
           >
             <span
@@ -152,8 +152,8 @@ export function SecurityTab({data, onSaved}: SecurityTabProps) {
             />
           </button>
         </div>
-        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-          <p className="text-sm font-semibold text-emerald-800">
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+          <p className="text-sm font-semibold text-blue-800">
             2FA is currently {twoFactorEnabled ? 'enabled' : 'disabled'}
           </p>
           <p className="text-xs text-emerald-700 mt-0.5">

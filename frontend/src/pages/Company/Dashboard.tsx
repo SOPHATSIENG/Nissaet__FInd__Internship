@@ -13,7 +13,9 @@ import {
   ArrowRight,
   AlertTriangle,
   X,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -39,6 +41,8 @@ export default function Dashboard() {
   ]);
   const [trends, setTrends] = useState([]);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
 
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
@@ -85,6 +89,7 @@ export default function Dashboard() {
       
       setInternships(internshipsResponse.internships || []);
       setDashboardData(statsResponse);
+      setCurrentPage(1); // Reset to first page when new data is fetched
       
       if (statsResponse) {
         setStats([
@@ -155,6 +160,21 @@ export default function Dashboard() {
     setActiveDropdown(activeDropdown === jobId ? null : jobId);
   };
 
+  // Pagination helper functions
+  const totalPages = Math.max(1, Math.ceil(filteredInternships.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentInternships = filteredInternships.slice(startIndex, endIndex);
+  const goToPage = (page) => {
+    setCurrentPage(page);
+  };
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(prev - 1, 1));
+  };
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  };
+
   useEffect(() => {
     const handleClickOutside = () => {
       setActiveDropdown(null);
@@ -184,7 +204,7 @@ export default function Dashboard() {
         </div>
         <Link 
           to="/company/post"
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-all"
         >
           <PlusCircle size={20} />
           Post New Internship
@@ -209,6 +229,7 @@ export default function Dashboard() {
               <div className={`p-2 ${stat.bg} rounded-lg ${stat.color}`}>
                 <stat.icon size={24} />
               </div>
+<<<<<<< HEAD
               <span className={`text-[10px] font-bold uppercase tracking-wider ${
                 stat.trend.includes('+') ? 'text-emerald-600 bg-emerald-50' : 'text-slate-500 bg-slate-50'
               } px-2 py-1 rounded-full`}>
@@ -242,7 +263,7 @@ export default function Dashboard() {
                   <div key={trend.month} className="relative z-10 flex flex-col items-center flex-1 h-full justify-end group">
                     <div 
                       className={`w-full max-w-[40px] transition-all duration-300 rounded-t-md relative ${
-                        isCurrentMonth ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-primary/20 hover:bg-primary'
+                        isCurrentMonth ? 'bg-blue-600 shadow-lg shadow-blue-600/20' : 'bg-blue-600/20 hover:bg-blue-600'
                       }`}
                       style={{ height: `${Math.max(10, Math.min((trend.applications || 1) * 10, 100))}%` }}
                     >
@@ -250,7 +271,7 @@ export default function Dashboard() {
                         {trend.applications} Applicants
                       </div>
                     </div>
-                    <span className={`text-xs mt-2 ${isCurrentMonth ? 'font-bold text-primary' : 'text-slate-500'}`}>
+                    <span className={`text-xs mt-2 ${isCurrentMonth ? 'font-bold text-blue-600' : 'text-slate-500'}`}>
                       {monthName}
                     </span>
                   </div>
@@ -379,8 +400,8 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  <AnimatePresence mode="popLayout">
-                    {filteredInternships.map((job: any) => (
+                    <AnimatePresence mode="popLayout">
+                      {currentInternships.map((job: any) => (
                       <motion.tr 
                         key={job.id} 
                         layout
@@ -412,6 +433,7 @@ export default function Dashboard() {
                           </div>
                         </td>
                         <td className="py-4 px-6">
+<<<<<<< HEAD
                           <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
                             job.status === 'active' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-800 ring-amber-600/20'
                           }`}>
@@ -473,6 +495,48 @@ export default function Dashboard() {
               </table>
             )}
           </div>
+          
+          {/* Pagination Controls */}
+          {filteredInternships.length > itemsPerPage && (
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+              <div className="text-sm text-slate-600">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredInternships.length)} of {filteredInternships.length} internships
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goToPreviousPage}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => goToPage(page)}
+                      className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                        currentPage === page
+                          ? 'bg-blue-600 text-white'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+                
+                <button
+                  onClick={goToNextPage}
+                  disabled={currentPage === totalPages}
+                  className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="lg:w-80 flex flex-col gap-6">

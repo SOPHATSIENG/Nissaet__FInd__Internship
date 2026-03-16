@@ -77,7 +77,7 @@ export default function ApplicationNotificationCard({
             </button>
             <button 
               onClick={onApprove}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-background-dark rounded-lg text-xs font-bold hover:bg-primary-dark transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all shadow-sm"
             >
               <CheckCircle size={14} />
               Shortlist

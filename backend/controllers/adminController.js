@@ -1,5 +1,7 @@
 const db = require('../config/db');
 
+const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
+
 const getAllUsers = async (req, res) => {
     try {
         const users = await db.query(`
@@ -37,7 +39,820 @@ const getStats = async (req, res) => {
     }
 };
 
+const normalizeDocuments = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
+};
+
+const getCompanyVerifications = async (req, res) => {
+    try {
+        const rows = await db.query(
+            `SELECT
+                cv.id,
+                cv.company_id,
+                cv.user_id,
+                cv.status,
+                cv.documents,
+                cv.notes,
+                cv.rejection_reason,
+                cv.submitted_at,
+                cv.reviewed_at,
+                cv.company_name,
+                cv.industry,
+                cv.website,
+                cv.location,
+                cv.contact_email,
+                cv.contact_person,
+                u.email AS user_email,
+                u.full_name AS user_name,
+                admin.full_name AS reviewed_by_name
+             FROM company_verifications cv
+             JOIN users u ON u.id = cv.user_id
+             LEFT JOIN users admin ON admin.id = cv.reviewed_by
+             ORDER BY cv.submitted_at DESC`
+        );
+
+        const normalized = rows.map(row => ({
+            ...row,
+            documents: normalizeDocuments(row.documents)
+        }));
+
+        return res.json(normalized);
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json([]);
+        }
+        console.error('Error fetching company verifications:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateCompanyVerificationStatus = async (req, res) => {
+    try {
+        const verificationId = req.params.id;
+        const { status, rejection_reason } = req.body || {};
+
+        if (!['approved', 'rejected'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        const [rows] = await db.queryRaw(
+            `UPDATE company_verifications
+             SET status = ?, rejection_reason = ?, reviewed_by = ?, reviewed_at = NOW()
+             WHERE id = ?`,
+            [status, rejection_reason || null, req.user.userId, verificationId]
+        );
+
+        if (rows.affectedRows === 0) {
+            return res.status(404).json({ message: 'Verification request not found' });
+        }
+
+        const [verificationRows] = await db.queryRaw(
+            'SELECT company_id FROM company_verifications WHERE id = ? LIMIT 1',
+            [verificationId]
+        );
+
+        const companyId = verificationRows?.[0]?.company_id;
+        if (companyId) {
+            await db.queryRaw(
+                'UPDATE companies SET is_verified = ? WHERE id = ?',
+                [status === 'approved' ? 1 : 0, companyId]
+            );
+        }
+
+        return res.json({ message: 'Verification updated', status });
+    } catch (error) {
+        console.error('Error updating company verification:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getStudentVerifications = async (req, res) => {
+    try {
+        const rows = await db.query(
+            `SELECT
+                sv.id,
+                sv.student_id,
+                sv.user_id,
+                sv.status,
+                sv.documents,
+                sv.notes,
+                sv.rejection_reason,
+                sv.submitted_at,
+                sv.reviewed_at,
+                sv.student_name,
+                sv.university,
+                sv.major,
+                sv.graduation_year,
+                sv.contact_email,
+                u.email AS user_email,
+                u.full_name AS user_name,
+                admin.full_name AS reviewed_by_name
+             FROM student_verifications sv
+             JOIN users u ON u.id = sv.user_id
+             LEFT JOIN users admin ON admin.id = sv.reviewed_by
+             ORDER BY sv.submitted_at DESC`
+        );
+
+        const normalized = rows.map(row => ({
+            ...row,
+            documents: normalizeDocuments(row.documents)
+        }));
+
+        return res.json(normalized);
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json([]);
+        }
+        console.error('Error fetching student verifications:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateStudentVerificationStatus = async (req, res) => {
+    try {
+        const verificationId = req.params.id;
+        const { status, rejection_reason } = req.body || {};
+
+        if (!['approved', 'rejected'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        const [rows] = await db.queryRaw(
+            `UPDATE student_verifications
+             SET status = ?, rejection_reason = ?, reviewed_by = ?, reviewed_at = NOW()
+             WHERE id = ?`,
+            [status, rejection_reason || null, req.user.userId, verificationId]
+        );
+
+        if (rows.affectedRows === 0) {
+            return res.status(404).json({ message: 'Verification request not found' });
+        }
+
+        return res.json({ message: 'Verification updated', status });
+    } catch (error) {
+        console.error('Error updating student verification:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const deleteUser = async (req, res) => {
+    try {
+        const userId = req.params.id;
+        if (!userId) {
+            return res.status(400).json({ message: 'User ID is required' });
+        }
+
+        const [rows] = await db.queryRaw('DELETE FROM users WHERE id = ?', [userId]);
+        if (rows.affectedRows === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        return res.json({ message: 'User deleted' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getCategories = async (req, res) => {
+    try {
+        const rows = await db.query(`
+            SELECT
+                c.id,
+                c.name,
+                c.description,
+                c.icon,
+                c.color,
+                c.is_active,
+                c.created_at,
+                c.updated_at,
+                COUNT(i.id) AS listings_count
+            FROM categories c
+            LEFT JOIN companies co ON co.industry = c.name
+            LEFT JOIN internships i ON i.company_id = co.id AND i.status = 'active'
+            GROUP BY c.id, c.name, c.description, c.icon, c.color, c.is_active, c.created_at, c.updated_at
+            ORDER BY c.name ASC
+        `);
+
+        return res.json({ success: true, categories: rows });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({ success: true, categories: [] });
+        }
+        console.error('Error fetching categories:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const createCategory = async (req, res) => {
+    try {
+        const { name, description, icon, color, is_active } = req.body || {};
+        if (!name) {
+            return res.status(400).json({ message: 'Category name is required' });
+        }
+
+        const result = await db.query(
+            `INSERT INTO categories (name, description, icon, color, is_active)
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+                name,
+                description || null,
+                icon || null,
+                color || null,
+                is_active === undefined ? 1 : (is_active ? 1 : 0)
+            ]
+        );
+
+        const [created] = await db.query('SELECT * FROM categories WHERE id = ?', [result.insertId]);
+        return res.status(201).json({ success: true, category: created });
+    } catch (error) {
+        if (error && error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'Category name already exists' });
+        }
+        console.error('Error creating category:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateCategory = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, icon, color, is_active } = req.body || {};
+
+        const updates = [];
+        const params = [];
+
+        if (name !== undefined) {
+            updates.push('name = ?');
+            params.push(name);
+        }
+        if (description !== undefined) {
+            updates.push('description = ?');
+            params.push(description || null);
+        }
+        if (icon !== undefined) {
+            updates.push('icon = ?');
+            params.push(icon || null);
+        }
+        if (color !== undefined) {
+            updates.push('color = ?');
+            params.push(color || null);
+        }
+        if (is_active !== undefined) {
+            updates.push('is_active = ?');
+            params.push(is_active ? 1 : 0);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ message: 'No fields to update' });
+        }
+
+        updates.push('updated_at = CURRENT_TIMESTAMP');
+        params.push(id);
+
+        const [result] = await db.queryRaw(
+            `UPDATE categories SET ${updates.join(', ')} WHERE id = ?`,
+            params
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Category not found' });
+        }
+
+        const [updated] = await db.query('SELECT * FROM categories WHERE id = ?', [id]);
+        return res.json({ success: true, category: updated });
+    } catch (error) {
+        if (error && error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'Category name already exists' });
+        }
+        console.error('Error updating category:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const deleteCategory = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.queryRaw('DELETE FROM categories WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Category not found' });
+        }
+        return res.json({ success: true, message: 'Category deleted' });
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getCategoryInternships = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [category] = await db.query('SELECT id, name FROM categories WHERE id = ? LIMIT 1', [id]);
+        if (!category) {
+            return res.status(404).json({ message: 'Category not found' });
+        }
+
+        const internships = await db.query(`
+            SELECT
+                i.*,
+                c.name AS company_name,
+                c.logo AS company_logo,
+                c.industry AS company_industry,
+                c.headquarters AS company_location,
+                c.website AS company_website
+            FROM internships i
+            JOIN companies c ON i.company_id = c.id
+            WHERE c.industry = ? AND i.status = 'active'
+            ORDER BY i.created_at DESC
+        `, [category.name]);
+
+        return res.json({ success: true, category: category.name, internships });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({ success: true, internships: [] });
+        }
+        console.error('Error fetching category internships:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getSkills = async (req, res) => {
+    try {
+        const rows = await db.query(`
+            SELECT
+                s.id,
+                s.name,
+                s.description,
+                s.category,
+                s.is_active,
+                s.created_at,
+                s.updated_at,
+                COUNT(isk.internship_id) AS usage_count
+            FROM skills s
+            LEFT JOIN internship_skills isk ON isk.skill_id = s.id
+            GROUP BY s.id, s.name, s.description, s.category, s.is_active, s.created_at, s.updated_at
+            ORDER BY s.name ASC
+        `);
+
+        const skills = rows.map((row) => {
+            let popularity = 'Low';
+            if (row.usage_count >= 10) popularity = 'High';
+            else if (row.usage_count >= 5) popularity = 'Medium';
+            return { ...row, popularity };
+        });
+
+        return res.json({ success: true, skills });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({ success: true, skills: [] });
+        }
+        console.error('Error fetching skills:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const createSkill = async (req, res) => {
+    try {
+        const { name, description, category, is_active } = req.body || {};
+        if (!name) {
+            return res.status(400).json({ message: 'Skill name is required' });
+        }
+
+        const result = await db.query(
+            `INSERT INTO skills (name, description, category, is_active)
+             VALUES (?, ?, ?, ?)`,
+            [
+                name,
+                description || null,
+                category || null,
+                is_active === undefined ? 1 : (is_active ? 1 : 0)
+            ]
+        );
+
+        const [created] = await db.query('SELECT * FROM skills WHERE id = ?', [result.insertId]);
+        return res.status(201).json({ success: true, skill: created });
+    } catch (error) {
+        if (error && error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'Skill name already exists' });
+        }
+        console.error('Error creating skill:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateSkill = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, category, is_active } = req.body || {};
+
+        const updates = [];
+        const params = [];
+
+        if (name !== undefined) {
+            updates.push('name = ?');
+            params.push(name);
+        }
+        if (description !== undefined) {
+            updates.push('description = ?');
+            params.push(description || null);
+        }
+        if (category !== undefined) {
+            updates.push('category = ?');
+            params.push(category || null);
+        }
+        if (is_active !== undefined) {
+            updates.push('is_active = ?');
+            params.push(is_active ? 1 : 0);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ message: 'No fields to update' });
+        }
+
+        updates.push('updated_at = CURRENT_TIMESTAMP');
+        params.push(id);
+
+        const [result] = await db.queryRaw(
+            `UPDATE skills SET ${updates.join(', ')} WHERE id = ?`,
+            params
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Skill not found' });
+        }
+
+        const [updated] = await db.query('SELECT * FROM skills WHERE id = ?', [id]);
+        return res.json({ success: true, skill: updated });
+    } catch (error) {
+        if (error && error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'Skill name already exists' });
+        }
+        console.error('Error updating skill:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const deleteSkill = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await db.queryRaw('DELETE FROM skills WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Skill not found' });
+        }
+        return res.json({ success: true, message: 'Skill deleted' });
+    } catch (error) {
+        console.error('Error deleting skill:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getSkillInternships = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [skill] = await db.query('SELECT id, name FROM skills WHERE id = ? LIMIT 1', [id]);
+        if (!skill) {
+            return res.status(404).json({ message: 'Skill not found' });
+        }
+
+        const internships = await db.query(`
+            SELECT
+                i.id,
+                i.title,
+                i.location,
+                i.type,
+                i.status,
+                i.created_at,
+                c.name AS company_name
+            FROM internship_skills isk
+            JOIN internships i ON isk.internship_id = i.id
+            JOIN companies c ON i.company_id = c.id
+            WHERE isk.skill_id = ? AND i.status = 'active'
+            ORDER BY i.created_at DESC
+        `, [skill.id]);
+
+        return res.json({ success: true, skill: skill.name, internships });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({ success: true, internships: [] });
+        }
+        console.error('Error fetching skill internships:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getInternshipByIdForAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const rows = await db.query(`
+            SELECT
+                i.*,
+                c.name AS company_name
+            FROM internships i
+            JOIN companies c ON i.company_id = c.id
+            WHERE i.id = ?
+            LIMIT 1
+        `, [id]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+
+        const internship = rows[0];
+
+        try {
+            const skills = await db.query(`
+                SELECT s.id, s.name, s.category, isk.skill_level, isk.is_required
+                FROM internship_skills isk
+                JOIN skills s ON isk.skill_id = s.id
+                WHERE isk.internship_id = ?
+            `, [id]);
+            internship.skills = skills;
+        } catch (error) {
+            internship.skills = [];
+        }
+
+        return res.json({ success: true, internship });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+        console.error('Error fetching internship:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateInternshipForAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const {
+            title,
+            description,
+            requirements,
+            location,
+            type = 'full-time',
+            duration_months,
+            stipend = 0,
+            stipend_currency = 'USD',
+            positions = 1,
+            application_deadline,
+            start_date,
+            end_date,
+            skills = []
+        } = req.body;
+
+        const connection = await db.connection();
+
+        try {
+            await connection.beginTransaction();
+
+            await connection.execute(
+                `UPDATE internships SET
+                    title = ?, description = ?, requirements = ?, location = ?,
+                    type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
+                    positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [
+                    title,
+                    description,
+                    requirements || null,
+                    location,
+                    type,
+                    duration_months,
+                    stipend,
+                    stipend_currency,
+                    positions,
+                    application_deadline,
+                    start_date || null,
+                    end_date || null,
+                    id
+                ]
+            );
+
+            await connection.execute(
+                'DELETE FROM internship_skills WHERE internship_id = ?',
+                [id]
+            );
+
+            if (skills && skills.length > 0) {
+                for (const skillName of skills) {
+                    const [existingSkills] = await connection.execute(
+                        'SELECT id FROM skills WHERE name = ?',
+                        [skillName]
+                    );
+
+                    let skillId;
+                    if (existingSkills.length === 0) {
+                        const [newSkill] = await connection.execute(
+                            'INSERT INTO skills (name) VALUES (?)',
+                            [skillName]
+                        );
+                        skillId = newSkill.insertId;
+                    } else {
+                        skillId = existingSkills[0].id;
+                    }
+
+                    await connection.execute(
+                        'INSERT INTO internship_skills (internship_id, skill_id) VALUES (?, ?)',
+                        [id, skillId]
+                    );
+                }
+            }
+
+            await connection.commit();
+            return res.json({ message: 'Internship updated successfully' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error updating internship (admin):', error);
+        return res.status(500).json({ message: 'Server error: ' + error.message });
+    }
+};
+
+const flagInternshipForAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body || {};
+
+        const [internship] = await db.query(
+            `SELECT i.title, c.user_id
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+             WHERE i.id = ?
+             LIMIT 1`,
+            [id]
+        );
+
+        if (!internship) {
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+
+        const [result] = await db.queryRaw(
+            `UPDATE internships
+             SET is_flagged = 1, flag_reason = ?, flagged_at = NOW(), updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [reason || null, id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+
+        const message = reason
+            ? `Your internship "${internship.title}" was flagged by admin. Reason: ${reason}`
+            : `Your internship "${internship.title}" was flagged by admin for review.`;
+
+        try {
+            await db.query(
+                `INSERT INTO notifications (user_id, title, message, type, related_entity_type, related_entity_id, action_url)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    internship.user_id,
+                    'Internship flagged',
+                    message,
+                    'system',
+                    'internship',
+                    id,
+                    `/company/post/${id}`
+                ]
+            );
+        } catch (notifyError) {
+            console.error('Notification insert failed:', notifyError.message);
+        }
+
+        return res.json({ success: true, message: 'Internship flagged' });
+    } catch (error) {
+        if (isBadFieldError(error)) {
+            return res.status(400).json({ message: 'Flag columns missing. Please run the migration.' });
+        }
+        console.error('Error flagging internship (admin):', error);
+        return res.status(500).json({ message: 'Server error: ' + error.message });
+    }
+};
+
+const unflagInternshipForAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [result] = await db.queryRaw(
+            `UPDATE internships
+             SET is_flagged = 0, flag_reason = NULL, flagged_at = NULL, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+
+        return res.json({ success: true, message: 'Internship unflagged' });
+    } catch (error) {
+        if (isBadFieldError(error)) {
+            return res.status(400).json({ message: 'Flag columns missing. Please run the migration.' });
+        }
+        console.error('Error unflagging internship (admin):', error);
+        return res.status(500).json({ message: 'Server error: ' + error.message });
+    }
+};
+
+const getJobTypes = async (req, res) => {
+    try {
+        const rows = await db.query(`
+            SELECT type AS name, COUNT(*) AS count
+            FROM internships
+            GROUP BY type
+        `);
+
+        let remoteCount = 0;
+        let hybridCount = 0;
+        try {
+            const [flags] = await db.query(`
+                SELECT
+                    SUM(CASE WHEN is_remote = 1 THEN 1 ELSE 0 END) AS remote_count,
+                    SUM(CASE WHEN is_hybrid = 1 THEN 1 ELSE 0 END) AS hybrid_count
+                FROM internships
+            `);
+            remoteCount = Number(flags?.remote_count || 0);
+            hybridCount = Number(flags?.hybrid_count || 0);
+        } catch (error) {
+            // Ignore if columns don't exist
+        }
+
+        const descriptionMap = {
+            'full-time': 'Standard 40-hour work week.',
+            'part-time': 'Less than 30 hours per week.',
+            'contract': 'Project-based employment.',
+            'internship': 'Temporary position for students.'
+        };
+
+        const jobTypes = rows.map((row) => ({
+            id: row.name,
+            name: row.name,
+            description: descriptionMap[row.name] || 'Employment type.',
+            count: Number(row.count || 0)
+        }));
+
+        if (remoteCount > 0) {
+            jobTypes.push({
+                id: 'remote',
+                name: 'remote',
+                description: 'Work from anywhere.',
+                count: remoteCount
+            });
+        }
+
+        if (hybridCount > 0) {
+            jobTypes.push({
+                id: 'hybrid',
+                name: 'hybrid',
+                description: 'Mix of on-site and remote work.',
+                count: hybridCount
+            });
+        }
+
+        return res.json({ success: true, jobTypes });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({ success: true, jobTypes: [] });
+        }
+        console.error('Error fetching job types:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     getAllUsers,
-    getStats
+    getStats,
+    getCompanyVerifications,
+    updateCompanyVerificationStatus,
+    getStudentVerifications,
+    updateStudentVerificationStatus,
+    deleteUser,
+    getCategories,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    getSkills,
+    createSkill,
+    updateSkill,
+    deleteSkill,
+    getCategoryInternships,
+    getSkillInternships,
+    getInternshipByIdForAdmin,
+    updateInternshipForAdmin,
+    flagInternshipForAdmin,
+    unflagInternshipForAdmin,
+    getJobTypes
 };

@@ -25,23 +25,21 @@ import {
   Mail,
   Phone,
   MapPin,
-  ExternalLink,
-  Star
+  ExternalLink
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
 import api from '../../api/axios';
+import * as XLSX from 'xlsx';
 
 export default function Applicants() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
-  const [isSkillsDropdownOpen, setIsSkillsDropdownOpen] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<number[]>([]);
   const [viewingApplicant, setViewingApplicant] = useState<any>(null);
   const selectAllRef = React.useRef<HTMLInputElement>(null);
@@ -49,6 +47,12 @@ export default function Applicants() {
 
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const getAvatarUrl = (profileImage?: string, name?: string, size = 40) => {
+    if (profileImage) return profileImage;
+    const fallbackName = encodeURIComponent(name || 'User');
+    return `https://ui-avatars.com/api/?name=${fallbackName}&size=${size}&background=0D8ABC&color=fff`;
+  };
 
   const normalizeStatus = (status?: string) => {
     if (!status) return 'Pending Review';
@@ -105,7 +109,9 @@ export default function Applicants() {
       const transformedApplicants = applications.map(app => {
         const skills = Array.isArray(app.skills)
           ? app.skills.map((skill) => (typeof skill === 'string' ? skill : skill?.name)).filter(Boolean)
-          : [];
+          : typeof app.skills === 'string'
+            ? app.skills.split(',').map((skill) => skill.trim()).filter(Boolean)
+            : [];
 
         const education = [];
         if (app.university || app.major || app.current_education_level) {
@@ -134,7 +140,8 @@ export default function Applicants() {
           skills,
           education,
           experience,
-          resumeUrl: app.resume_url || ''
+          resumeUrl: app.resume_url || '',
+          profileImage: app.profile_image || ''
         };
       });
 
@@ -178,15 +185,70 @@ export default function Applicants() {
     onConfirm: () => {},
   });
 
-  const handleDownload = (name: string) => {
-    setModalConfig({
-      isOpen: true,
-      type: 'success',
-      title: 'Download CV',
-      message: `The CV for ${name} is being downloaded. In a real application, this would fetch the PDF file from the server.`,
-      confirmText: 'Got it',
-      onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
-    });
+  const handleDownload = (name: string, resumeUrl?: string) => {
+    if (!resumeUrl) {
+      setModalConfig({
+        isOpen: true,
+        type: 'info',
+        title: 'Download CV',
+        message: `No CV file was provided for ${name}.`,
+        confirmText: 'Got it',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+      });
+      return;
+    }
+
+    const lowerUrl = resumeUrl.toLowerCase();
+    const isPdf = lowerUrl.split('?')[0].endsWith('.pdf');
+    const isGoogleDrive = lowerUrl.includes('drive.google.com');
+    if (!isPdf) {
+      if (isGoogleDrive) {
+        const link = document.createElement('a');
+        link.href = resumeUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.download = `${name}-CV`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return;
+      }
+      setModalConfig({
+        isOpen: true,
+        type: 'info',
+        title: 'Download CV',
+        message: `Only PDF files are allowed. The CV for ${name} is not a PDF.`,
+        confirmText: 'Got it',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+      });
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = resumeUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.download = `${name}-CV`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleExportList = () => {
+    const rows = filteredApplicants.map(app => ({
+      Name: app.name || '',
+      Email: app.email || '',
+      'Applied For': app.role || '',
+      'Applied Date': app.date || '',
+      Status: app.status || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Applicants');
+
+    const fileName = `applicants-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
   };
 
   const handleUpdateStatus = async (id: number, newStatus: string) => {
@@ -415,9 +477,7 @@ export default function Applicants() {
                          app.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === '' || app.role === roleFilter;
     const matchesStatus = statusFilter === '' || app.status === statusFilter;
-    const matchesSkills = selectedSkills.length === 0 || 
-                         selectedSkills.every(skill => app.skills.includes(skill));
-    return matchesSearch && matchesRole && matchesStatus && matchesSkills;
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
   const totalPages = Math.ceil(filteredApplicants.length / itemsPerPage);
@@ -446,30 +506,16 @@ export default function Applicants() {
   // Get unique roles for the filter dropdown
   const uniqueRoles = Array.from(new Set(applicants.map(app => app.role)));
   
-  // Get unique skills for the filter dropdown
-  const uniqueSkills = Array.from(new Set(applicants.flatMap(app => app.skills))).sort();
-
-  const toggleSkill = (skill: string) => {
-    setSelectedSkills(prev => 
-      prev.includes(skill) 
-        ? prev.filter(s => s !== skill) 
-        : [...prev, skill]
-    );
-    setCurrentPage(1);
-  };
-
   const activeFilterCount = [
     searchQuery !== '',
     roleFilter !== '',
-    statusFilter !== '',
-    selectedSkills.length > 0
+    statusFilter !== ''
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
     setSearchQuery('');
     setRoleFilter('');
     setStatusFilter('');
-    setSelectedSkills([]);
     setSelectedApplicants([]);
     setCurrentPage(1);
   };
@@ -551,77 +597,11 @@ export default function Applicants() {
             </AnimatePresence>
           </div>
 
-          <div className="relative min-w-[200px]">
-            <button
-              onClick={() => setIsSkillsDropdownOpen(!isSkillsDropdownOpen)}
-              className={`w-full flex items-center justify-between pl-4 pr-3 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm border ${
-                selectedSkills.length > 0 
-                  ? 'bg-primary/5 border-primary text-primary' 
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Star size={16} className={selectedSkills.length > 0 ? 'text-primary' : 'text-slate-400'} />
-                {selectedSkills.length === 0 ? 'Filter by Skills' : `${selectedSkills.length} Skills Selected`}
-              </div>
-              <ChevronDown size={16} className={`transition-transform duration-200 ${isSkillsDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            <AnimatePresence>
-              {isSkillsDropdownOpen && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-20" 
-                    onClick={() => setIsSkillsDropdownOpen(false)} 
-                  />
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-30 overflow-hidden min-w-[240px]"
-                  >
-                    <div className="p-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      <div className="px-2 py-1.5 mb-1 border-b border-slate-50 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Skills</span>
-                        {selectedSkills.length > 0 && (
-                          <button 
-                            onClick={() => setSelectedSkills([])}
-                            className="text-[10px] font-bold text-red-500 hover:underline"
-                          >
-                            Clear All
-                          </button>
-                        )}
-                      </div>
-                      {uniqueSkills.map((skill: string) => (
-                        <button
-                          key={skill}
-                          onClick={() => toggleSkill(skill)}
-                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                            selectedSkills.includes(skill) 
-                              ? 'bg-primary/10 text-primary font-bold' 
-                              : 'text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                            selectedSkills.includes(skill) ? 'bg-primary border-primary text-background-dark' : 'border-slate-300 bg-white'
-                          }`}>
-                            {selectedSkills.includes(skill) && <Check size={12} strokeWidth={3} />}
-                          </div>
-                          {skill}
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <button 
+          <button
             onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all shadow-sm border ${
-              isFilterOpen || activeFilterCount > 0
-                ? 'bg-primary/5 border-primary text-primary'
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg border transition-all ${
+              isFilterOpen
+                ? 'bg-primary text-background-dark border-primary'
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -634,7 +614,11 @@ export default function Applicants() {
             )}
             {isFilterOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
-          <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-all">
+
+          <button
+            onClick={handleExportList}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-white border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-all"
+          >
             <Download size={20} />
             Export List
           </button>
@@ -718,26 +702,6 @@ export default function Applicants() {
                   </select>
                 </div>
               </div>
-
-              {selectedSkills.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-50">
-                  <span className="text-xs font-medium text-slate-500 py-1">Active Skill Filters:</span>
-                  {selectedSkills.map(skill => (
-                    <span 
-                      key={skill} 
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-xs font-medium border border-primary/20"
-                    >
-                      {skill}
-                      <button 
-                        onClick={() => toggleSkill(skill)}
-                        className="hover:text-primary-dark transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           </motion.div>
         )}
@@ -825,7 +789,6 @@ export default function Applicants() {
                   </div>
                 </th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applicant Name</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Skills</th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applied For</th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applied Date</th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
@@ -848,7 +811,7 @@ export default function Applicants() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <img className="h-10 w-10 rounded-full object-cover" src={`https://picsum.photos/seed/applicant${app.id}/40/40`} alt={app.name} />
+                        <img className="h-10 w-10 rounded-full object-cover" src={getAvatarUrl(app.profileImage, app.name, 40)} alt={app.name} />
                         <div>
                           <button 
                             onClick={() => setViewingApplicant(app)}
@@ -858,15 +821,6 @@ export default function Applicants() {
                           </button>
                           <p className="text-xs text-slate-500">{app.email}</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex flex-wrap gap-1">
-                        {app.skills.map((skill, idx) => (
-                          <span key={idx} className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium border border-slate-200">
-                            {skill}
-                          </span>
-                        ))}
                       </div>
                     </td>
                     <td className="py-4 px-6">
@@ -888,7 +842,7 @@ export default function Applicants() {
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button 
-                          onClick={() => handleDownload(app.name)}
+                          onClick={() => handleDownload(app.name, app.resumeUrl)}
                           className="p-1.5 text-slate-400 hover:text-primary transition-colors" 
                           title="Download CV"
                         >
@@ -1034,7 +988,7 @@ export default function Applicants() {
                 <div className="flex items-start gap-6">
                   <img 
                     className="h-24 w-24 rounded-2xl object-cover shadow-md" 
-                    src={`https://picsum.photos/seed/applicant${viewingApplicant.id}/200/200`} 
+                    src={getAvatarUrl(viewingApplicant.profileImage, viewingApplicant.name, 200)} 
                     alt={viewingApplicant.name} 
                   />
                   <div className="flex-1">
@@ -1141,7 +1095,7 @@ export default function Applicants() {
                 <div className="pt-6 border-t border-slate-100">
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button 
-                      onClick={() => handleDownload(viewingApplicant.name)}
+                      onClick={() => handleDownload(viewingApplicant.name, viewingApplicant.resumeUrl)}
                       className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-background-dark rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all"
                     >
                       <Download size={18} />
@@ -1164,5 +1118,13 @@ export default function Applicants() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
 
 

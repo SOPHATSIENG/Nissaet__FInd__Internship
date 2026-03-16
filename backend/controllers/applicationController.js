@@ -1,4 +1,4 @@
-const db = require('../config/db');
+﻿const db = require('../config/db');
 
 const getCompanyIdByUserId = async (userId) => {
     const rows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
@@ -58,7 +58,7 @@ const getMyApplications = async (req, res) => {
                 a.student_id,
                 a.internship_id,
                 a.cover_letter,
-                a.resume_url,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
                 a.status,
                 a.applied_at AS created_at,
                 a.updated_at,
@@ -71,6 +71,7 @@ const getMyApplications = async (req, res) => {
                 c.name AS company_name,
                 c.logo AS company_logo
              FROM applications a
+             JOIN students s ON a.student_id = s.id
              JOIN internships i ON a.internship_id = i.id
              JOIN companies c ON i.company_id = c.id
              WHERE a.student_id = ?
@@ -122,9 +123,15 @@ const applyForInternship = async (req, res) => {
             return res.status(400).json({ message: 'You have already applied for this internship' });
         }
 
+        const resumeRows = await db.query(
+            'SELECT resume_url FROM students WHERE id = ? LIMIT 1',
+            [studentId]
+        );
+        const resumeUrl = resumeRows[0]?.resume_url || null;
+
         const result = await db.query(
-            'INSERT INTO applications (student_id, internship_id, cover_letter, status) VALUES (?, ?, ?, ?)',
-            [studentId, internship_id, cover_letter || null, 'pending']
+            'INSERT INTO applications (student_id, internship_id, cover_letter, resume_url, status) VALUES (?, ?, ?, ?, ?)',
+            [studentId, internship_id, cover_letter || null, resumeUrl, 'pending']
         );
 
         await db.query(
@@ -175,7 +182,7 @@ const getStudentApplications = async (req, res) => {
                 a.student_id,
                 a.internship_id,
                 a.cover_letter,
-                a.resume_url,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
                 a.status,
                 a.applied_at AS created_at,
                 a.updated_at,
@@ -183,6 +190,7 @@ const getStudentApplications = async (req, res) => {
                 i.company_id,
                 c.name AS company_name
              FROM applications a
+             JOIN students s ON a.student_id = s.id
              JOIN internships i ON a.internship_id = i.id
              JOIN companies c ON i.company_id = c.id
              WHERE a.student_id = ?
@@ -238,7 +246,7 @@ const getInternshipApplications = async (req, res) => {
                 a.student_id,
                 a.internship_id,
                 a.cover_letter,
-                a.resume_url,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
                 a.status,
                 a.applied_at AS created_at,
                 a.updated_at,
@@ -291,7 +299,7 @@ const updateApplicationStatus = async (req, res) => {
         }
 
         // For testing: Allow status updates without authentication
-        console.log(`🔄 Updating application ${id} to status: ${status}`);
+        console.log(`ðŸ”„ Updating application ${id} to status: ${status}`);
 
         // Check if application exists
         const appRows = await db.query(
@@ -306,12 +314,12 @@ const updateApplicationStatus = async (req, res) => {
         }
 
         const application = appRows[0];
-        console.log(`📋 Found application: ID=${application.id}, Current status=${application.status}`);
+        console.log(`ðŸ“‹ Found application: ID=${application.id}, Current status=${application.status}`);
 
         // Update the status in database
         await db.query('UPDATE applications SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, id]);
 
-        console.log(`✅ Successfully updated application ${id} to status: ${status}`);
+        console.log(`âœ… Successfully updated application ${id} to status: ${status}`);
 
         return res.json({ 
             message: 'Application status updated successfully',
@@ -351,16 +359,18 @@ const getCompanyApplications = async (req, res) => {
                 a.student_id,
                 a.internship_id,
                 a.cover_letter,
-                a.resume_url,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
                 a.status,
                 a.applied_at,
                 a.updated_at,
                 u.full_name,
                 u.email,
                 u.phone,
+                COALESCE(u.profile_image, u.profile) AS profile_image,
                 s.university,
                 s.current_education_level,
                 s.major,
+                GROUP_CONCAT(sk.name ORDER BY sk.name SEPARATOR ',') AS skills,
                 i.title AS internship_title,
                 i.company_id,
                 c.name AS company_name
@@ -369,7 +379,10 @@ const getCompanyApplications = async (req, res) => {
              JOIN users u ON s.user_id = u.id
              JOIN internships i ON a.internship_id = i.id
              JOIN companies c ON i.company_id = c.id
+             LEFT JOIN user_skills us ON us.user_id = u.id
+             LEFT JOIN skills sk ON sk.id = us.skill_id
              WHERE i.company_id = ?
+             GROUP BY a.id
              ORDER BY a.applied_at DESC
              LIMIT ? OFFSET ?`,
             [targetCompanyId, limit, offset]
@@ -499,7 +512,7 @@ const getAllApplications = async (req, res) => {
                 a.student_id,
                 a.internship_id,
                 a.cover_letter,
-                a.resume_url,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
                 a.status,
                 a.applied_at,
                 a.updated_at,
@@ -542,3 +555,5 @@ module.exports = {
     bulkUpdateApplicationStatus,
     testDatabaseConnection
 };
+
+

@@ -20,6 +20,7 @@ import {
   Check,
   Trash2,
   FileDown,
+  Star,
   GraduationCap,
   Briefcase,
   Mail,

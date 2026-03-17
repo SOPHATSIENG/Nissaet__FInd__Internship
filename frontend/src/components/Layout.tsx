@@ -29,6 +29,7 @@ export default function Layout() {
     { name: 'Home', path: '/' },
     { name: 'Internships', path: '/internships' },
     { name: 'Companies', path: '/companies' },
+    { name: 'Blog & Events', path: '/blog' },
     { name: 'Career Advice', path: '/career-advice' },
   ];
 

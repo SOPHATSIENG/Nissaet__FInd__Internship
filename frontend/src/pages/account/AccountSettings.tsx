@@ -8,6 +8,8 @@ import {
   PersonalTab,
   SecurityTab,
   SkillsTab,
+  SavedTab,
+  ApplicationsTab,
 } from '../../components/settings/tabs';
 
 const TAB_DESCRIPTION: Record<TabType, string> = {
@@ -16,6 +18,8 @@ const TAB_DESCRIPTION: Record<TabType, string> = {
   skills: 'Add and update skills to improve internship matching.',
   security: 'Manage password, account connections, and login sessions.',
   notifications: 'Control which alerts and updates you receive.',
+  saved: 'Review internships you have bookmarked for later.',
+  applications: 'Track your submitted internship applications and statuses.',
 };
 
 const EMPTY_SETTINGS: ProfileSettingsPayload = {
@@ -61,6 +65,8 @@ export default function AccountSettings() {
   // FIX MARK: all settings tabs now load from API + DB and save dynamically.
   const [activeTab, setActiveTab] = useState<TabType>('personal');
   const [settings, setSettings] = useState<ProfileSettingsPayload>(EMPTY_SETTINGS);
+  const [savedInternships, setSavedInternships] = useState<any[]>([]);
+  const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -73,8 +79,18 @@ export default function AccountSettings() {
         if (response?.settings) {
           setSettings((previous) => ({...previous, ...response.settings}));
         }
+
+        const savedResponse = await api.getSavedInternships();
+        if (savedResponse?.internships) {
+          setSavedInternships(savedResponse.internships);
+        }
+
+        const applicationsResponse = await api.getMyApplications({ limit: 100 });
+        if (applicationsResponse?.applications) {
+          setApplications(applicationsResponse.applications);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load account settings.');
+        setError(err instanceof Error ? err.message : 'Failed to load settings.');
       } finally {
         setLoading(false);
       }
@@ -90,8 +106,18 @@ export default function AccountSettings() {
       skills: <SkillsTab data={settings.skills} onSaved={setSettings} />,
       security: <SecurityTab data={settings.security} onSaved={setSettings} />,
       notifications: <NotificationsTab data={settings.notifications} onSaved={setSettings} />,
+      saved: <SavedTab savedInternships={savedInternships} onUnsaved={async (internshipId) => {
+        try {
+          await api.unsaveInternship(internshipId);
+          const res = await api.getSavedInternships();
+          if (res?.internships) setSavedInternships(res.internships);
+        } catch (error) {
+          console.error('Failed to unsave internship:', error);
+        }
+      }} />,
+      applications: <ApplicationsTab applications={applications} />,
     }),
-    [settings]
+    [settings, savedInternships, applications]
   );
 
   return (

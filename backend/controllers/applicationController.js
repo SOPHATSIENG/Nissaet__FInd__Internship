@@ -371,6 +371,7 @@ const getCompanyApplications = async (req, res) => {
                 s.university,
                 s.current_education_level,
                 s.major,
+                s.is_available,
                 GROUP_CONCAT(sk.name ORDER BY sk.name SEPARATOR ',') AS skills,
                 i.title AS internship_title,
                 i.company_id,

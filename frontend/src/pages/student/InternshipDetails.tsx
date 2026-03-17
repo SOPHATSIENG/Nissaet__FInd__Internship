@@ -42,9 +42,33 @@ export default function InternshipDetails() {
   const [isApplying, setIsApplying] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [coverLetter, setCoverLetter] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchInternship();
+  }, [id]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSavedStatus = async () => {
+      if (!id) return;
+      try {
+        const res = await api.getSavedInternships();
+        const saved = Array.isArray(res?.internships)
+          ? res.internships.some((item: { id: number }) => String(item.id) === String(id))
+          : false;
+        if (mounted) setIsSaved(saved);
+      } catch (error) {
+        console.error('Error loading saved internships:', error);
+      }
+    };
+
+    loadSavedStatus();
+    return () => {
+      mounted = false;
+    };
   }, [id]);
 
   const fetchInternship = async () => {
@@ -71,6 +95,10 @@ export default function InternshipDetails() {
     if (!stipend || stipend === 0) return 'Unpaid';
     return `${internship.stipend_currency || '$'}${internship.stipend}/mo`;
   };
+
+  const internshipType = internship?.work_mode || internship?.type || 'Internship';
+  const internshipDuration = internship?.duration_months ?? internship?.duration ?? 'Variable';
+  const applicationDeadline = internship?.application_deadline || internship?.deadline;
 
   const getPostedTime = (dateStr: string) => {
     try {
@@ -105,6 +133,25 @@ export default function InternshipDetails() {
     }
   };
 
+  const handleToggleSave = async () => {
+    if (!id) return;
+    setIsSaving(true);
+    try {
+      if (isSaved) {
+        await api.unsaveInternship(id);
+        setIsSaved(false);
+      } else {
+        await api.saveInternship(id);
+        setIsSaved(true);
+      }
+    } catch (error) {
+      console.error('Error updating saved status:', error);
+      alert('Failed to update saved status. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="bg-[#f3f5f8] min-h-screen py-8 px-4 sm:px-6 lg:px-8">
       {loading ? (
@@ -131,10 +178,16 @@ export default function InternshipDetails() {
             </button>
             <button
               type="button"
-              className="h-12 px-5 rounded-xl bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-2 font-medium"
+              onClick={handleToggleSave}
+              disabled={isSaving}
+              className={`h-12 px-5 rounded-xl transition-colors flex items-center gap-2 font-medium ${
+                isSaved
+                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+              } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
               <Bookmark size={18} />
-              Save
+              {isSaved ? 'Unsave' : 'Save'}
             </button>
           </div>
         </div>
@@ -176,6 +229,9 @@ export default function InternshipDetails() {
                   <Clock3 size={18} /> Posted {safePostedTime}
                 </span>
               </div>
+              <div className="mt-2 text-sm text-slate-500">
+                {internshipType.replace('-', ' ')} - {internship.location}
+              </div>
             </div>
           </div>
         </div>
@@ -189,17 +245,17 @@ export default function InternshipDetails() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Location</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.location} ({internship.work_mode})</p>
+                <p className="text-sm font-semibold text-slate-800">{internship.location} ({internship.work_mode || internship.type})</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
                 <Clock3 size={20} />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Duration</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.duration_months ? `${internship.duration_months} Months` : 'Variable'}</p>
+                <p className="text-sm font-semibold text-slate-800">{internshipDuration && internshipDuration !== 'Variable' ? `${internshipDuration} Months` : 'Variable'}</p>
               </div>
             </div>
 
@@ -219,11 +275,13 @@ export default function InternshipDetails() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Deadline</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.application_deadline ? new Date(internship.application_deadline).toLocaleDateString() : 'Open Until Filled'}</p>
+                <p className="text-sm font-semibold text-slate-800">{applicationDeadline ? new Date(applicationDeadline).toLocaleDateString() : 'Open Until Filled'}</p>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Content Section */}
 
         {/* Content Section */}
         <div className="px-6 md:px-8 py-10">
@@ -309,7 +367,7 @@ export default function InternshipDetails() {
           <div className="flex items-center gap-4">
              <div className="hidden sm:block">
               <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">Apply By</p>
-              <p className="text-lg font-bold text-slate-900">{internship.application_deadline ? new Date(internship.application_deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Always Open'}</p>
+              <p className="text-lg font-bold text-slate-900">{applicationDeadline ? new Date(applicationDeadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Always Open'}</p>
             </div>
           </div>
           <button
@@ -394,4 +452,5 @@ export default function InternshipDetails() {
     </div>
   );
 }
+
 

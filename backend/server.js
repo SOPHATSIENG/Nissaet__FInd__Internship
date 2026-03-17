@@ -44,6 +44,7 @@ const profileRoutes = require('./routes/profileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
 const eventRoutes = require('./routes/eventRoutes');
+const postRoutes = require('./routes/postRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/internships', internshipRoutes);
@@ -52,6 +53,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/posts', postRoutes);
 
 const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 5001;
 const PORT_RETRY_COUNT = Number.parseInt(process.env.PORT_RETRY_COUNT, 10) || 10;

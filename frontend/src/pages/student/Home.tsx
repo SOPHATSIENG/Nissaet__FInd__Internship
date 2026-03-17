@@ -43,6 +43,9 @@ export default function Home() {
   const [latestInternships, setLatestInternships] = useState<Internship[]>([]);
   const [matchingInternships, setMatchingInternships] = useState<Internship[]>([]);
   const [profileSkills, setProfileSkills] = useState<string[]>([]);
+  const [isAvailable, setIsAvailable] = useState<boolean>(false);
+  const [userName, setUserName] = useState<string>('');
+  const [studentId, setStudentId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,6 +92,20 @@ export default function Home() {
                   .filter(Boolean)
               : []
           );
+
+          if (profileRes?.settings) {
+            setIsAvailable(!!profileRes.settings.education?.is_available);
+            setUserName(profileRes.settings.personal?.full_name || "");
+
+            try {
+              const studentRes = await api.getApplicants().catch(() => null);
+              if (studentRes?.applications?.length > 0) {
+                setStudentId(studentRes.applications[0].student_id);
+              }
+            } catch {
+              // Ignore if student ID lookup fails
+            }
+          }
         } catch (err) {
           console.error('Profile settings failed:', err);
           // Don't throw error for profile, it's optional

@@ -167,6 +167,10 @@ export const api = {
     return request('/profile/security/two-factor', { method: 'PUT', auth: true, body: payload });
   },
 
+  getStudentProfile(id) {
+    return request(`/profile/student/${id}`);
+  },
+
   // Skills endpoint
   getSkills(params = {}) {
     const query = new URLSearchParams(
@@ -213,11 +217,56 @@ export const api = {
     ).toString();
 
     return request(`/internships${query ? `?${query}` : ''}`).then((data) => {
+      if (data && data.success === false) {
+        throw new Error(data.message || 'Failed to fetch internships');
+      }
       if (Array.isArray(data)) {
         return { internships: data };
       }
       return data;
     });
+  },
+
+  getSavedInternships() {
+    return request('/internships/saved', { auth: true }).then((data) => {
+      if (Array.isArray(data)) {
+        return { internships: data };
+      }
+      return data;
+    });
+  },
+
+  saveInternship(internshipId) {
+    return request(`/internships/${internshipId}/save`, { method: 'POST', auth: true });
+  },
+
+  // Blog & Events endpoints
+  getPosts(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/posts${query ? `?${query}` : ''}`, { auth: true });
+  },
+
+  getPostById(id) {
+    return request(`/posts/${id}`, { auth: true });
+  },
+
+  unsaveInternship(internshipId) {
+    return request(`/internships/${internshipId}/save`, { method: 'DELETE', auth: true });
+  },
+
+  getMyApplications(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/applications/my${query ? `?${query}` : ''}`, { auth: true });
   },
 
   getMatchingInternships() {

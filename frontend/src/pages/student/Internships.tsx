@@ -76,7 +76,6 @@ export default function Internships() {
   const [internships, setInternships] = useState<InternshipApiItem[]>([]);
   const [matchingInternships, setMatchingInternships] = useState<InternshipApiItem[]>([]);
   const [savedInternships, setSavedInternships] = useState<InternshipApiItem[]>([]);
-  const [myApplications, setMyApplications] = useState<ApplicationStatus>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -84,7 +83,6 @@ export default function Internships() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const [activeTab, setActiveTab] = useState("all");
   const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
   const [skillsFilter, setSkillsFilter] = useState<number[]>([]);
   const [minPositions, setMinPositions] = useState<number | "">("");
@@ -131,7 +129,9 @@ export default function Internships() {
           setInternships(Array.isArray(res?.internships) ? res.internships : []);
         }
       } catch (err) {
-        if (mounted) setError("Failed to load internships. Please try again later.");
+        const message = err instanceof Error ? err.message : JSON.stringify(err);
+        console.error('Internship load error:', err);
+        if (mounted) setError(`Failed to load internships. ${message}`);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -158,7 +158,29 @@ export default function Internships() {
     return () => { mounted = false; };
   }, []);
 
+  // Fetch saved internships
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSaved = async () => {
+      try {
+        const res = await api.getSavedInternships();
+        if (mounted && res?.internships) {
+          setSavedInternships(res.internships);
+        }
+      } catch (err) {
+        console.error('Failed to load saved internships:', err);
+      }
+    };
+
+    loadSaved();
+
+    return () => { mounted = false; };
+  }, []);
+
   // Transform API data to Card format for display
+  const savedInternshipIds = useMemo(() => new Set(savedInternships.map((item) => item.id)), [savedInternships]);
+
   const cards: InternshipCard[] = useMemo(() => {
     return internships.map((item) => {
       const tags = [item.work_mode, salaryText(item)].filter(Boolean);
@@ -169,13 +191,13 @@ export default function Internships() {
         location: item.location,
         pay: salaryText(item),
         tags,
-        saved: false,
+        saved: savedInternshipIds.has(item.id),
         closed: false,
         logo: item.company_logo || `https://picsum.photos/seed/job-${item.id}/48/48`,
         isNew: item.created_at ? (new Date().getTime() - new Date(item.created_at).getTime()) < 604800000 : false,
       };
     });
-  }, [internships]);
+  }, [internships, savedInternshipIds]);
 
   // Skill-based filtering (Client-side refinement)
   const filteredCards = useMemo(() => {
@@ -199,6 +221,32 @@ export default function Internships() {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const refreshSavedData = async () => {
+    try {
+      const res = await api.getSavedInternships();
+      if (res?.internships) setSavedInternships(res.internships);
+    } catch (err) {
+      console.error('Error refreshing saved internships:', err);
+    }
+  };
+
+  const displayedPaginatedCards = paginatedCards;
+  const pageTitle = loading ? 'Searching...' : `${filteredCards.length} Internships found`;
+
+  const handleToggleSave = async (internshipId: number, currentlySaved: boolean) => {
+    try {
+      if (currentlySaved) {
+        await api.unsaveInternship(internshipId);
+      } else {
+        await api.saveInternship(internshipId);
+      }
+      await refreshSavedData();
+    } catch (err) {
+      console.error('Error toggling saved internship:', err);
+      alert((err as Error).message || 'Could not update save status.');
     }
   };
 
@@ -264,33 +312,10 @@ export default function Internships() {
           <aside className="w-full lg:w-64 flex-shrink-0 space-y-6">
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
               <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => setActiveTab("all")}
-                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                    activeTab === "all" ? "bg-[#3b82f6]/10 text-[#2563eb]" : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
+                <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium bg-[#3b82f6]/10 text-[#2563eb]">
                   <Briefcase className="w-4 h-4" />
                   All Internships
-                </button>
-                <button
-                  onClick={() => setActiveTab("saved")}
-                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                    activeTab === "saved" ? "bg-[#3b82f6]/10 text-[#2563eb]" : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  <Bookmark className="w-4 h-4" />
-                  Saved ({savedInternships.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("applied")}
-                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                    activeTab === "applied" ? "bg-[#3b82f6]/10 text-[#2563eb]" : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                  My Applications
-                </button>
+                </div>
               </div>
             </div>
 
@@ -423,7 +448,7 @@ export default function Internships() {
 
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">
-                {loading ? "Searching..." : `${filteredCards.length} Internships found`}
+                {loading ? "Searching..." : pageTitle}
               </h2>
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <span>Sort by:</span>
@@ -435,12 +460,12 @@ export default function Internships() {
             </div>
 
             <div className="space-y-4">
-              {!loading && filteredCards.length === 0 ? (
+              {!loading && displayedPaginatedCards.length === 0 ? (
                 <div className="bg-white p-20 rounded-2xl border border-dashed border-gray-200 text-center text-gray-500 font-medium">
                   No internships match your criteria. Try adjusting your filters.
                 </div>
               ) : (
-                paginatedCards.map((job) => (
+                displayedPaginatedCards.map((job) => (
                   <div
                     key={job.id}
                     className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:border-[#3b82f6]/50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-6"
@@ -487,16 +512,20 @@ export default function Internships() {
                       >
                         View Details
                       </Link>
-                      <button 
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors"
-                        onClick={() => alert("Internship saved to your bookmarks!")}
+                      <button
+                        className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors ${
+                          job.saved
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                        }`}
+                        onClick={() => handleToggleSave(job.id, !!job.saved)}
                       >
-                        <Bookmark className="w-4 h-4" /> Save
+                        <Bookmark className="w-4 h-4" /> {job.saved ? 'Unsave' : 'Save'}
                       </button>
                     </div>
                   </div>
-                )
-              ))}
+                ))
+              )}
             </div>
 
             {/* Pagination */}

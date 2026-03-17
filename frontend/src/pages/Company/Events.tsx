@@ -415,6 +415,7 @@ export default function Events() {
         message={`Are you sure you want to delete "${selectedEvent?.title}"? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
+        type="danger"
       />
     </div>
   );

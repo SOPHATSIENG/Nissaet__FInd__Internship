@@ -511,6 +511,7 @@ export default function PostEvent() {
         message="Are you sure you want to delete this event? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
+        type="danger"
       />
     </div>
   );

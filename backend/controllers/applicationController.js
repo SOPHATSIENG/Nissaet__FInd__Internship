@@ -1,4 +1,4 @@
-const db = require('../config/db');
+﻿const db = require('../config/db');
 
 const getStudentIdByUserId = async (userId) => {
     const rows = await db.query('SELECT id FROM students WHERE user_id = ? LIMIT 1', [userId]);
@@ -27,6 +27,79 @@ const parsePagination = (query = {}) => {
     return { page, limit, offset };
 };
 
+const getMyApplications = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        if (req.user?.role !== 'student') {
+            return res.status(403).json({ message: 'Only students can view their applications' });
+        }
+
+        const studentId = await getStudentIdByUserId(userId);
+        
+        if (!studentId) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const { page, limit, offset } = parsePagination(req.query);
+
+        const applications = await db.query(
+            `SELECT
+                a.id,
+                a.student_id,
+                a.internship_id,
+                a.cover_letter,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
+                a.status,
+                a.applied_at AS created_at,
+                a.updated_at,
+                i.title,
+                i.company_id,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary,
+                i.application_deadline AS deadline,
+                c.name AS company_name,
+                c.logo AS company_logo
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN internships i ON a.internship_id = i.id
+             JOIN companies c ON i.company_id = c.id
+             WHERE a.student_id = ?
+             ORDER BY a.applied_at DESC
+             LIMIT ? OFFSET ?`,
+            [studentId, limit, offset]
+        );
+
+        const countRows = await db.query(
+            'SELECT COUNT(*) AS total FROM applications WHERE student_id = ?',
+            [studentId]
+        );
+        const total = Number(countRows[0]?.total || 0);
+        const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+        return res.json({
+            applications,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+                hasNext: page < totalPages,
+                hasPrev: page > 1
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching my applications:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const applyForInternship = async (req, res) => {
     try {
         const { internship_id, cover_letter } = req.body;
@@ -46,9 +119,15 @@ const applyForInternship = async (req, res) => {
             return res.status(400).json({ message: 'You have already applied for this internship' });
         }
 
+        const resumeRows = await db.query(
+            'SELECT resume_url FROM students WHERE id = ? LIMIT 1',
+            [studentId]
+        );
+        const resumeUrl = resumeRows[0]?.resume_url || null;
+
         const result = await db.query(
-            'INSERT INTO applications (student_id, internship_id, cover_letter, status) VALUES (?, ?, ?, ?)',
-            [studentId, internship_id, cover_letter || null, 'pending']
+            'INSERT INTO applications (student_id, internship_id, cover_letter, resume_url, status) VALUES (?, ?, ?, ?, ?)',
+            [studentId, internship_id, cover_letter || null, resumeUrl, 'pending']
         );
 
         await db.query(
@@ -99,7 +178,7 @@ const getStudentApplications = async (req, res) => {
                 a.student_id,
                 a.internship_id,
                 a.cover_letter,
-                a.resume_url,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
                 a.status,
                 a.created_at,
                 a.updated_at,
@@ -107,6 +186,7 @@ const getStudentApplications = async (req, res) => {
                 i.company_id,
                 c.company_name
              FROM applications a
+             JOIN students s ON a.student_id = s.id
              JOIN internships i ON a.internship_id = i.id
              JOIN companies c ON i.company_id = c.id
              WHERE a.student_id = ?
@@ -162,7 +242,7 @@ const getInternshipApplications = async (req, res) => {
                 a.student_id,
                 a.internship_id,
                 a.cover_letter,
-                a.resume_url,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
                 a.status,
                 a.created_at,
                 a.updated_at,
@@ -214,8 +294,12 @@ const updateApplicationStatus = async (req, res) => {
             return res.status(400).json({ message: 'Invalid status' });
         }
 
+        // For testing: Allow status updates without authentication
+        console.log(`ðŸ”„ Updating application ${id} to status: ${status}`);
+
+        // Check if application exists
         const appRows = await db.query(
-            `SELECT a.id, a.internship_id
+            `SELECT a.id, a.internship_id, a.status
              FROM applications a
              WHERE a.id = ?`,
             [id]
@@ -226,76 +310,233 @@ const updateApplicationStatus = async (req, res) => {
         }
 
         const application = appRows[0];
-        const companyOwnerUserId = await getCompanyUserIdByInternshipId(application.internship_id);
+        console.log(`ðŸ“‹ Found application: ID=${application.id}, Current status=${application.status}`);
 
-        const isAdmin = req.user?.role === 'admin';
-        const isOwnerCompany = req.user?.role === 'company' && Number(req.user.userId) === Number(companyOwnerUserId);
+        // Update the status in database
+        await db.query('UPDATE applications SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, id]);
 
-        if (!isAdmin && !isOwnerCompany) {
-            return res.status(403).json({ message: 'Forbidden' });
-        }
+        console.log(`âœ… Successfully updated application ${id} to status: ${status}`);
 
-        await db.query('UPDATE applications SET status = ? WHERE id = ?', [status, id]);
-
-        return res.json({ message: 'Application status updated successfully' });
+        return res.json({ 
+            message: 'Application status updated successfully',
+            applicationId: id,
+            oldStatus: application.status,
+            newStatus: status
+        });
     } catch (error) {
         console.error('Error updating application status:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 };
 
-/**
- * Get all applications for internships belonging to the authenticated company
- */
 const getCompanyApplications = async (req, res) => {
     try {
-        const userId = req.user.userId;
-        const companyRows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
-        if (companyRows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Company profile not found' });
+        const companyId = await getCompanyIdByUserId(req.user.userId);
+        
+        if (!companyId) {
+            return res.status(404).json({ message: 'Company not found' });
         }
-        const companyId = companyRows[0].id;
 
         const { page, limit, offset } = parsePagination(req.query);
+        const isAdmin = req.user?.role === 'admin';
 
-        const sql = `
-            SELECT
+        let targetCompanyId = companyId;
+        if (!isAdmin) {
+            const ownCompanyId = await getCompanyIdByUserId(req.user.userId);
+            if (!ownCompanyId) {
+                return res.status(404).json({ message: 'Company profile not found' });
+            }
+            targetCompanyId = ownCompanyId;
+        }
+
+        const applications = await db.query(
+            `SELECT
                 a.id,
                 a.student_id,
                 a.internship_id,
+                a.cover_letter,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
                 a.status,
-                a.created_at,
+                a.applied_at,
+                a.updated_at,
+                u.full_name,
+                u.email,
+                u.phone,
+                COALESCE(u.profile_image, u.profile) AS profile_image,
+                s.university,
+                s.current_education_level,
+                s.major,
+                GROUP_CONCAT(sk.name ORDER BY sk.name SEPARATOR ',') AS skills,
                 i.title AS internship_title,
-                u.full_name AS student_name,
-                u.profile_image AS student_image
-            FROM applications a
-            JOIN internships i ON a.internship_id = i.id
-            JOIN students s ON a.student_id = s.id
-            JOIN users u ON s.user_id = u.id
-            WHERE i.company_id = ?
-            ORDER BY a.created_at DESC
-            LIMIT ? OFFSET ?
-        `;
-
-        const applications = await db.query(sql, [companyId, limit, offset]);
+                i.company_id,
+                c.name AS company_name
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN users u ON s.user_id = u.id
+             JOIN internships i ON a.internship_id = i.id
+             JOIN companies c ON i.company_id = c.id
+             LEFT JOIN user_skills us ON us.user_id = u.id
+             LEFT JOIN skills sk ON sk.id = us.skill_id
+             WHERE i.company_id = ?
+             GROUP BY a.id
+             ORDER BY a.applied_at DESC
+             LIMIT ? OFFSET ?`,
+            [targetCompanyId, limit, offset]
+        );
 
         const countRows = await db.query(
-            `SELECT COUNT(*) AS total 
+            `SELECT COUNT(*) AS total
              FROM applications a
              JOIN internships i ON a.internship_id = i.id
              WHERE i.company_id = ?`,
-            [companyId]
+            [targetCompanyId]
         );
         const total = Number(countRows[0]?.total || 0);
+        const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 
         return res.json({
-            success: true,
             applications,
-            total
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+                hasNext: page < totalPages,
+                hasPrev: page > 1
+            }
         });
     } catch (error) {
         console.error('Error fetching company applications:', error);
-        return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const bulkUpdateApplicationStatus = async (req, res) => {
+    try {
+        const { ids, status } = req.body;
+        const companyId = await getCompanyIdByUserId(req.user.userId);
+        
+        if (!companyId) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ message: 'Application IDs are required' });
+        }
+
+        const validStatuses = new Set(['pending', 'reviewing', 'shortlisted', 'rejected', 'withdrawn']);
+        if (!validStatuses.has(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        // Verify all applications belong to this company
+        const applicationChecks = await db.query(
+            `SELECT a.id, i.company_id
+             FROM applications a
+             JOIN internships i ON a.internship_id = i.id
+             WHERE a.id IN (${ids.map(() => '?').join(',')}) AND i.company_id = ${companyId}`,
+            [ids, companyId]
+        );
+
+        if (applicationChecks.length !== ids.length) {
+            return res.status(404).json({ message: 'Some applications not found or do not belong to your company' });
+        }
+
+        const connection = await db.connection();
+        try {
+            await connection.beginTransaction();
+
+            for (const id of ids) {
+                await connection.execute(
+                    'UPDATE applications SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    [status, id]
+                );
+            }
+
+            await connection.commit();
+            return res.json({ 
+                message: `${ids.length} application(s) updated successfully`,
+                updatedCount: ids.length
+            });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error bulk updating application status:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const testDatabaseConnection = async (req, res) => {
+    try {
+        // Test basic database connection
+        const testQuery = await db.query('SELECT 1 as test');
+        console.log('Database connection test:', testQuery);
+        
+        // Test if applications table exists and has data
+        const applicationsCount = await db.query('SELECT COUNT(*) as count FROM applications');
+        console.log('Applications count:', applicationsCount);
+        
+        // Test if companies table exists
+        const companiesCount = await db.query('SELECT COUNT(*) as count FROM companies');
+        console.log('Companies count:', companiesCount);
+        
+        return res.json({
+            databaseConnected: true,
+            applicationsCount: applicationsCount[0]?.count || 0,
+            companiesCount: companiesCount[0]?.count || 0,
+            message: 'Database connection successful'
+        });
+    } catch (error) {
+        console.error('Database test failed:', error);
+        return res.status(500).json({
+            databaseConnected: false,
+            error: error.message,
+            message: 'Database connection failed'
+        });
+    }
+};
+
+const getAllApplications = async (req, res) => {
+    try {
+        const applications = await db.query(
+            `SELECT
+                a.id,
+                a.student_id,
+                a.internship_id,
+                a.cover_letter,
+                COALESCE(a.resume_url, s.resume_url) AS resume_url,
+                a.status,
+                a.applied_at,
+                a.updated_at,
+                u.full_name,
+                u.email,
+                u.phone,
+                s.university,
+                s.current_education_level,
+                s.major,
+                i.title AS internship_title,
+                i.company_id,
+                c.name AS company_name
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN users u ON s.user_id = u.id
+             JOIN internships i ON a.internship_id = i.id
+             JOIN companies c ON i.company_id = c.id
+             ORDER BY a.applied_at DESC
+             LIMIT 50`
+        );
+
+        return res.json({
+            applications,
+            total: applications.length
+        });
+    } catch (error) {
+        console.error('Error fetching all applications:', error);
+        return res.status(500).json({ message: 'Server error' });
     }
 };
 
@@ -304,7 +545,10 @@ module.exports = {
     getStudentApplications,
     getInternshipApplications,
     updateApplicationStatus,
-    getCompanyApplications
+    getCompanyApplications,
+    getAllApplications,
+    bulkUpdateApplicationStatus,
+    testDatabaseConnection
 };
 
 

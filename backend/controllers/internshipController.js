@@ -1,146 +1,117 @@
 const db = require('../config/db');
 
-/**
- * Helper to identify database field errors (missing columns/tables)
- */
-const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
-
-/**
- * Helper to get company ID by user ID
- */
 const getCompanyIdByUserId = async (userId) => {
-    try {
-        const rows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
-        return rows.length > 0 ? rows[0].id : null;
-    } catch (error) {
-        console.error('Error getting company ID:', error);
-        return null;
-    }
+    const rows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+    return rows.length > 0 ? rows[0].id : null;
 };
 
-/**
- * Get all internships with dynamic filtering and search
- */
 const getAllInternships = async (req, res) => {
     try {
-        const {
-            search,
-            location,
-            type,
-            remote,
-            hybrid,
-            min_stipend,
-            max_stipend,
-            skills, // comma-separated skill IDs
-            limit = 10,
-            offset = 0,
-            sort = 'recent'
-        } = req.query;
+        const parsedLimit = Number.parseInt(req.query.limit, 10);
+        const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : null;
 
-        let whereClause = "WHERE i.status = 'active'";
-        const params = [];
+        const internships = await db.query(
+            `SELECT
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.location,
+                i.type AS work_mode,
+                i.duration_months AS duration,
+                i.stipend AS salary_min,
+                i.stipend AS salary_max,
+                CASE 
+                    WHEN i.stipend > 0 THEN 'paid'
+                    ELSE 'unpaid'
+                END AS salary_type,
+                i.positions,
+                i.application_deadline AS deadline,
+                i.status AS is_active,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
+                c.logo AS company_logo
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+             WHERE i.status = 'active' AND i.is_flagged = 0
+        `;
 
-        // Keyword Search
+        const queryParams = [];
+
         if (search) {
-            whereClause += ` AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)`;
-            const searchVal = `%${search}%`;
-            params.push(searchVal, searchVal, searchVal);
+            query += ' AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)';
+            const searchPattern = `%${search}%`;
+            queryParams.push(searchPattern, searchPattern, searchPattern);
         }
 
-        // Location Filter
         if (location) {
-            whereClause += ` AND (i.location LIKE ? OR c.headquarters LIKE ?)`;
-            const locVal = `%${location}%`;
-            params.push(locVal, locVal);
+            query += ' AND (i.location LIKE ? OR c.headquarters LIKE ?)';
+            const locationPattern = `%${location}%`;
+            queryParams.push(locationPattern, locationPattern);
         }
 
-        // Type Filter
-        if (type && type !== 'all') {
-            whereClause += ` AND i.type = ?`;
-            params.push(type);
+        if (work_mode && work_mode !== 'All') {
+            query += ' AND i.type = ?';
+            queryParams.push(work_mode.toLowerCase());
         }
 
-        // Work Mode Filters
-        if (remote === 'true' || remote === '1') {
-            whereClause += ` AND i.is_remote = 1`;
-        }
-        if (hybrid === 'true' || hybrid === '1') {
-            whereClause += ` AND i.is_hybrid = 1`;
-        }
-
-        // Stipend / Salary Filters
-        if (min_stipend) {
-            whereClause += ` AND i.stipend >= ?`;
-            params.push(Number(min_stipend));
-        }
-        if (max_stipend) {
-            whereClause += ` AND i.stipend <= ?`;
-            params.push(Number(max_stipend));
-        }
-
-        // Skill Filters
-        if (skills) {
-            const skillIds = String(skills).split(',').map(id => Number(id)).filter(id => !isNaN(id));
-            if (skillIds.length > 0) {
-                whereClause += ` AND i.id IN (
-                    SELECT internship_id FROM internship_skills 
-                    WHERE skill_id IN (${skillIds.map(() => '?').join(',')})
-                )`;
-                params.push(...skillIds);
+        if (salary_type && salary_type !== 'All') {
+            if (salary_type.toLowerCase() === 'paid') {
+                query += ' AND i.stipend > 0';
+            } else if (salary_type.toLowerCase() === 'unpaid') {
+                query += ' AND i.stipend = 0';
             }
         }
 
-        // Get total count first
-        const countSql = `
-            SELECT COUNT(*) as total 
-            FROM internships i
-            JOIN companies c ON i.company_id = c.id
-            ${whereClause}
-        `;
-        const countResult = await db.query(countSql, params);
-        const total = countResult[0].total;
+        query += ' ORDER BY i.created_at DESC';
 
-        // Sorting
-        let orderBy = "ORDER BY i.created_at DESC";
-        switch (sort) {
-            case 'salary_desc':
-                orderBy = ` ORDER BY i.stipend DESC, i.created_at DESC`;
-                break;
-            case 'salary_asc':
-                orderBy = ` ORDER BY i.stipend ASC, i.created_at DESC`;
-                break;
-            case 'popular':
-                orderBy = ` ORDER BY i.applications_count DESC, i.created_at DESC`;
-                break;
-            case 'recent':
-            default:
-                orderBy = ` ORDER BY i.created_at DESC`;
+        if (limit) {
+            query += ' LIMIT ?';
+            queryParams.push(limit);
         }
 
-        let sql = `
-            SELECT
-                i.*,
-                c.name AS company_name,
-                c.logo AS company_logo,
-                c.industry AS company_industry,
-                c.headquarters AS company_location,
-                CASE 
-                    WHEN i.is_remote = 1 THEN 'Remote'
-                    WHEN i.is_hybrid = 1 THEN 'Hybrid'
-                    ELSE 'On-site'
-                END AS work_mode
+        // Get total count before applying limit
+        let countQuery = `
+            SELECT COUNT(*) as total
             FROM internships i
             JOIN companies c ON i.company_id = c.id
-            ${whereClause}
-            ${orderBy}
-            LIMIT ? OFFSET ?
+            WHERE i.status = 'active' AND i.is_flagged = 0
         `;
-        
-        const queryParams = [...params, Number.parseInt(limit, 10), Number.parseInt(offset, 10)];
+        const countParams = [];
+        if (search) {
+            countQuery += ' AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)';
+            const searchPattern = `%${search}%`;
+            countParams.push(searchPattern, searchPattern, searchPattern);
+        }
+        if (location) {
+            countQuery += ' AND (i.location LIKE ? OR c.headquarters LIKE ?)';
+            const locationPattern = `%${location}%`;
+            countParams.push(locationPattern, locationPattern);
+        }
+        if (work_mode && work_mode !== 'All') {
+            countQuery += ' AND i.type = ?';
+            countParams.push(work_mode.toLowerCase());
+        }
+        if (salary_type && salary_type !== 'All') {
+            if (salary_type.toLowerCase() === 'paid') {
+                countQuery += ' AND i.stipend > 0';
+            } else if (salary_type.toLowerCase() === 'unpaid') {
+                countQuery += ' AND i.stipend = 0';
+            }
+        }
 
         let internships;
+        let total = 0;
+
         try {
-            internships = await db.query(sql, queryParams);
+            const countResult = await db.query(countQuery, countParams);
+            total = countResult[0]?.total || 0;
+            internships = await db.query(query, queryParams);
         } catch (error) {
             if (!isBadFieldError(error)) throw error;
             
@@ -149,15 +120,16 @@ const getAllInternships = async (req, res) => {
             let fallbackSql = `
                 SELECT
                     i.*,
-                    c.company_name,
+                    c.name AS company_name,
                     c.logo AS company_logo,
-                    c.location AS company_location
+                    c.headquarters AS company_location
                 FROM internships i
                 JOIN companies c ON i.company_id = c.id
-                WHERE (i.is_active = 1 OR i.status = 'active')
+                WHERE i.status = 'active'
                 ORDER BY i.created_at DESC LIMIT ?
             `;
-            internships = await db.query(fallbackSql, [Number.parseInt(limit, 10)]);
+            internships = await db.query(fallbackSql, [limit || 10]);
+            total = internships.length;
         }
 
         return res.json({ 
@@ -168,19 +140,17 @@ const getAllInternships = async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching internships:', error);
-        return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(500).json({ message: 'Server error' });
     }
 };
 
-/**
- * Get featured companies
- */
 const getFeaturedCompanies = async (req, res) => {
     try {
-        const limit = Number.parseInt(req.query.limit, 10) || 8;
+        const parsedLimit = Number.parseInt(req.query.limit, 10);
+        const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 24) : 8;
 
-        let sql = `
-            SELECT
+        const companies = await db.query(
+            `SELECT
                 c.id,
                 c.name AS company_name,
                 c.description,
@@ -191,50 +161,25 @@ const getFeaturedCompanies = async (req, res) => {
              LEFT JOIN internships i
                 ON i.company_id = c.id
                 AND i.status = 'active'
+                AND i.is_flagged = 0
              GROUP BY c.id, c.name, c.description, c.logo, c.headquarters
              ORDER BY open_positions DESC, c.name ASC
-             LIMIT ${limit}
-        `;
+             LIMIT ${limit}`
+        );
 
-        let companies;
-        try {
-            companies = await db.query(sql, [limit]);
-        } catch (error) {
-            if (!isBadFieldError(error)) throw error;
-            
-            const fallbackSql = `
-                SELECT
-                    c.id,
-                    c.company_name,
-                    c.description,
-                    c.logo,
-                    c.location,
-                    COUNT(i.id) AS open_positions
-                FROM companies c
-                LEFT JOIN internships i ON i.company_id = c.id
-                GROUP BY c.id, c.company_name, c.description, c.logo, c.location
-                ORDER BY open_positions DESC
-                LIMIT ?
-            `;
-            companies = await db.query(fallbackSql, [limit]);
-        }
-
-        return res.json({ success: true, companies });
+        return res.json({ companies });
     } catch (error) {
         console.error('Error fetching featured companies:', error);
-        return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(500).json({ message: 'Server error' });
     }
 };
 
-/**
- * Get internship details by ID
- */
 const getInternshipById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const sql = `
-            SELECT
+        const internships = await db.query(
+            `SELECT
                 i.id,
                 i.company_id,
                 i.title,
@@ -243,8 +188,6 @@ const getInternshipById = async (req, res) => {
                 i.responsibilities,
                 i.benefits,
                 i.location,
-                i.is_remote,
-                i.is_hybrid,
                 i.type AS work_mode,
                 i.duration_months AS duration,
                 i.stipend,
@@ -266,7 +209,7 @@ const getInternshipById = async (req, res) => {
                 c.company_size
              FROM internships i
              JOIN companies c ON i.company_id = c.id
-             WHERE i.id = ? AND i.status = 'active'
+             WHERE i.id = ? AND i.status = 'active' AND i.is_flagged = 0
         `;
 
         let results;
@@ -322,6 +265,18 @@ const getInternshipById = async (req, res) => {
  */
 const createInternship = async (req, res) => {
     try {
+        console.log('=== CREATE INTERNSHIP FUNCTION CALLED ===');
+        console.log('Request method:', req.method);
+        console.log('Request URL:', req.originalUrl);
+        console.log('Create internship request received:', req.body);
+        console.log('User from token:', req.user);
+
+        // Ensure this is not being called with an ID parameter (which would indicate routing issue)
+        if (req.params.id) {
+            console.error('ERROR: createInternship called with ID parameter:', req.params.id);
+            return res.status(400).json({ message: 'Invalid request: createInternship should not be called with an ID' });
+        }
+
         const {
             title,
             description,
@@ -344,10 +299,13 @@ const createInternship = async (req, res) => {
 
         let companyId = req.body.company_id;
         if (req.user && req.user.role === 'company') {
+            console.log('Getting company ID for user:', req.user.userId);
             companyId = await getCompanyIdByUserId(req.user.userId);
+            console.log('Company ID found:', companyId);
         }
 
         if (!companyId || !title || !description || !location || !duration_months || !application_deadline) {
+            console.log('Validation failed:', { companyId, title: !!title, description: !!description, location: !!location, duration_months: !!duration_months, application_deadline: !!application_deadline });
             return res.status(400).json({ message: 'Required fields are missing' });
         }
 
@@ -402,51 +360,121 @@ const createInternship = async (req, res) => {
     }
 };
 
+
 /**
  * Update an internship
  */
 const updateInternship = async (req, res) => {
     try {
         const { id } = req.params;
-        const updates = req.body;
+        const companyId = await getCompanyIdByUserId(req.user.userId);
         
-        let companyId = null;
-        if (req.user && req.user.role === 'company') {
-            companyId = await getCompanyIdByUserId(req.user.userId);
-            
-            // Verify ownership
-            const existing = await db.query('SELECT company_id FROM internships WHERE id = ?', [id]);
-            if (existing.length === 0) return res.status(404).json({ message: 'Not found' });
-            if (existing[0].company_id !== companyId) return res.status(403).json({ message: 'Forbidden' });
+        if (!companyId) {
+            return res.status(404).json({ message: 'Company not found' });
         }
 
-        // Filter valid fields for update based on schema
-        const fields = [
-            'title', 'description', 'requirements', 'responsibilities', 'benefits',
-            'location', 'is_remote', 'is_hybrid', 'type', 'duration_months',
-            'stipend', 'stipend_currency', 'application_deadline', 'start_date',
-            'end_date', 'status'
-        ];
+        // Check if the internship belongs to this company
+        const internship = await db.query(
+            'SELECT id FROM internships WHERE id = ? AND company_id = ?',
+            [id, companyId]
+        );
 
-        const updateSet = [];
-        const params = [];
+        if (internship.length === 0) {
+            return res.status(404).json({ message: 'Internship not found or does not belong to your company' });
+        }
 
-        for (const field of fields) {
-            if (updates[field] !== undefined) {
-                updateSet.push(`${field} = ?`);
-                params.push(updates[field]);
+        const {
+            title,
+            description,
+            requirements,
+            location,
+            type = 'full-time',
+            duration_months,
+            stipend = 0,
+            stipend_currency = 'USD',
+            positions = 1,
+            application_deadline,
+            start_date,
+            end_date,
+            skills = []
+        } = req.body;
+
+        const connection = await db.connection();
+        
+        try {
+            await connection.beginTransaction();
+
+            // Update internship
+            await connection.execute(
+                `UPDATE internships SET
+                    title = ?, description = ?, requirements = ?, location = ?,
+                    type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
+                    positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [
+                    title,
+                    description,
+                    requirements || null,
+                    location,
+                    type,
+                    duration_months,
+                    stipend,
+                    stipend_currency,
+                    positions,
+                    application_deadline,
+                    start_date || null,
+                    end_date || null,
+                    id
+                ]
+            );
+
+            // Handle skills - remove existing skills and add new ones
+            await connection.execute(
+                'DELETE FROM internship_skills WHERE internship_id = ?',
+                [id]
+            );
+
+            if (skills && skills.length > 0) {
+                for (const skillName of skills) {
+                    // Check if skill exists, if not create it
+                    const [existingSkills] = await connection.execute(
+                        'SELECT id FROM skills WHERE name = ?',
+                        [skillName]
+                    );
+
+                    let skillId;
+                    if (existingSkills.length === 0) {
+                        // Create new skill
+                        const [newSkill] = await connection.execute(
+                            'INSERT INTO skills (name) VALUES (?)',
+                            [skillName]
+                        );
+                        skillId = newSkill.insertId;
+                    } else {
+                        skillId = existingSkills[0].id;
+                    }
+
+                    // Link skill to internship
+                    await connection.execute(
+                        'INSERT INTO internship_skills (internship_id, skill_id) VALUES (?, ?)',
+                        [id, skillId]
+                    );
+                }
             }
+
+            await connection.commit();
+
+            return res.json({ message: 'Internship updated successfully' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
         }
-
-        if (updateSet.length === 0) return res.status(400).json({ message: 'No fields to update' });
-
-        params.push(id);
-        await db.query(`UPDATE internships SET ${updateSet.join(', ')} WHERE id = ?`, params);
-
-        return res.json({ success: true, message: 'Internship updated' });
     } catch (error) {
-        console.error('Update failed:', error);
-        return res.status(500).json({ message: 'Server error' });
+        console.error('Error updating internship:', error);
+        return res.status(500).json({ message: 'Server error: ' + error.message });
     }
 };
 
@@ -510,13 +538,37 @@ const getRecommendedInternships = async (req, res) => {
             FROM internships i
             JOIN companies c ON i.company_id = c.id
             JOIN internship_skills isk ON i.id = isk.internship_id
-            WHERE i.status = 'active' AND isk.skill_id IN (${skillIds.map(() => '?').join(',')})
+            WHERE i.status = 'active' AND i.is_flagged = 0 AND isk.skill_id IN (${skillIds.map(() => '?').join(',')})
             GROUP BY i.id
             ORDER BY matching_skills_count DESC, i.created_at DESC
             LIMIT 4
         `;
-
-        const internships = await db.query(sql, skillIds);
+        let internships;
+        try {
+            internships = await db.query(sql, skillIds);
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            const fallbackSql = `
+                SELECT 
+                    i.*, 
+                    c.name AS company_name, 
+                    c.logo AS company_logo,
+                    COUNT(isk.skill_id) AS matching_skills_count,
+                    CASE 
+                        WHEN i.is_remote = 1 THEN 'Remote'
+                        WHEN i.is_hybrid = 1 THEN 'Hybrid'
+                        ELSE 'On-site'
+                    END AS work_mode
+                FROM internships i
+                JOIN companies c ON i.company_id = c.id
+                JOIN internship_skills isk ON i.id = isk.internship_id
+                WHERE i.status = 'active' AND isk.skill_id IN (${skillIds.map(() => '?').join(',')})
+                GROUP BY i.id
+                ORDER BY matching_skills_count DESC, i.created_at DESC
+                LIMIT 4
+            `;
+            internships = await db.query(fallbackSql, skillIds);
+        }
 
         return res.json({ success: true, internships });
     } catch (error) {
@@ -574,7 +626,7 @@ const getAllCompanies = async (req, res) => {
                 c.company_size,
                 COUNT(i.id) AS open_positions
             FROM companies c
-            LEFT JOIN internships i ON i.company_id = c.id AND i.status = 'active'
+            LEFT JOIN internships i ON i.company_id = c.id AND i.status = 'active' AND i.is_flagged = 0
             ${whereClause}
             GROUP BY c.id 
             ORDER BY c.is_verified DESC, c.name ASC 
@@ -611,15 +663,33 @@ const getCompanyInternships = async (req, res) => {
         const sql = `
             SELECT
                 i.*,
+                c.name AS company_name,
+                c.logo AS company_logo,
                 COUNT(a.id) AS applicant_count
             FROM internships i
+            JOIN companies c ON i.company_id = c.id
             LEFT JOIN applications a ON i.id = a.internship_id
-            WHERE i.company_id = ?
+            WHERE i.company_id = ? AND i.is_flagged = 0
             GROUP BY i.id
             ORDER BY i.created_at DESC
         `;
-
-        const internships = await db.query(sql, [companyId]);
+        let internships;
+        try {
+            internships = await db.query(sql, [companyId]);
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            const fallbackSql = `
+                SELECT
+                    i.*,
+                    COUNT(a.id) AS applicant_count
+                FROM internships i
+                LEFT JOIN applications a ON i.id = a.internship_id
+                WHERE i.company_id = ?
+                GROUP BY i.id
+                ORDER BY i.created_at DESC
+            `;
+            internships = await db.query(fallbackSql, [companyId]);
+        }
 
         return res.json({ success: true, internships });
     } catch (error) {
@@ -628,15 +698,352 @@ const getCompanyInternships = async (req, res) => {
     }
 };
 
+// Save/Bookmark functions
+const getSavedInternships = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        // Get student's ID
+        const studentRows = await db.query(
+            'SELECT id FROM students WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+
+        if (studentRows.length === 0) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const studentId = studentRows[0].id;
+
+        let savedInternships;
+        try {
+            savedInternships = await db.query(
+                `SELECT 
+                    i.id,
+                    i.company_id,
+                    i.title,
+                    i.description,
+                    i.location,
+                    i.type AS work_mode,
+                    i.duration_months AS duration,
+                    i.stipend AS salary_min,
+                    i.stipend AS salary_max,
+                    CASE 
+                        WHEN i.stipend > 0 THEN 'paid'
+                        ELSE 'unpaid'
+                    END AS salary_type,
+                    i.positions,
+                    i.application_deadline AS deadline,
+                    i.status AS is_active,
+                    i.views_count AS views,
+                    i.applications_count,
+                    i.created_at,
+                    c.name AS company_name,
+                    c.headquarters AS company_location,
+                    c.logo AS company_logo,
+                    si.created_at AS saved_at
+                 FROM saved_internships si
+                 JOIN internships i ON si.internship_id = i.id
+                 JOIN companies c ON i.company_id = c.id
+                 WHERE si.student_id = ? AND i.status = 'active' AND i.is_flagged = 0
+                 ORDER BY si.created_at DESC`,
+                [studentId]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            savedInternships = await db.query(
+                `SELECT 
+                    i.id,
+                    i.company_id,
+                    i.title,
+                    i.description,
+                    i.location,
+                    i.type AS work_mode,
+                    i.duration_months AS duration,
+                    i.stipend AS salary_min,
+                    i.stipend AS salary_max,
+                    CASE 
+                        WHEN i.stipend > 0 THEN 'paid'
+                        ELSE 'unpaid'
+                    END AS salary_type,
+                    i.positions,
+                    i.application_deadline AS deadline,
+                    i.status AS is_active,
+                    i.views_count AS views,
+                    i.applications_count,
+                    i.created_at,
+                    c.name AS company_name,
+                    c.headquarters AS company_location,
+                    c.logo AS company_logo,
+                    si.created_at AS saved_at
+                 FROM saved_internships si
+                 JOIN internships i ON si.internship_id = i.id
+                 JOIN companies c ON i.company_id = c.id
+                 WHERE si.student_id = ? AND i.status = 'active'
+                 ORDER BY si.created_at DESC`,
+                [studentId]
+            );
+        }
+
+        return res.json({ internships: savedInternships });
+    } catch (error) {
+        console.error('Error fetching saved internships:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const saveInternship = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        // Get student's ID
+        const studentRows = await db.query(
+            'SELECT id FROM students WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+
+        if (studentRows.length === 0) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const studentId = studentRows[0].id;
+
+        // Check if internship exists
+        const internshipRows = await db.query(
+            'SELECT id FROM internships WHERE id = ? AND status = "active"',
+            [id]
+        );
+
+        if (internships.length === 0) {
+            return res.status(404).json({ message: 'Internship not found' });
+        }
+
+        return res.json({ internship: internships[0] });
+    } catch (error) {
+        console.error('Error fetching internship:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const createInternship = async (req, res) => {
+    try {
+        const {
+            title,
+            description,
+            requirements,
+            location,
+            type = 'full-time',
+            duration_months,
+            stipend = 0,
+            stipend_currency = 'USD',
+            positions = 1,
+            application_deadline,
+            start_date,
+            end_date
+        } = req.body;
+
+        let companyId = req.body.company_id;
+
+        if (req.user && req.user.role === 'company') {
+            companyId = await getCompanyIdByUserId(req.user.userId);
+        }
+
+        if (!companyId || !title || !description || !location || !duration_months || !application_deadline) {
+            return res.status(400).json({ message: 'Required fields are missing' });
+        }
+
+        const result = await db.query(
+            `INSERT INTO internships (
+                company_id, title, description, requirements, location,
+                type, duration_months, stipend, stipend_currency,
+                positions, application_deadline, start_date, end_date, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            [
+                companyId,
+                title,
+                description,
+                requirements || null,
+                location,
+                type,
+                duration_months,
+                stipend,
+                stipend_currency,
+                positions,
+                application_deadline,
+                start_date || null,
+                end_date || null
+            ]
+        );
+
+        if (existingSave.length === 0) {
+            return res.status(404).json({ message: 'Saved internship not found' });
+        }
+
+        // Remove the save
+        await db.query(
+            'DELETE FROM saved_internships WHERE student_id = ? AND internship_id = ?',
+            [studentId, id]
+        );
+
+        return res.json({ message: 'Internship unsaved successfully' });
+    } catch (error) {
+        console.error('Error unsaving internship:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getDashboardStats = async (req, res) => {
+    try {
+        const companyId = await getCompanyIdByUserId(req.user.userId);
+        
+        if (!companyId) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        // Get total posts
+        let totalPostsResult;
+        let activePostsResult;
+        let expiredPostsResult;
+        let totalApplicantsResult;
+        let lastMonthResult;
+        let previousMonthResult;
+
+        try {
+            totalPostsResult = await db.query(
+                'SELECT COUNT(*) as total FROM internships WHERE company_id = ? AND is_flagged = 0',
+                [companyId]
+            );
+            activePostsResult = await db.query(
+                'SELECT COUNT(*) as active FROM internships WHERE company_id = ? AND status = "active" AND application_deadline > NOW() AND is_flagged = 0',
+                [companyId]
+            );
+            expiredPostsResult = await db.query(
+                'SELECT COUNT(*) as expired FROM internships WHERE company_id = ? AND (status != "active" OR application_deadline <= NOW()) AND is_flagged = 0',
+                [companyId]
+            );
+            totalApplicantsResult = await db.query(
+                'SELECT COALESCE(SUM(applications_count), 0) as total FROM internships WHERE company_id = ? AND is_flagged = 0',
+                [companyId]
+            );
+            lastMonthResult = await db.query(
+                'SELECT COUNT(*) as last_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) AND is_flagged = 0',
+                [companyId]
+            );
+            previousMonthResult = await db.query(
+                'SELECT COUNT(*) as previous_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MONTH) AND created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH) AND is_flagged = 0',
+                [companyId]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            totalPostsResult = await db.query(
+                'SELECT COUNT(*) as total FROM internships WHERE company_id = ?',
+                [companyId]
+            );
+            activePostsResult = await db.query(
+                'SELECT COUNT(*) as active FROM internships WHERE company_id = ? AND status = "active" AND application_deadline > NOW()',
+                [companyId]
+            );
+            expiredPostsResult = await db.query(
+                'SELECT COUNT(*) as expired FROM internships WHERE company_id = ? AND (status != "active" OR application_deadline <= NOW())',
+                [companyId]
+            );
+            totalApplicantsResult = await db.query(
+                'SELECT COALESCE(SUM(applications_count), 0) as total FROM internships WHERE company_id = ?',
+                [companyId]
+            );
+            lastMonthResult = await db.query(
+                'SELECT COUNT(*) as last_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)',
+                [companyId]
+            );
+            previousMonthResult = await db.query(
+                'SELECT COUNT(*) as previous_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MONTH) AND created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)',
+                [companyId]
+            );
+        }
+
+        const totalPosts = totalPostsResult[0].total;
+        const activePosts = activePostsResult[0].active;
+        const expiredPosts = expiredPostsResult[0].expired;
+        const totalApplicants = totalApplicantsResult[0].total;
+        const lastMonthPosts = lastMonthResult[0].last_month;
+        const previousMonthPosts = previousMonthResult[0].previous_month;
+
+        // Calculate trends
+        let postsTrend = 'Stable';
+        if (previousMonthPosts > 0) {
+            const postsChange = ((lastMonthPosts - previousMonthPosts) / previousMonthPosts) * 100;
+            postsTrend = postsChange >= 0 ? `+${postsChange.toFixed(0)}%` : `${postsChange.toFixed(0)}%`;
+        }
+
+        return res.json({
+            totalPosted: totalPosts,
+            activePosts: activePosts,
+            expiredPosts: expiredPosts,
+            totalApplicants: totalApplicants,
+            postsTrend: postsTrend
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getApplicationTrends = async (req, res) => {
+    try {
+        const companyId = await getCompanyIdByUserId(req.user.userId);
+        
+        if (!companyId) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        // Get monthly application trends for last 6 months
+        let trends;
+        try {
+            trends = await db.query(
+                `SELECT 
+                    DATE_FORMAT(created_at, '%Y-%m') as month,
+                    COUNT(*) as posts,
+                    COALESCE(SUM(applications_count), 0) as applications
+                 FROM internships 
+                 WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND is_flagged = 0
+                 GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+                 ORDER BY month ASC`,
+                [companyId]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            trends = await db.query(
+                `SELECT 
+                    DATE_FORMAT(created_at, '%Y-%m') as month,
+                    COUNT(*) as posts,
+                    COALESCE(SUM(applications_count), 0) as applications
+                 FROM internships 
+                 WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+                 GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+                 ORDER BY month ASC`,
+                [companyId]
+            );
+        }
+
+        return res.json({ trends });
+    } catch (error) {
+        console.error('Error fetching application trends:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     getAllInternships,
     getFeaturedCompanies,
-    getAllCompanies,
     getInternshipById,
-    createInternship,
-    updateInternship,
-    deleteInternship,
-    getRecommendedInternships,
-    getCompanyInternships
+    createInternship
 };
-

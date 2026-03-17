@@ -40,7 +40,7 @@ export default function Security() {
                   to={item.path}
                   className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
                     isActive 
-                      ? 'bg-white text-primary shadow-sm border border-slate-200' 
+                      ? 'bg-white text-blue-600 shadow-sm border border-slate-200' 
                       : 'text-slate-600 hover:bg-white hover:text-slate-900'
                   }`}
                 >
@@ -118,7 +118,7 @@ export default function Security() {
                     <div>
                       <h4 className="font-bold text-slate-900 flex items-center gap-2">
                         {session.device}
-                        {session.current && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Current</span>}
+                        {session.current && <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Current</span>}
                       </h4>
                       <p className="text-sm text-slate-500">{session.location} • {session.time}</p>
                     </div>

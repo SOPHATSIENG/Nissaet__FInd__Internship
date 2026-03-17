@@ -145,7 +145,7 @@ export default function Settings() {
                 to={item.path}
                 className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive 
-                    ? 'bg-white text-primary shadow-sm border border-slate-200' 
+                    ? 'bg-white text-blue-600 shadow-sm border border-slate-200' 
                     : 'text-slate-600 hover:bg-white hover:text-slate-900'
                 }`}
               >
@@ -165,7 +165,7 @@ export default function Settings() {
             </div>
             <div className="p-6 space-y-8">
               {error ? (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+                <p className="text-sm text-red-600 bg-blue-50 border border-red-100 px-3 py-2 rounded-lg">
                   {error}
                 </p>
               ) : null}
@@ -313,7 +313,7 @@ export default function Settings() {
                   <motion.span 
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="text-emerald-600 text-sm font-medium flex items-center gap-1"
+                    className="text-blue-600 text-sm font-medium flex items-center gap-1"
                   >
                     <CheckCircle2 size={16} />
                     Profile updated successfully!
@@ -322,7 +322,7 @@ export default function Settings() {
                 <button 
                   onClick={handleSave}
                   disabled={loading}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-all disabled:opacity-50"
                 >
                   {loading ? (
                     <Loader2 className="animate-spin" size={18} />

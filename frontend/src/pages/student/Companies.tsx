@@ -1,82 +1,76 @@
 import { Search, MapPin, Building2, Map, Users, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 
 interface Company {
   id: number;
   company_name: string;
-  description: string | null;
+  description: string;
   logo: string | null;
-  industry: string | null;
+  industry: string;
   location: string | null;
   is_verified: boolean;
   company_size: string | null;
   open_positions: number;
-}
+};
 
 export default function Companies() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const pageSize = 12;
+  const [currentPage, setCurrentPage] = useState(1);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [featuredCompanies, setFeaturedCompanies] = useState<Company[]>([]);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [totalFound, setTotalFound] = useState(0);
-
-  // Filter values from URL
+  
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
+  const [locationQuery, setLocationQuery] = useState(searchParams.get("location") || "");
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState("All Locations");
+  const [selectedCompanySizes, setSelectedCompanySizes] = useState<string[]>([]);
+  
+  const page = parseInt(searchParams.get("page") || "1");
+  const industry = searchParams.get("industry") || "all";
   const query = searchParams.get("search") || "";
   const location = searchParams.get("location") || "";
-  const industry = searchParams.get("industry") || "all";
-  const page = parseInt(searchParams.get("page") || "1", 10);
+  const totalFound = companies.length;
+  const featuredCompanies: Company[] = []; // Placeholder
 
-  // Local input state
-  const [searchInput, setSearchInput] = useState(query);
-  const [locationInput, setLocationInput] = useState(location);
-
-  // Sync inputs when URL changes
-  useEffect(() => {
-    setSearchInput(query);
-    setLocationInput(location);
-  }, [query, location]);
-
-  const fetchCompanies = useCallback(async () => {
+  const loadCompanies = useCallback(async () => {
+    let mounted = true;
     try {
       setLoading(true);
       setError("");
       
-      const params: any = {
-        limit: 12,
-        offset: (page - 1) * 12,
-        search: query || undefined,
-        location: location || undefined,
-        industry: industry !== 'all' ? industry : undefined,
+      const params = {
+        search: searchQuery,
+        location: selectedLocation === "All Locations" ? locationQuery : selectedLocation,
+        industries: selectedIndustries.length > 0 ? selectedIndustries.join(',') : undefined,
       };
-
-      const response = await api.getCompanies(params);
-      setCompanies(response.companies || []);
-      setTotalFound(response.total || response.count || 0);
-    } catch (err) {
-      setError("Failed to fetch companies. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [query, location, industry, page]);
-
-  useEffect(() => {
-    fetchCompanies();
-  }, [fetchCompanies]);
-
-  useEffect(() => {
-    const fetchFeatured = async () => {
-      try {
-        const response = await api.getFeaturedCompanies(2);
-        setFeaturedCompanies(response.companies || []);
-      } catch (err) {
-        console.warn("Failed to fetch featured companies");
+      
+      const res = await api.getCompanies(params);
+      if (mounted) {
+        const items = Array.isArray(res?.companies) ? res.companies : [];
+        setAllCompanies(items);
+        setCompanies(items);
       }
-    };
-    fetchFeatured();
-  }, []);
+    } catch (err) {
+      if (mounted) setError("Failed to load companies");
+    } finally {
+      if (mounted) setLoading(false);
+    }
+    return () => { mounted = false; };
+  }, [searchQuery, locationQuery, selectedLocation, selectedIndustries]);
+
+  useEffect(() => {
+    loadCompanies();
+  }, [loadCompanies]);
+
+  const filteredCompanies = useMemo(() => {
+    return allCompanies;
+  }, [allCompanies]);
 
   const updateFilters = (updates: Record<string, string | number | null>) => {
     const newParams = new URLSearchParams(searchParams);
@@ -87,15 +81,12 @@ export default function Companies() {
         newParams.set(key, String(value));
       }
     });
-    if (!updates.page) {
-      newParams.delete("page");
-    }
     setSearchParams(newParams);
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateFilters({ search: searchInput, location: locationInput });
+    setCurrentPage(1);
   };
 
   const industries = [
@@ -127,8 +118,8 @@ export default function Companies() {
                 type="text"
                 placeholder="Search by company name..."
                 className="w-full outline-none text-gray-700 bg-transparent"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
               />
             </div>
             <div className="hidden md:block w-px bg-gray-200 my-2"></div>
@@ -138,8 +129,8 @@ export default function Companies() {
                 type="text"
                 placeholder="Location"
                 className="w-full outline-none text-gray-700 bg-transparent"
-                value={locationInput}
-                onChange={(e) => setLocationInput(e.target.value)}
+                value={locationQuery}
+                onChange={(e) => { setLocationQuery(e.target.value); setCurrentPage(1); }}
               />
             </div>
             <button type="submit" className="bg-[#111816] hover:bg-gray-800 text-white font-bold px-8 py-3 rounded-lg transition-colors w-full md:w-auto">
@@ -154,12 +145,12 @@ export default function Companies() {
             {industries.slice(0, 4).map((ind) => (
               <span
                 key={ind}
-                onClick={() => updateFilters({ industry: ind })}
-                className={`px-4 py-1.5 border rounded-full cursor-pointer transition-colors ${
-                  industry === ind
-                    ? "bg-[#3b82f6] text-white border-[#3b82f6]"
-                    : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                }`}
+                onClick={() => {
+                  setSearchQuery(ind);
+                  setSelectedIndustries([]);
+                  setCurrentPage(1);
+                }}
+                className="px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
               >
                 {ind}
               </span>
@@ -194,16 +185,21 @@ export default function Companies() {
                     key={ind}
                     className="flex items-center gap-3 cursor-pointer group"
                   >
-                    <input
-                      type="radio"
-                      name="industry-filter"
-                      checked={industry === ind}
-                      onChange={() => updateFilters({ industry: ind })}
-                      className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                    />
-                    <span className="text-gray-600 group-hover:text-gray-900">
-                      {ind}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIndustries.includes(ind)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedIndustries([...selectedIndustries, ind]);
+                          else setSelectedIndustries(selectedIndustries.filter(i => i !== ind));
+                          setCurrentPage(1);
+                        }}
+                        className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
+                      />
+                      <span className="text-gray-600 group-hover:text-gray-900">
+                        {ind}
+                      </span>
+                    </div>
                   </label>
                 ))}
               </div>
@@ -214,20 +210,31 @@ export default function Companies() {
                 <Map className="w-5 h-5 text-[#3b82f6]" /> Location
               </h3>
               <div className="space-y-3">
-                {["All Locations", "Phnom Penh", "Siem Reap", "Remote"].map((loc) => (
+                {[
+                  { name: "All Locations" },
+                  { name: "Phnom Penh" },
+                  { name: "Siem Reap" },
+                  { name: "Battambang" },
+                  { name: "Kompot" },
+                  { name: "Remote" },
+                ].map((item) => (
                   <label
-                    key={loc}
+                    key={item.name}
                     className="flex items-center gap-3 cursor-pointer group"
                   >
                     <input
                       type="radio"
-                      name="location-filter"
-                      checked={(location === "" && loc === "All Locations") || location === loc}
-                      onChange={() => updateFilters({ location: loc === "All Locations" ? "" : loc })}
+                      name="location"
+                      checked={selectedLocation === item.name}
+                      onChange={() => { 
+                          setSelectedLocation(item.name); 
+                          setLocationQuery(item.name === "All Locations" ? "" : item.name); // Also update input field
+                          setCurrentPage(1); 
+                        }}
                       className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
                     <span className="text-gray-600 group-hover:text-gray-900">
-                      {loc}
+                      {item.name}
                     </span>
                   </label>
                 ))}
@@ -251,6 +258,12 @@ export default function Companies() {
                   >
                     <input
                       type="checkbox"
+                      checked={selectedCompanySizes.includes(item)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedCompanySizes([...selectedCompanySizes, item]);
+                        else setSelectedCompanySizes(selectedCompanySizes.filter(s => s !== item));
+                        setCurrentPage(1);
+                      }}
                       className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
                     />
                     <span className="text-gray-600 group-hover:text-gray-900">

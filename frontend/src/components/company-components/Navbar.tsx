@@ -76,37 +76,28 @@ export default function Navbar() {
       <div className="max-w-[1280px] mx-auto flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link to="/company" className="flex items-center gap-3 group">
-            <div className="h-10 w-10 bg-primary/20 rounded-xl flex items-center justify-center text-primary transition-colors group-hover:bg-primary group-hover:text-background-dark">
+            <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
               <Briefcase size={24} />
             </div>
             <h2 className="text-xl font-bold tracking-tight text-slate-900">InternCambodia</h2>
           </Link>
-          <div className="hidden lg:flex items-center w-80">
-            <div className="relative w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Search size={20} />
-              </div>
-              <input
-                className="block w-full rounded-lg border-0 py-2.5 pl-10 text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 bg-slate-50"
-                placeholder="Search internships, applicants..."
-                type="text"
-              />
-            </div>
-          </div>
         </div>
         <div className="flex items-center gap-6">
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
               <Link
                 key={link.path}
                 to={link.path}
-                className={`text-sm font-medium transition-colors hover:text-slate-900 ${
-                  location.pathname === link.path || location.pathname.startsWith(`${link.path}/`)
-                    ? 'text-primary font-semibold'
-                    : 'text-slate-600'
+                className={`px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 hover:bg-slate-50 relative group ${
+                  location.pathname === link.path
+                    ? 'text-blue-600 bg-blue-50 font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {link.name}
+                <span className={`absolute bottom-1.5 left-4 right-4 h-0.5 bg-blue-600 rounded-full transition-all duration-300 transform origin-left ${
+                  location.pathname === link.path ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                }`} />
               </Link>
             ))}
           </nav>

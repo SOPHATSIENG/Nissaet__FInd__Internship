@@ -219,6 +219,21 @@ export const api = {
     return request(`/internships/${internshipId}/save`, { method: 'POST', auth: true });
   },
 
+  // Blog & Events endpoints
+  getPosts(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/posts${query ? `?${query}` : ''}`, { auth: true });
+  },
+
+  getPostById(id) {
+    return request(`/posts/${id}`, { auth: true });
+  },
+
   unsaveInternship(internshipId) {
     return request(`/internships/${internshipId}/save`, { method: 'DELETE', auth: true });
   },

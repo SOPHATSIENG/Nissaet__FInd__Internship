@@ -15,6 +15,8 @@ import Internships from '../pages/student/Internships';
 import InternshipDetails from '../pages/student/InternshipDetails';
 import Companies from '../pages/student/Companies';
 import CareerAdvice from '../pages/student/CareerAdvice';
+import BlogList from '../pages/student/BlogList';
+import BlogDetail from '../pages/student/BlogDetail';
 import AccountSettings from '../pages/account/AccountSettings';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -234,6 +236,8 @@ export default function WebRouter() {
           <Route path="companies" element={<Companies />} />
           <Route path="companies/:id" element={<Companies />} />
           <Route path="career-advice" element={<CareerAdvice />} />
+          <Route path="blog" element={<BlogList />} />
+          <Route path="blog/:id" element={<BlogDetail />} />
           <Route path="student/:id" element={<StudentProfile />} />
           <Route
             path="account-settings"

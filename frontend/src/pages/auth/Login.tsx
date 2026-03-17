@@ -339,9 +339,13 @@ export function Login() {
       </p>
       <p className="mt-8 text-center text-sm text-slate-500">
         Login as a Admin account?{' '}
-        <Link to="/admin/login" className="font-semibold text-[#137fec] transition-colors hover:text-[#137fec]/80 hover:underline">
+        <button
+          type="button"
+          onClick={handleDirectAdminLogin}
+          className="font-semibold text-[#137fec] transition-colors hover:text-[#137fec]/80 hover:underline"
+        >
           Admin
-        </Link>
+        </button>
       </p>
 
       <div className="mt-6 flex flex-col gap-3">

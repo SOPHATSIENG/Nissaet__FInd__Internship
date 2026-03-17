@@ -178,13 +178,13 @@ export default function StudentProfile() {
           <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <h3 className="text-lg font-bold text-slate-900 mb-4">Rate this Student</h3>
             {isSubmitted ? (
-              <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 text-center">
-                <CheckCircle2 className="mx-auto text-emerald-500 mb-2" size={24} />
-                <p className="text-sm font-bold text-emerald-900">Rating Submitted!</p>
-                <p className="text-xs text-emerald-700 mt-1">Thank you for your feedback.</p>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-center">
+                <CheckCircle2 className="mx-auto text-blue-500 mb-2" size={24} />
+                <p className="text-sm font-bold text-blue-900">Rating Submitted!</p>
+                <p className="text-xs text-blue-700 mt-1">Thank you for your feedback.</p>
                 <button 
                   onClick={() => setIsSubmitted(false)}
-                  className="mt-3 text-xs font-bold text-emerald-600 hover:underline"
+                  className="mt-3 text-xs font-bold text-blue-600 hover:underline"
                 >
                   Edit Rating
                 </button>

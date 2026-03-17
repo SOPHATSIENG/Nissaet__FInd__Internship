@@ -80,6 +80,10 @@ export default function InternshipDetails() {
     }
   };
 
+  const safeType = internship?.type ? internship.type.replace('-', ' ') : 'internship';
+  const safePostedTime = internship?.created_at ? getPostedTime(internship.created_at) : 'recently';
+  const safeCompanyName = internship?.company_name || 'Company';
+
   const handleApply = async () => {
     if (!coverLetter.trim()) {
       alert('Please write a cover letter before applying.');
@@ -145,7 +149,7 @@ export default function InternshipDetails() {
               referrerPolicy="no-referrer"
             />
             <span className="absolute left-6 bottom-6 bg-[#3b82f6] text-white text-base font-bold px-5 py-2 rounded-full uppercase tracking-wide shadow-lg">
-              {internship.type.replace('-', ' ')}
+              {safeType}
             </span>
           </div>
         </div>
@@ -155,7 +159,7 @@ export default function InternshipDetails() {
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             <img
               src={internship.company_logo || `https://picsum.photos/seed/company-${internship.company_id}/120/120`}
-              alt={`${internship.company_name} logo`}
+              alt={`${safeCompanyName} logo`}
               className="w-24 h-24 rounded-2xl object-cover border border-slate-200 shadow-sm"
               referrerPolicy="no-referrer"
             />
@@ -165,11 +169,11 @@ export default function InternshipDetails() {
               </h2>
               <div className="flex flex-wrap items-center gap-3 text-lg text-slate-500">
                 <Link to={`/companies/${internship.company_id}`} className="text-[#3b82f6] font-bold hover:underline transition-colors">
-                  {internship.company_name}
+                  {safeCompanyName}
                 </Link>
-                <span>•</span>
+                <span>-</span>
                 <span className="flex items-center gap-1.5">
-                  <Clock3 size={18} /> Posted {getPostedTime(internship.created_at)}
+                  <Clock3 size={18} /> Posted {safePostedTime}
                 </span>
               </div>
             </div>
@@ -390,3 +394,4 @@ export default function InternshipDetails() {
     </div>
   );
 }
+

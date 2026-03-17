@@ -28,6 +28,7 @@ export default function Layout() {
   const navLinks = [
     { name: 'Home', path: '/' },
     { name: 'Internships', path: '/internships' },
+    { name: 'Events', path: '/events' },
     { name: 'Companies', path: '/companies' },
     { name: 'Career Advice', path: '/career-advice' },
   ];

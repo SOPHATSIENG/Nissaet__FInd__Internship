@@ -52,7 +52,7 @@ async function request(path, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = data?.message || `Request failed with status ${response.status}`;
+    const message = data?.message || data?.error || `Request failed with status ${response.status}`;
     console.error('API Error Details:', {
       status: response.status,
       statusText: response.statusText,
@@ -72,6 +72,27 @@ export const authStorage = {
 };
 
 export const api = {
+  // Generic HTTP helpers (axios-like)
+  get(path, options = {}) {
+    const { auth = true, headers } = options;
+    return request(path, { method: 'GET', auth, headers }).then((data) => ({ data }));
+  },
+
+  post(path, body, options = {}) {
+    const { auth = true, headers } = options;
+    return request(path, { method: 'POST', auth, headers, body }).then((data) => ({ data }));
+  },
+
+  put(path, body, options = {}) {
+    const { auth = true, headers } = options;
+    return request(path, { method: 'PUT', auth, headers, body }).then((data) => ({ data }));
+  },
+
+  delete(path, options = {}) {
+    const { auth = true, headers, body } = options;
+    return request(path, { method: 'DELETE', auth, headers, body }).then((data) => ({ data }));
+  },
+
   // Auth endpoints
   register(payload) {
     const role = payload?.role || payload?.user_type;

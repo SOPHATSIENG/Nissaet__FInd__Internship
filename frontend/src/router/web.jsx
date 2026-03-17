@@ -15,6 +15,8 @@ import Internships from '../pages/student/Internships';
 import InternshipDetails from '../pages/student/InternshipDetails';
 import Companies from '../pages/student/Companies';
 import CareerAdvice from '../pages/student/CareerAdvice';
+import Events from '../pages/student/Events';
+import EventDetails from '../pages/student/EventDetails';
 import AccountSettings from '../pages/account/AccountSettings';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -33,6 +35,8 @@ import Billing from '../pages/Company/Billing';
 import StudentProfile from '../pages/Company/StudentProfile';
 import Evaluation from '../pages/Company/Evaluation';
 import VerificationPending from '../pages/Company/VerificationPending';
+import CompanyEvents from '../pages/Company/Events';
+import PostEvent from '../pages/Company/PostEvent';
 
 import { Sidebar as AdminSidebar } from '../components/Admin_components/Sidebar';
 import { Header as AdminHeader } from '../components/Admin_components/Header';
@@ -234,6 +238,8 @@ export default function WebRouter() {
           <Route path="companies" element={<Companies />} />
           <Route path="companies/:id" element={<Companies />} />
           <Route path="career-advice" element={<CareerAdvice />} />
+          <Route path="events" element={<Events />} />
+          <Route path="events/:id" element={<EventDetails />} />
           <Route
             path="account-settings"
             element={
@@ -255,6 +261,8 @@ export default function WebRouter() {
         >
           <Route index element={<Dashboard />} />
           <Route path="post/:id?" element={<PostInternship />} />
+          <Route path="events" element={<CompanyEvents />} />
+          <Route path="events/post/:id?" element={<PostEvent />} />
           <Route path="applicants" element={<Applicants />} />
           <Route path="all-applicants" element={<AllApplicants />} />
           <Route path="real-applicants" element={<RealApplicants />} />

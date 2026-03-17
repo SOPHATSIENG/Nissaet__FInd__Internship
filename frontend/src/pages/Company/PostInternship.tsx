@@ -129,7 +129,7 @@ export default function PostInternship() {
         newText = `__${selectedText}__`;
         break;
       case 'unorderedList':
-        newText = selectedText.split('\n').map(line => `• ${line}`).join('\n');
+        newText = selectedText.split('\n').map(line => `- ${line}`).join('\n');
         break;
       case 'orderedList':
         newText = selectedText.split('\n').map((line, index) => `${index + 1}. ${line}`).join('\n');
@@ -155,17 +155,58 @@ export default function PostInternship() {
 
   const renderMarkdown = (text) => {
     if (!text) return '';
-    
-    // Simple markdown rendering
-    let html = text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/__(.*?)__/g, '<u>$1</u>')
-      .replace(/^• (.+)$/gm, '<li>$1</li>')
-      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-    
-    return html;
+
+    const formatInline = (value) =>
+      value
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/__(.*?)__/g, '<u>$1</u>');
+
+    const lines = text.split('\n');
+    const htmlParts = [];
+    let listType = null; // 'ul' | 'ol' | null
+
+    const openList = (type) => {
+      if (listType === type) return;
+      if (listType) htmlParts.push(listType === 'ol' ? '</ol>' : '</ul>');
+      htmlParts.push(type === 'ol' ? '<ol>' : '<ul>');
+      listType = type;
+    };
+
+    const closeList = () => {
+      if (!listType) return;
+      htmlParts.push(listType === 'ol' ? '</ol>' : '</ul>');
+      listType = null;
+    };
+
+    for (const rawLine of lines) {
+      const line = rawLine.trimEnd();
+      const unorderedMatch = line.match(/^\s*(?:-|\u2022)\s+(.+)/);
+      const orderedMatch = line.match(/^\s*(\d+)\.\s+(.+)/);
+
+      if (unorderedMatch) {
+        openList('ul');
+        htmlParts.push(`<li>${formatInline(unorderedMatch[1])}</li>`);
+        continue;
+      }
+
+      if (orderedMatch) {
+        openList('ol');
+        htmlParts.push(`<li>${formatInline(orderedMatch[2])}</li>`);
+        continue;
+      }
+
+      closeList();
+
+      if (line.trim().length === 0) {
+        htmlParts.push('<br />');
+      } else {
+        htmlParts.push(`<p>${formatInline(line)}</p>`);
+      }
+    }
+
+    closeList();
+    return htmlParts.join('');
   };
 
   const handleSubmit = async (e) => {
@@ -256,6 +297,12 @@ export default function PostInternship() {
       </div>
 
       <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+        {error && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <AlertCircle size={18} className="mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 md:p-8">
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
             <Info size={20} className="text-blue-600" />

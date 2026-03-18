@@ -9,6 +9,7 @@ import {
   Edit,
   Trash2,
   Eye,
+  X,
   Search,
   Filter,
   Video,
@@ -63,6 +64,8 @@ export default function Events() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [detailEvent, setDetailEvent] = useState<Event | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
   const eventTypes = [
     { value: 'workshop', label: 'Workshop' },
@@ -372,31 +375,48 @@ export default function Events() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 ml-4">
+                <div className="relative ml-4">
                   <button
-                    onClick={() => navigate(`/company/events/${event.id}/registrations`)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="View Registrations"
+                    onClick={() => setDetailEvent(event)}
+                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="View Details"
                   >
-                    <UserCheck className="w-4 h-4" />
+                    <Eye className="w-4 h-4" />
                   </button>
+
                   <button
-                    onClick={() => navigate(`/company/events/post/${event.id}`)}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Edit Event"
+                    onClick={() => setOpenMenuId(openMenuId === event.id ? null : event.id)}
+                    className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    title="More actions"
                   >
-                    <Edit className="w-4 h-4" />
+                    <span className="inline-flex h-4 w-4 items-center justify-center text-lg leading-none">⋮</span>
                   </button>
-                  <button
-                    onClick={() => {
-                      setSelectedEvent(event);
-                      setIsDeleteModalOpen(true);
-                    }}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete Event"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+
+                  {openMenuId === event.id && (
+                    <div className="absolute right-0 top-11 z-10 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          navigate(`/company/events/post/${event.id}`);
+                        }}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit event
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          setSelectedEvent(event);
+                          setIsDeleteModalOpen(true);
+                        }}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete event
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -417,6 +437,125 @@ export default function Events() {
         cancelText="Cancel"
         type="danger"
       />
+
+      {detailEvent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="relative">
+              {detailEvent.image_url ? (
+                <img
+                  src={detailEvent.image_url}
+                  alt={detailEvent.title}
+                  className="h-56 w-full object-cover"
+                />
+              ) : (
+                <div className="h-56 w-full bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center text-indigo-400">
+                  <Calendar className="w-12 h-12" />
+                </div>
+              )}
+              <button
+                onClick={() => setDetailEvent(null)}
+                className="absolute right-4 top-4 inline-flex items-center justify-center rounded-full bg-white/90 p-2 text-slate-700 shadow hover:bg-white"
+                aria-label="Close details"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="absolute left-6 bottom-4 flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(detailEvent.status)}`}>
+                  {getStatusIcon(detailEvent.status)}
+                  {detailEvent.status.charAt(0).toUpperCase() + detailEvent.status.slice(1)}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
+                  {getTypeLabel(detailEvent.type)}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900">{detailEvent.title}</h3>
+                <p className="text-sm text-slate-500 mt-1">Created on {formatDate(detailEvent.created_at)}</p>
+              </div>
+
+              <p className="text-slate-600 whitespace-pre-wrap">{detailEvent.description}</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-slate-400" />
+                  <span>{formatDate(detailEvent.event_date)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-slate-400" />
+                  <span>{formatTime(detailEvent.start_time)} - {formatTime(detailEvent.end_time)}</span>
+                </div>
+                {detailEvent.is_virtual ? (
+                  <div className="flex items-center gap-2">
+                    <Video className="h-4 w-4 text-slate-400" />
+                    <span>Virtual event</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-slate-400" />
+                    <span>{detailEvent.location}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-slate-400" />
+                  <span>
+                    {detailEvent.current_participants || detailEvent.total_registrations || 0}
+                    {detailEvent.max_participants && ` / ${detailEvent.max_participants}`} participants
+                  </span>
+                </div>
+              </div>
+
+              {detailEvent.registration_deadline && (
+                <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Registration closes on {formatDate(detailEvent.registration_deadline)}.
+                </div>
+              )}
+
+              {detailEvent.requirements && (
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Requirements</h4>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{detailEvent.requirements}</p>
+                </div>
+              )}
+
+              {detailEvent.tags && (
+                <div className="flex flex-wrap gap-2">
+                  {detailEvent.tags.split(',').map((tag, index) => (
+                    <span key={index} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                      {tag.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setDetailEvent(null)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setDetailEvent(null);
+                    navigate(`/company/events/post/${detailEvent.id}`);
+                  }}
+                  className="rounded-lg bg-[#137fec] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0e6bb8]"
+                >
+                  Edit Event
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

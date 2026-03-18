@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS events (
     registration_deadline DATE,
     requirements TEXT,
     tags VARCHAR(500),
-    image_url VARCHAR(500),
+    image_url LONGTEXT,
     status ENUM('draft', 'published', 'cancelled', 'completed') DEFAULT 'draft',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

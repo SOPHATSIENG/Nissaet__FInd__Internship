@@ -3,7 +3,9 @@ export type TabType =
   | 'education'
   | 'skills'
   | 'security'
-  | 'notifications';
+  | 'notifications'
+  | 'saved'
+  | 'applications';
 
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type NotificationFrequency = 'Instant' | 'Daily' | 'Weekly';

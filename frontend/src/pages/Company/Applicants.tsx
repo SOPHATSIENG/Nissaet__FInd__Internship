@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Download, 
@@ -20,178 +20,155 @@ import {
   Check,
   Trash2,
   FileDown,
+  Star,
   GraduationCap,
   Briefcase,
   Mail,
   Phone,
   MapPin,
-  ExternalLink,
-  Star
+  ExternalLink
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
+import api from '../../api/axios';
+import * as XLSX from 'xlsx';
 
 export default function Applicants() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
-  const [isSkillsDropdownOpen, setIsSkillsDropdownOpen] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<number[]>([]);
   const [viewingApplicant, setViewingApplicant] = useState<any>(null);
   const selectAllRef = React.useRef<HTMLInputElement>(null);
   const itemsPerPage = 5;
 
-  const [applicants, setApplicants] = useState([
-    { 
-      id: 1, 
-      name: 'Sophea Chan', 
-      email: 'sophea.chan@email.com', 
-      phone: '+855 12 345 678',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Marketing Intern', 
-      date: 'Oct 24, 2023', 
-      status: 'Pending Review', 
-      skills: ['Social Media', 'Content Writing', 'SEO'],
-      education: [
-        { school: 'Royal University of Phnom Penh', degree: 'Bachelor of Media & Communication', period: '2020 - Present' }
-      ],
-      experience: [
-        { company: 'Digital Agency X', role: 'Content Creator Intern', period: 'Jun 2023 - Aug 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 2, 
-      name: 'Dara Sok', 
-      email: 'dara.sok@email.com', 
-      phone: '+855 98 765 432',
-      location: 'Siem Reap, Cambodia',
-      role: 'Web Developer', 
-      date: 'Oct 22, 2023', 
-      status: 'Shortlisted', 
-      skills: ['React', 'Node.js', 'Tailwind'],
-      education: [
-        { school: 'Institute of Technology of Cambodia', degree: 'Bachelor of Computer Science', period: '2019 - 2023' }
-      ],
-      experience: [
-        { company: 'Tech Solutions Co.', role: 'Junior Web Developer', period: 'Jan 2023 - Jul 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 3, 
-      name: 'Vanna Ly', 
-      email: 'vanna.ly@email.com', 
-      phone: '+855 11 222 333',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Data Analyst', 
-      date: 'Oct 20, 2023', 
-      status: 'Pending Review', 
-      skills: ['Python', 'SQL', 'Tableau'],
-      education: [
-        { school: 'National University of Management', degree: 'Bachelor of Economics', period: '2020 - Present' }
-      ],
-      experience: [
-        { company: 'Market Research Inc.', role: 'Data Entry Clerk', period: 'Mar 2023 - Jun 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 4, 
-      name: 'Bopha Keo', 
-      email: 'bopha.keo@email.com', 
-      phone: '+855 77 888 999',
-      location: 'Battambang, Cambodia',
-      role: 'Graphic Designer', 
-      date: 'Oct 18, 2023', 
-      status: 'Rejected', 
-      skills: ['Photoshop', 'Illustrator'],
-      education: [
-        { school: 'Phnom Penh International Institute of the Arts', degree: 'Bachelor of Graphic Design', period: '2018 - 2022' }
-      ],
-      experience: [
-        { company: 'Creative Studio Y', role: 'Graphic Designer', period: 'Aug 2022 - Sep 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 5, 
-      name: 'Visal Long', 
-      email: 'visal.long@email.com', 
-      phone: '+855 15 444 555',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Web Developer', 
-      date: 'Oct 15, 2023', 
-      status: 'Pending Review', 
-      skills: ['JavaScript', 'HTML/CSS'],
-      education: [
-        { school: 'Kirirom Institute of Technology', degree: 'Bachelor of Software Engineering', period: '2021 - Present' }
-      ],
-      experience: [
-        { company: 'Freelance', role: 'Web Developer', period: '2022 - Present' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 6, 
-      name: 'Srey Leak', 
-      email: 'srey.leak@email.com', 
-      phone: '+855 16 666 777',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Marketing Intern', 
-      date: 'Oct 14, 2023', 
-      status: 'Shortlisted', 
-      skills: ['SEO', 'Copywriting'],
-      education: [
-        { school: 'Paññāsāstra University of Cambodia', degree: 'Bachelor of Marketing', period: '2020 - Present' }
-      ],
-      experience: [
-        { company: 'E-commerce Startup', role: 'Marketing Assistant', period: 'May 2023 - Aug 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 7, 
-      name: 'Phirun Meas', 
-      email: 'phirun.meas@email.com', 
-      phone: '+855 17 777 888',
-      location: 'Phnom Penh, Cambodia',
-      role: 'UI/UX Designer', 
-      date: 'Oct 12, 2023', 
-      status: 'Pending Review', 
-      skills: ['Figma', 'Prototyping'],
-      education: [
-        { school: 'Royal University of Fine Arts', degree: 'Bachelor of Design', period: '2019 - 2023' }
-      ],
-      experience: [
-        { company: 'Design Agency Z', role: 'UI Intern', period: 'Feb 2023 - May 2023' }
-      ],
-      resumeUrl: '#'
-    },
-    { 
-      id: 8, 
-      name: 'Chanthou Ros', 
-      email: 'chanthou.ros@email.com', 
-      phone: '+855 18 888 999',
-      location: 'Phnom Penh, Cambodia',
-      role: 'Software Engineer', 
-      date: 'Oct 10, 2023', 
-      status: 'Pending Review', 
-      skills: ['Java', 'Spring Boot'],
-      education: [
-        { school: 'American University of Phnom Penh', degree: 'Bachelor of IT', period: '2020 - Present' }
-      ],
-      experience: [
-        { company: 'Banking Software Co.', role: 'Backend Intern', period: 'Jun 2023 - Sep 2023' }
-      ],
-      resumeUrl: '#'
-    },
-  ]);
+  const [applicants, setApplicants] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const getAvatarUrl = (profileImage?: string, name?: string, size = 40) => {
+    if (profileImage) return profileImage;
+    const fallbackName = encodeURIComponent(name || 'User');
+    return `https://ui-avatars.com/api/?name=${fallbackName}&size=${size}&background=0D8ABC&color=fff`;
+  };
+
+  const normalizeStatus = (status?: string) => {
+    if (!status) return 'Pending Review';
+    const value = status.toLowerCase();
+    if (value === 'accepted') return 'Shortlisted';
+    if (value === 'reviewing') return 'Pending Review';
+    if (value === 'pending') return 'Pending Review';
+    if (value === 'rejected') return 'Rejected';
+    if (value === 'withdrawn') return 'Withdrawn';
+    return status;
+  };
+
+  const toApiStatus = (status: string) => {
+    if (status === 'Shortlisted') return 'accepted';
+    if (status === 'Pending Review') return 'pending';
+    if (status === 'Rejected') return 'rejected';
+    return status.toLowerCase();
+  };
+
+  useEffect(() => {
+    // Check current user first
+    const checkCurrentUser = async () => {
+      try {
+        const userResponse = await api.getCurrentUser();
+        console.log('Current user:', userResponse);
+        console.log('User role:', userResponse.user?.role);
+        console.log('User ID:', userResponse.user?.id);
+        
+        // Check if user is company
+        if (userResponse.user?.role !== 'company') {
+          console.error('User is not a company user! Role:', userResponse.user?.role);
+          alert('You must be logged in as a company user to view applicants.');
+          return;
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error);
+        alert('Error: Please log in again.');
+      }
+    };
+    
+    checkCurrentUser();
+    fetchApplicants();
+  }, []);
+
+  const fetchApplicants = async () => {
+    try {
+      setLoading(true);
+      console.log('Fetching applicants from database...');
+
+      const response = await api.getCompanyApplications({ page: 1, limit: 200 });
+      const applications = response?.applications || [];
+      console.log('Company applications response:', response);
+
+      const transformedApplicants = applications.map(app => {
+        const skills = Array.isArray(app.skills)
+          ? app.skills.map((skill) => (typeof skill === 'string' ? skill : skill?.name)).filter(Boolean)
+          : typeof app.skills === 'string'
+            ? app.skills.split(',').map((skill) => skill.trim()).filter(Boolean)
+            : [];
+
+        const education = [];
+        if (app.university || app.major || app.current_education_level) {
+          const degreeParts = [app.major, app.current_education_level].filter(Boolean);
+          education.push({
+            school: app.university || '',
+            degree: degreeParts.join(' · '),
+            period: ''
+          });
+        }
+
+        const experience = Array.isArray(app.experience)
+          ? app.experience
+          : [];
+
+        return {
+          ...app,
+          name: app.full_name || app.name || 'Unknown Applicant',
+          role: app.internship_title || app.role || 'Unknown Role',
+          date: app.applied_at
+            ? new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : (app.date || ''),
+          status: normalizeStatus(app.status),
+          phone: app.phone || '',
+          location: app.location || '',
+          skills,
+          education,
+          experience,
+          resumeUrl: app.resume_url || '',
+          profileImage: app.profile_image || ''
+        };
+      });
+
+      console.log('Transformed applicants:', transformedApplicants);
+      console.log('About to set applicants with:', transformedApplicants.length, 'items');
+      setApplicants(transformedApplicants);
+      console.log('Applicants set successfully');
+    } catch (error) {
+      console.error('Error fetching applicants:', error);
+      // Show more detailed error information
+      if (error.message.includes('403')) {
+        console.error('Authentication error - user may not be logged in as company');
+      } else if (error.message.includes('404')) {
+        console.error('Company not found');
+      }
+      setApplicants([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelectApplicant = (id: number) => {
+    setSelectedApplicants(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
 
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -209,22 +186,183 @@ export default function Applicants() {
     onConfirm: () => {},
   });
 
-  const handleDownload = (name: string) => {
-    setModalConfig({
-      isOpen: true,
-      type: 'success',
-      title: 'Download CV',
-      message: `The CV for ${name} is being downloaded. In a real application, this would fetch the PDF file from the server.`,
-      confirmText: 'Got it',
-      onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
-    });
+  const handleDownload = (name: string, resumeUrl?: string) => {
+    if (!resumeUrl) {
+      setModalConfig({
+        isOpen: true,
+        type: 'info',
+        title: 'Download CV',
+        message: `No CV file was provided for ${name}.`,
+        confirmText: 'Got it',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+      });
+      return;
+    }
+
+    const lowerUrl = resumeUrl.toLowerCase();
+    const isPdf = lowerUrl.split('?')[0].endsWith('.pdf');
+    const isGoogleDrive = lowerUrl.includes('drive.google.com');
+    if (!isPdf) {
+      if (isGoogleDrive) {
+        const link = document.createElement('a');
+        link.href = resumeUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.download = `${name}-CV`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return;
+      }
+      setModalConfig({
+        isOpen: true,
+        type: 'info',
+        title: 'Download CV',
+        message: `Only PDF files are allowed. The CV for ${name} is not a PDF.`,
+        confirmText: 'Got it',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+      });
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = resumeUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.download = `${name}-CV`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
-  const handleUpdateStatus = (id: number, newStatus: string) => {
-    setApplicants(prev => prev.map(app => 
-      app.id === id ? { ...app, status: newStatus } : app
-    ));
-    setModalConfig(prev => ({ ...prev, isOpen: false }));
+  const handleExportList = () => {
+    const rows = filteredApplicants.map(app => ({
+      Name: app.name || '',
+      Email: app.email || '',
+      'Applied For': app.role || '',
+      'Applied Date': app.date || '',
+      Status: app.status || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Applicants');
+
+    const fileName = `applicants-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  const handleUpdateStatus = async (id: number, newStatus: string) => {
+    try {
+      console.log(`[UPDATE] Updating application ${id} to status: ${newStatus}`);
+
+      // Update UI immediately for better experience
+      setApplicants(prev => prev.map(app => 
+        app.id === id ? { ...app, status: newStatus } : app
+      ));
+
+      // Close modal
+      setModalConfig(prev => ({ ...prev, isOpen: false }));
+
+      // Convert status for database
+      const apiStatus = toApiStatus(newStatus);
+
+      // Try to save to database
+      try {
+        await api.updateApplicationStatus(id, apiStatus);
+        console.log('[OK] Saved to database successfully');
+        alert(`Applicant status updated to ${newStatus}`);
+      } catch (dbError) {
+        console.log('[WARN] Database error, but UI updated:', dbError);
+        alert(`Applicant status updated to ${newStatus} (Local only)`);
+      }
+
+      console.log(`[OK] Applicant ${id} status changed to ${newStatus}`);
+
+    } catch (error) {
+      console.error('[ERROR] Error:', error);
+      alert('Failed to update status');
+    }
+  };
+
+  const showNotification = (message: string, type: 'success' | 'warning' | 'error' | 'info') => {
+    // Create notification styles if not already added
+    if (!document.getElementById('notification-styles')) {
+      const style = document.createElement('style');
+      style.id = 'notification-styles';
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(100%); opacity: 0; }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Remove any existing notifications
+    const existingNotifications = document.querySelectorAll('[data-notification]');
+    existingNotifications.forEach(n => n.remove());
+    
+    // Create notification
+    const notification = document.createElement('div');
+    notification.setAttribute('data-notification', 'true');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      z-index: 9999;
+      animation: slideIn 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      max-width: 300px;
+      ${type === 'success' ? 'background: #4caf50;' : ''}
+      ${type === 'warning' ? 'background: #ff9800;' : ''}
+      ${type === 'error' ? 'background: #f44336;' : ''}
+      ${type === 'info' ? 'background: #2196f3; animation: slideIn 0.3s ease, pulse 1s infinite;' : ''}
+    `;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-dismiss after delay
+    const dismissDelay = type === 'info' ? 10000 : 3000;
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+      }
+    }, dismissDelay);
+  };
+
+  const updateDashboardStats = () => {
+    // Force re-render of statistics
+    setApplicants(prev => [...prev]);
+    
+    // Recalculate statistics
+    const stats = applicants.reduce((acc, app) => {
+      if (app.status === 'Pending Review') acc.pending++;
+      else if (app.status === 'Shortlisted') acc.shortlisted++;
+      else if (app.status === 'Rejected') acc.rejected++;
+      return acc;
+    }, { pending: 0, shortlisted: 0, rejected: 0 });
+    
+    console.log('[STATS] Dynamic Dashboard Stats:', stats);
+    
+    // Update page title dynamically
+    document.title = `Applicants (${applicants.length}) - Nissaet Internship`;
+    
+    return stats;
   };
 
   const openConfirmation = (id: number, name: string, action: 'approve' | 'reject' | 'reconsider') => {
@@ -324,7 +462,7 @@ export default function Applicants() {
         isOpen: true,
         type: 'danger',
         title: 'Bulk Delete',
-        message: `Are you sure you want to permanently delete ${selectedCount} selected applicants? This action cannot be undone.`,
+        message: `Are you sure you want to delete ${selectedCount} selected applicants?`,
         confirmText: 'Delete All',
         onConfirm: () => {
           setApplicants(prev => prev.filter(app => !selectedApplicants.includes(app.id)));
@@ -335,27 +473,12 @@ export default function Applicants() {
     }
   };
 
-  const toggleSelectApplicant = (id: number) => {
-    setSelectedApplicants(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const stats = [
-    { label: 'Total Applicants', value: applicants.length.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+12 Today' },
-    { label: 'Pending Review', value: applicants.filter(a => a.status === 'Pending Review').length.toString(), icon: Hourglass, color: 'text-yellow-600', bg: 'bg-yellow-50' },
-    { label: 'Shortlisted', value: applicants.filter(a => a.status === 'Shortlisted').length.toString(), icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Rejected', value: applicants.filter(a => a.status === 'Rejected').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
-  ];
-
   const filteredApplicants = applicants.filter(app => {
     const matchesSearch = app.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                          app.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === '' || app.role === roleFilter;
     const matchesStatus = statusFilter === '' || app.status === statusFilter;
-    const matchesSkills = selectedSkills.length === 0 || 
-                         selectedSkills.every(skill => app.skills.includes(skill));
-    return matchesSearch && matchesRole && matchesStatus && matchesSkills;
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
   const totalPages = Math.ceil(filteredApplicants.length / itemsPerPage);
@@ -384,33 +507,26 @@ export default function Applicants() {
   // Get unique roles for the filter dropdown
   const uniqueRoles = Array.from(new Set(applicants.map(app => app.role)));
   
-  // Get unique skills for the filter dropdown
-  const uniqueSkills = Array.from(new Set(applicants.flatMap(app => app.skills))).sort();
-
-  const toggleSkill = (skill: string) => {
-    setSelectedSkills(prev => 
-      prev.includes(skill) 
-        ? prev.filter(s => s !== skill) 
-        : [...prev, skill]
-    );
-    setCurrentPage(1);
-  };
-
   const activeFilterCount = [
     searchQuery !== '',
     roleFilter !== '',
-    statusFilter !== '',
-    selectedSkills.length > 0
+    statusFilter !== ''
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
     setSearchQuery('');
     setRoleFilter('');
     setStatusFilter('');
-    setSelectedSkills([]);
     setSelectedApplicants([]);
     setCurrentPage(1);
   };
+
+  const stats = [
+    { label: 'Total Applicants', value: applicants.length.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+12 Today' },
+    { label: 'Pending Review', value: applicants.filter(a => a.status === 'Pending Review' || a.status === 'pending').length.toString(), icon: Hourglass, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+    { label: 'Shortlisted', value: applicants.filter(a => a.status === 'Shortlisted').length.toString(), icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Rejected', value: applicants.filter(a => a.status === 'Rejected').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
+  ];
 
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-8">
@@ -482,77 +598,11 @@ export default function Applicants() {
             </AnimatePresence>
           </div>
 
-          <div className="relative min-w-[200px]">
-            <button
-              onClick={() => setIsSkillsDropdownOpen(!isSkillsDropdownOpen)}
-              className={`w-full flex items-center justify-between pl-4 pr-3 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm border ${
-                selectedSkills.length > 0 
-                  ? 'bg-primary/5 border-primary text-primary' 
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Star size={16} className={selectedSkills.length > 0 ? 'text-primary' : 'text-slate-400'} />
-                {selectedSkills.length === 0 ? 'Filter by Skills' : `${selectedSkills.length} Skills Selected`}
-              </div>
-              <ChevronDown size={16} className={`transition-transform duration-200 ${isSkillsDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            <AnimatePresence>
-              {isSkillsDropdownOpen && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-20" 
-                    onClick={() => setIsSkillsDropdownOpen(false)} 
-                  />
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-30 overflow-hidden min-w-[240px]"
-                  >
-                    <div className="p-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      <div className="px-2 py-1.5 mb-1 border-b border-slate-50 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Skills</span>
-                        {selectedSkills.length > 0 && (
-                          <button 
-                            onClick={() => setSelectedSkills([])}
-                            className="text-[10px] font-bold text-red-500 hover:underline"
-                          >
-                            Clear All
-                          </button>
-                        )}
-                      </div>
-                      {uniqueSkills.map((skill: string) => (
-                        <button
-                          key={skill}
-                          onClick={() => toggleSkill(skill)}
-                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                            selectedSkills.includes(skill) 
-                              ? 'bg-primary/10 text-primary font-bold' 
-                              : 'text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                            selectedSkills.includes(skill) ? 'bg-primary border-primary text-background-dark' : 'border-slate-300 bg-white'
-                          }`}>
-                            {selectedSkills.includes(skill) && <Check size={12} strokeWidth={3} />}
-                          </div>
-                          {skill}
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <button 
+          <button
             onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all shadow-sm border ${
-              isFilterOpen || activeFilterCount > 0
-                ? 'bg-primary/5 border-primary text-primary'
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg border transition-all ${
+              isFilterOpen
+                ? 'bg-primary text-background-dark border-primary'
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -565,7 +615,11 @@ export default function Applicants() {
             )}
             {isFilterOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
-          <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-all">
+
+          <button
+            onClick={handleExportList}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-white border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-all"
+          >
             <Download size={20} />
             Export List
           </button>
@@ -649,26 +703,6 @@ export default function Applicants() {
                   </select>
                 </div>
               </div>
-
-              {selectedSkills.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-50">
-                  <span className="text-xs font-medium text-slate-500 py-1">Active Skill Filters:</span>
-                  {selectedSkills.map(skill => (
-                    <span 
-                      key={skill} 
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-xs font-medium border border-primary/20"
-                    >
-                      {skill}
-                      <button 
-                        onClick={() => toggleSkill(skill)}
-                        className="hover:text-primary-dark transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           </motion.div>
         )}
@@ -756,7 +790,6 @@ export default function Applicants() {
                   </div>
                 </th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applicant Name</th>
-                <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Skills</th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applied For</th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applied Date</th>
                 <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
@@ -779,7 +812,7 @@ export default function Applicants() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <img className="h-10 w-10 rounded-full object-cover" src={`https://picsum.photos/seed/applicant${app.id}/40/40`} alt={app.name} />
+                        <img className="h-10 w-10 rounded-full object-cover" src={getAvatarUrl(app.profileImage, app.name, 40)} alt={app.name} />
                         <div>
                           <button 
                             onClick={() => setViewingApplicant(app)}
@@ -789,15 +822,6 @@ export default function Applicants() {
                           </button>
                           <p className="text-xs text-slate-500">{app.email}</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex flex-wrap gap-1">
-                        {app.skills.map((skill, idx) => (
-                          <span key={idx} className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium border border-slate-200">
-                            {skill}
-                          </span>
-                        ))}
                       </div>
                     </td>
                     <td className="py-4 px-6">
@@ -819,7 +843,7 @@ export default function Applicants() {
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button 
-                          onClick={() => handleDownload(app.name)}
+                          onClick={() => handleDownload(app.name, app.resumeUrl)}
                           className="p-1.5 text-slate-400 hover:text-primary transition-colors" 
                           title="Download CV"
                         >
@@ -965,7 +989,7 @@ export default function Applicants() {
                 <div className="flex items-start gap-6">
                   <img 
                     className="h-24 w-24 rounded-2xl object-cover shadow-md" 
-                    src={`https://picsum.photos/seed/applicant${viewingApplicant.id}/200/200`} 
+                    src={getAvatarUrl(viewingApplicant.profileImage, viewingApplicant.name, 200)} 
                     alt={viewingApplicant.name} 
                   />
                   <div className="flex-1">
@@ -1072,7 +1096,7 @@ export default function Applicants() {
                 <div className="pt-6 border-t border-slate-100">
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button 
-                      onClick={() => handleDownload(viewingApplicant.name)}
+                      onClick={() => handleDownload(viewingApplicant.name, viewingApplicant.resumeUrl)}
                       className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-background-dark rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all"
                     >
                       <Download size={18} />
@@ -1095,3 +1119,13 @@ export default function Applicants() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+

@@ -76,7 +76,13 @@ export function Login() {
         return;
       }
 
-      navigate(role === 'company' ? '/company' : '/');
+      if (role === 'admin') {
+        navigate('/admin');
+      } else if (role === 'company') {
+        navigate('/company');
+      } else {
+        navigate('/');
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Login failed.');
     } finally {
@@ -111,7 +117,13 @@ export function Login() {
         return;
       }
 
-      navigate(role === 'company' ? '/company' : '/');
+      if (role === 'admin') {
+        navigate('/admin');
+      } else if (role === 'company') {
+        navigate('/company');
+      } else {
+        navigate('/');
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Google login failed.');
     } finally {
@@ -146,11 +158,39 @@ export function Login() {
         return;
       }
 
-      navigate(role === 'company' ? '/company' : '/');
+      if (role === 'admin') {
+        navigate('/admin');
+      } else if (role === 'company') {
+        navigate('/company');
+      } else {
+        navigate('/');
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'GitHub login failed.');
     } finally {
       setIsGithubLoading(false);
+    }
+  };
+
+  const handleDirectAdminLogin = async () => {
+    const demoEmail = 'admin@nissaet.com';
+    const demoPassword = 'admin123';
+    
+    try {
+      setError('');
+      setIsLoading(true);
+      const session = await login(demoEmail, demoPassword);
+      if (session?.user?.role === 'admin') {
+        navigate('/admin');
+      } else {
+        setError('Direct admin login failed. Please use official admin portal.');
+        navigate('/admin/login');
+      }
+    } catch (err) {
+      setError('Direct admin login failed. Redirecting to admin portal...');
+      navigate('/admin/login');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -299,10 +339,22 @@ export function Login() {
       </p>
       <p className="mt-8 text-center text-sm text-slate-500">
         Login as a Admin account?{' '}
-        <Link to="/admin/step-2" className="font-semibold text-[#137fec] transition-colors hover:text-[#137fec]/80 hover:underline">
+        <Link to="/admin/login" className="font-semibold text-[#137fec] transition-colors hover:text-[#137fec]/80 hover:underline">
           Admin
         </Link>
       </p>
+
+      <div className="mt-6 flex flex-col gap-3">
+        <button
+          type="button"
+          onClick={handleDirectAdminLogin}
+          disabled={isLoading}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-2.5 text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-100 transition-all disabled:opacity-50"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px]">A</span>
+          Quick Demo Admin Login
+        </button>
+      </div>
 
       <div className="mt-12 flex items-center justify-center gap-6 text-xs text-slate-400">
         <a href="#" className="hover:text-slate-600">Privacy Policy</a>

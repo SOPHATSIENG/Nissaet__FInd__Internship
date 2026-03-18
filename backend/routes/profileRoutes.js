@@ -4,6 +4,7 @@ const profileController = require('../controllers/profileController');
 const { authenticate } = require('../middleware/auth');
 
 router.get('/settings', authenticate, profileController.getSettings);
+router.get('/student/:id', profileController.getPublicStudentProfile);
 router.get('/notifications/card', authenticate, profileController.getNotificationCard);
 router.put('/personal', authenticate, profileController.updatePersonalSettings);
 router.put('/company', authenticate, profileController.updateCompanySettings);

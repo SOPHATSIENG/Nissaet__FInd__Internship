@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Building2, 
   Lock, 
@@ -12,7 +12,7 @@ import {
   Settings as SettingsIcon
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import ApplicationNotificationCard from '@/components/company-components/ApplicationNotificationCard';
+import api from '../../api/axios';
 
 export default function Notifications() {
   const location = useLocation();
@@ -25,32 +25,43 @@ export default function Notifications() {
     { name: 'Billing', icon: CreditCard, path: '/company/billing' },
   ];
 
-  const [notifications, setNotifications] = useState([
-    { 
-      id: '1', 
-      studentName: 'Sophea Chan', 
-      studentAvatar: 'https://picsum.photos/seed/sophea/100/100', 
-      internshipRole: 'Marketing Intern', 
-      message: "I've been following your company's growth for a while and I'm really excited about the Marketing Intern position. I have experience with social media management and would love to contribute to your team!",
-      time: '2 HOURS AGO'
-    },
-    { 
-      id: '2', 
-      studentName: 'Dara Sok', 
-      studentAvatar: 'https://picsum.photos/seed/dara/100/100', 
-      internshipRole: 'Web Developer', 
-      message: "Hello! I'm a final year CS student with a strong passion for React and Node.js. I've built several personal projects and I'm eager to learn from the experienced developers at your bank.",
-      time: '5 HOURS AGO'
-    },
-    { 
-      id: '3', 
-      studentName: 'Vanna Ly', 
-      studentAvatar: 'https://picsum.photos/seed/vanna/100/100', 
-      internshipRole: 'Data Analyst', 
-      message: "I am very interested in the Data Analyst internship. I have strong skills in Python and SQL, and I'm looking for an opportunity to apply them in a real-world banking environment.",
-      time: '1 DAY AGO'
-    }
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    const loadNotifications = async () => {
+      try {
+        setLoading(true);
+        const data = await api.getNotificationCard();
+        const items = Array.isArray(data?.notifications) ? data.notifications : Array.isArray(data?.items) ? data.items : [];
+        if (mounted) {
+          setNotifications(items);
+        }
+      } catch (error: any) {
+        if (mounted) {
+          setErrorMessage(error?.message || 'Failed to load notifications.');
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadNotifications();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const formattedNotifications = useMemo(() => {
+    return notifications.map((notif) => ({
+      ...notif,
+      timeLabel: notif?.created_at
+        ? new Date(notif.created_at).toLocaleString()
+        : 'Just now'
+    }));
+  }, [notifications]);
 
   const preferences = [
     {
@@ -94,7 +105,7 @@ export default function Notifications() {
             onClick={() => setActiveTab('activity')}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
               activeTab === 'activity' 
-                ? 'bg-white text-primary shadow-sm' 
+                ? 'bg-white text-blue-600 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -105,7 +116,7 @@ export default function Notifications() {
             onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
               activeTab === 'settings' 
-                ? 'bg-white text-primary shadow-sm' 
+                ? 'bg-white text-blue-600 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -126,7 +137,7 @@ export default function Notifications() {
                   to={item.path}
                   className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
                     isActive 
-                      ? 'bg-white text-primary shadow-sm border border-slate-200' 
+                      ? 'bg-white text-blue-600 shadow-sm border border-slate-200' 
                       : 'text-slate-600 hover:bg-white hover:text-slate-900'
                   }`}
                 >
@@ -141,15 +152,55 @@ export default function Notifications() {
         <div className="flex-1">
           {activeTab === 'activity' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {notifications.map((notif) => (
-                <ApplicationNotificationCard 
-                  key={notif.id}
-                  {...notif}
-                  onApprove={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
-                  onReject={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
-                />
-              ))}
-              {notifications.length === 0 && (
+              {errorMessage && (
+                <div className="col-span-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {errorMessage}
+                </div>
+              )}
+              {loading ? (
+                <div className="col-span-full py-20 bg-white rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
+                  <div className="p-4 bg-slate-50 rounded-full mb-4">
+                    <Bell size={40} className="opacity-20" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900">Loading notifications...</h3>
+                  <p className="text-sm mt-1">Fetching the latest updates.</p>
+                </div>
+              ) : formattedNotifications.length > 0 ? (
+                formattedNotifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${
+                      notif.is_read ? '' : 'ring-1 ring-primary/20'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900">{notif.title || 'Notification'}</h3>
+                        <p className="text-xs text-slate-500 mt-1">{notif.timeLabel}</p>
+                      </div>
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border ${
+                        notif.type === 'system' ? 'border-blue-200 bg-blue-50 text-blue-600' :
+                        notif.type === 'message' ? 'border-emerald-200 bg-emerald-50 text-emerald-600' :
+                        notif.type === 'reminder' ? 'border-amber-200 bg-amber-50 text-amber-600' :
+                        'border-slate-200 bg-slate-50 text-slate-500'
+                      }`}>
+                        {notif.type || 'system'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600 mt-3 whitespace-pre-line">
+                      {notif.message || 'No message provided.'}
+                    </p>
+                    {notif.action_url && (
+                      <button
+                        onClick={() => window.location.assign(notif.action_url)}
+                        className="mt-4 text-sm font-semibold text-primary hover:underline"
+                      >
+                        Open related item
+                      </button>
+                    )}
+                  </div>
+                ))
+              ) : (
                 <div className="col-span-full py-20 bg-white rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
                   <div className="p-4 bg-slate-50 rounded-full mb-4">
                     <Bell size={40} className="opacity-20" />

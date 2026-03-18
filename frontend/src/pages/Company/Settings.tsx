@@ -145,7 +145,7 @@ export default function Settings() {
                 to={item.path}
                 className={`flex items-center gap-3 px-4 py-3 font-medium rounded-lg transition-colors whitespace-nowrap ${
                   isActive 
-                    ? 'bg-white text-primary shadow-sm border border-slate-200' 
+                    ? 'bg-white text-blue-600 shadow-sm border border-slate-200' 
                     : 'text-slate-600 hover:bg-white hover:text-slate-900'
                 }`}
               >
@@ -165,14 +165,25 @@ export default function Settings() {
             </div>
             <div className="p-6 space-y-8">
               {error ? (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+                <p className="text-sm text-red-600 bg-blue-50 border border-red-100 px-3 py-2 rounded-lg">
                   {error}
                 </p>
               ) : null}
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
                 <div className="relative group">
-                  <div className="h-24 w-24 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 overflow-hidden">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => fileInputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    className="h-24 w-24 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  >
                     {formData.logo ? (
                       <img className="h-full w-full object-cover" src={formData.logo} alt="Profile" />
                     ) : (
@@ -198,12 +209,14 @@ export default function Settings() {
                   <p className="text-xs text-slate-500 mt-1">JPG, GIF or PNG. Max size of 800K</p>
                   <div className="flex gap-3 mt-3">
                     <button 
+                      type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="text-xs font-bold text-primary hover:underline"
                     >
                       Upload New
                     </button>
                     <button 
+                      type="button"
                       onClick={() => setFormData(prev => ({ ...prev, logo: '' }))}
                       className="text-xs font-bold text-red-500 hover:underline"
                     >
@@ -217,7 +230,7 @@ export default function Settings() {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-900">Display Name</label>
                   <input 
-                    className="w-full rounded-lg border-slate-200 focus:ring-primary focus:border-primary py-2.5" 
+                    className="w-full rounded-lg border-slate-200 focus:ring-primary focus:border-primary py-2.5 px-4" 
                     type="text" 
                     value={formData.displayName}
                     onChange={(e) => setFormData({...formData, displayName: e.target.value})}
@@ -226,7 +239,7 @@ export default function Settings() {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-900">Account Type</label>
                   <input
-                    className="w-full rounded-lg border-slate-200 py-2.5 bg-slate-50"
+                    className="w-full rounded-lg border-slate-200 py-2.5 px-4 bg-slate-50"
                     type="text"
                     value={user?.role || ''}
                     disabled
@@ -301,7 +314,7 @@ export default function Settings() {
                   Company Description
                 </label>
                 <textarea 
-                  className="w-full rounded-lg border-slate-200 focus:ring-primary focus:border-primary py-2.5 min-h-[120px]" 
+                  className="w-full rounded-lg border-slate-200 focus:ring-primary focus:border-primary py-2.5 px-4 min-h-[120px]" 
                   placeholder="Tell students about your company culture and mission..."
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
@@ -313,7 +326,7 @@ export default function Settings() {
                   <motion.span 
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="text-emerald-600 text-sm font-medium flex items-center gap-1"
+                    className="text-blue-600 text-sm font-medium flex items-center gap-1"
                   >
                     <CheckCircle2 size={16} />
                     Profile updated successfully!
@@ -322,7 +335,7 @@ export default function Settings() {
                 <button 
                   onClick={handleSave}
                   disabled={loading}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-all disabled:opacity-50"
                 >
                   {loading ? (
                     <Loader2 className="animate-spin" size={18} />

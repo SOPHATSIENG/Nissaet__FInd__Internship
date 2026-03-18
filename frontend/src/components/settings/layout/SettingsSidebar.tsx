@@ -1,4 +1,4 @@
-import {Bell, GraduationCap, Settings, Shield, User} from 'lucide-react';
+import {Bell, Bookmark, Briefcase, GraduationCap, Settings, Shield, User} from 'lucide-react';
 import {type TabType} from '../types';
 import {SidebarItem} from '../shared/SidebarItem';
 
@@ -13,6 +13,8 @@ const SIDEBAR_ITEMS: Array<{tab: TabType; label: string; icon: typeof User}> = [
   {tab: 'skills', label: 'Skills', icon: Settings},
   {tab: 'security', label: 'Security', icon: Shield},
   {tab: 'notifications', label: 'Notifications', icon: Bell},
+  {tab: 'saved', label: 'Saved Internships', icon: Bookmark},
+  {tab: 'applications', label: 'My Applications', icon: Briefcase},
 ];
 
 export function SettingsSidebar({activeTab, onTabChange}: SettingsSidebarProps) {

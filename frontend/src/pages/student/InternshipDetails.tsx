@@ -1,6 +1,6 @@
-import { Bookmark, BriefcaseBusiness, Clock3, Code2, MapPin, Share2, WalletCards, Loader2, AlertCircle, Calendar } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Bookmark, BriefcaseBusiness, Calendar, Clock3, Code2, MapPin, Share2, WalletCards } from "lucide-react";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import api from "../../api/axios";
 
 type Skill = {
@@ -35,71 +35,131 @@ type InternshipRecord = {
 };
 
 export default function InternshipDetails() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams();
+  const navigate = useNavigate();
   const [internship, setInternship] = useState<InternshipRecord | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [isApplying, setIsApplying] = useState(false);
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [coverLetter, setCoverLetter] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const fetchInternship = async () => {
-      if (!id) return;
-      try {
-        setLoading(true);
-        const response = await api.request(`/internships/${id}`);
-        setInternship(response.internship);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load internship details.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchInternship();
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f3f5f8] text-gray-400">
-        <Loader2 className="w-12 h-12 animate-spin mb-4 text-[#3b82f6]" />
-        <p className="text-lg">Loading internship details...</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    let mounted = true;
 
-  if (error || !internship) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f3f5f8] px-4 text-center">
-        <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Oops! Something went wrong</h2>
-        <p className="text-gray-500 mb-8 max-w-md">{error || "We couldn't find the internship you're looking for."}</p>
-        <Link to="/internships" className="bg-[#3b82f6] text-white px-8 py-3 rounded-xl font-bold hover:bg-[#2563eb] transition-colors">
-          Browse All Internships
-        </Link>
-      </div>
-    );
-  }
+    const loadSavedStatus = async () => {
+      if (!id) return;
+      try {
+        const res = await api.getSavedInternships();
+        const saved = Array.isArray(res?.internships)
+          ? res.internships.some((item: { id: number }) => String(item.id) === String(id))
+          : false;
+        if (mounted) setIsSaved(saved);
+      } catch (error) {
+        console.error('Error loading saved internships:', error);
+      }
+    };
 
-  const getPostedTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays <= 1) return "Today";
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
+    loadSavedStatus();
+    return () => {
+      mounted = false;
+    };
+  }, [id]);
+
+  const fetchInternship = async () => {
+    try {
+      setLoading(true);
+      const response = await api.getInternshipById(id);
+      console.log('Internship response:', response);
+
+      if (response.internship) {
+        setInternship(response.internship);
+      }
+    } catch (error) {
+      console.error('Error fetching internship:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const heroImage = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80';
+
   const salaryText = () => {
-    if (!internship.stipend || internship.stipend === 0) return "Unpaid Internship";
+    if (!internship) return 'Unpaid';
+    const stipend = Number(internship.stipend);
+    if (!stipend || stipend === 0) return 'Unpaid';
     return `${internship.stipend_currency || '$'}${internship.stipend}/mo`;
   };
 
-  const heroImage = `https://picsum.photos/seed/internship-${internship.id}/1200/400`;
+  const internshipType = internship?.work_mode || internship?.type || 'Internship';
+  const internshipDuration = internship?.duration_months ?? internship?.duration ?? 'Variable';
+  const applicationDeadline = internship?.application_deadline || internship?.deadline;
+
+  const getPostedTime = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const safeType = internship?.type ? internship.type.replace('-', ' ') : 'internship';
+  const safePostedTime = internship?.created_at ? getPostedTime(internship.created_at) : 'recently';
+  const safeCompanyName = internship?.company_name || 'Company';
+
+  const handleApply = async () => {
+    if (!coverLetter.trim()) {
+      alert('Please write a cover letter before applying.');
+      return;
+    }
+
+    setIsApplying(true);
+    try {
+      await api.applyForInternship(id, coverLetter);
+      alert('Application submitted successfully!');
+      setShowApplyModal(false);
+      setCoverLetter('');
+      navigate('/student/internships');
+    } catch (error) {
+      console.error('Error applying:', error);
+      alert('Failed to submit application. Please try again.');
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const handleToggleSave = async () => {
+    if (!id) return;
+    setIsSaving(true);
+    try {
+      if (isSaved) {
+        await api.unsaveInternship(id);
+        setIsSaved(false);
+      } else {
+        await api.saveInternship(id);
+        setIsSaved(true);
+      }
+    } catch (error) {
+      console.error('Error updating saved status:', error);
+      alert('Failed to update saved status. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="bg-[#f3f5f8] min-h-screen py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-[1180px] mx-auto bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        {/* Header Header */}
+      {loading ? (
+        <div className="max-w-[1180px] mx-auto flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-700"></div>
+        </div>
+      ) : internship ? (
+        <div className="max-w-[1180px] mx-auto bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-6 md:px-8 py-5 border-b border-slate-200 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
@@ -118,10 +178,16 @@ export default function InternshipDetails() {
             </button>
             <button
               type="button"
-              className="h-12 px-5 rounded-xl bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors flex items-center gap-2 font-medium"
+              onClick={handleToggleSave}
+              disabled={isSaving}
+              className={`h-12 px-5 rounded-xl transition-colors flex items-center gap-2 font-medium ${
+                isSaved
+                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+              } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
               <Bookmark size={18} />
-              Save
+              {isSaved ? 'Unsave' : 'Save'}
             </button>
           </div>
         </div>
@@ -136,7 +202,7 @@ export default function InternshipDetails() {
               referrerPolicy="no-referrer"
             />
             <span className="absolute left-6 bottom-6 bg-[#3b82f6] text-white text-base font-bold px-5 py-2 rounded-full uppercase tracking-wide shadow-lg">
-              {internship.type.replace('-', ' ')}
+              {safeType}
             </span>
           </div>
         </div>
@@ -146,7 +212,7 @@ export default function InternshipDetails() {
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             <img
               src={internship.company_logo || `https://picsum.photos/seed/company-${internship.company_id}/120/120`}
-              alt={`${internship.company_name} logo`}
+              alt={`${safeCompanyName} logo`}
               className="w-24 h-24 rounded-2xl object-cover border border-slate-200 shadow-sm"
               referrerPolicy="no-referrer"
             />
@@ -156,12 +222,15 @@ export default function InternshipDetails() {
               </h2>
               <div className="flex flex-wrap items-center gap-3 text-lg text-slate-500">
                 <Link to={`/companies/${internship.company_id}`} className="text-[#3b82f6] font-bold hover:underline transition-colors">
-                  {internship.company_name}
+                  {safeCompanyName}
                 </Link>
-                <span>•</span>
+                <span>-</span>
                 <span className="flex items-center gap-1.5">
-                  <Clock3 size={18} /> Posted {getPostedTime(internship.created_at)}
+                  <Clock3 size={18} /> Posted {safePostedTime}
                 </span>
+              </div>
+              <div className="mt-2 text-sm text-slate-500">
+                {internshipType.replace('-', ' ')} - {internship.location}
               </div>
             </div>
           </div>
@@ -176,17 +245,17 @@ export default function InternshipDetails() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Location</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.location} ({internship.work_mode})</p>
+                <p className="text-sm font-semibold text-slate-800">{internship.location} ({internship.work_mode || internship.type})</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
                 <Clock3 size={20} />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Duration</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.duration_months ? `${internship.duration_months} Months` : 'Variable'}</p>
+                <p className="text-sm font-semibold text-slate-800">{internshipDuration && internshipDuration !== 'Variable' ? `${internshipDuration} Months` : 'Variable'}</p>
               </div>
             </div>
 
@@ -206,11 +275,13 @@ export default function InternshipDetails() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Deadline</p>
-                <p className="text-sm font-semibold text-slate-800">{internship.application_deadline ? new Date(internship.application_deadline).toLocaleDateString() : 'Open Until Filled'}</p>
+                <p className="text-sm font-semibold text-slate-800">{applicationDeadline ? new Date(applicationDeadline).toLocaleDateString() : 'Open Until Filled'}</p>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Content Section */}
 
         {/* Content Section */}
         <div className="px-6 md:px-8 py-10">
@@ -296,17 +367,90 @@ export default function InternshipDetails() {
           <div className="flex items-center gap-4">
              <div className="hidden sm:block">
               <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">Apply By</p>
-              <p className="text-lg font-bold text-slate-900">{internship.application_deadline ? new Date(internship.application_deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Always Open'}</p>
+              <p className="text-lg font-bold text-slate-900">{applicationDeadline ? new Date(applicationDeadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Always Open'}</p>
             </div>
           </div>
           <button
             type="button"
-            className="w-full sm:w-auto bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-extrabold text-lg px-12 py-4 rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5"
+            onClick={() => setShowApplyModal(true)}
+            className="bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xl md:text-lg px-10 py-3 rounded-2xl shadow-[0_8px_24px_rgba(67,56,202,0.35)] transition-colors"
           >
             Apply for this Internship
           </button>
         </div>
       </div>
+      )
+      : (
+        <div className="max-w-[1180px] mx-auto flex items-center justify-center py-20">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Internship Not Found</h2>
+            <p className="text-slate-600">The internship you're looking for doesn't exist or has been removed.</p>
+            <button 
+              onClick={() => navigate('/student/internships')}
+              className="mt-4 px-6 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 transition-colors"
+            >
+              Back to Internships
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Apply Modal */}
+      {showApplyModal && internship && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Apply for {internship.title}</h2>
+                <button
+                  onClick={() => setShowApplyModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cover Letter <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={coverLetter}
+                  onChange={(e) => setCoverLetter(e.target.value)}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Tell us why you're interested in this internship and why you'd be a good fit..."
+                />
+                <p className="mt-2 text-sm text-gray-500">
+                  Write a compelling cover letter that highlights your relevant skills and experience.
+                </p>
+              </div>
+              
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowApplyModal(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApply}
+                  disabled={isApplying || !coverLetter.trim()}
+                  className="px-6 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isApplying ? 'Submitting...' : 'Submit Application'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+

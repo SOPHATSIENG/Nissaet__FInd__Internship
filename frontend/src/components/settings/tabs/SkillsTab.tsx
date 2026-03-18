@@ -205,7 +205,7 @@ export function SkillsTab({data, onSaved}: SkillsTabProps) {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="bg-emerald-500 disabled:opacity-70 hover:bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-emerald-500/20"
+              className="bg-blue-600 disabled:opacity-70 hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg font-semibold transition-colors shadow-lg shadow-blue-600/20"
             >
               {saving ? 'Saving...' : 'Save Skills'}
             </button>
@@ -216,7 +216,7 @@ export function SkillsTab({data, onSaved}: SkillsTabProps) {
       <div className="w-full md:w-80 space-y-6">
         <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500">
               <Plus size={18} />
             </div>
             <h3 className="font-semibold text-slate-800">Recommended for You</h3>
@@ -244,7 +244,7 @@ export function SkillsTab({data, onSaved}: SkillsTabProps) {
                 <button
                   type="button"
                   onClick={() => addSkill(skill)}
-                  className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label={`Add ${toLabel(skill.name)}`}
                 >
                   <Plus size={16} />

@@ -29,6 +29,7 @@ export default function Layout() {
     { name: 'Home', path: '/' },
     { name: 'Internships', path: '/internships' },
     { name: 'Companies', path: '/companies' },
+    { name: 'Blog & Events', path: '/blog' },
     { name: 'Career Advice', path: '/career-advice' },
   ];
 
@@ -192,16 +193,19 @@ export default function Layout() {
               <span className="text-xl font-bold tracking-tight">NSI</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-8">
+            <nav className="hidden md:flex items-center gap-1">
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
                   to={link.path}
-                  className={`text-sm font-medium transition-colors hover:text-[#3b82f6] ${
-                    isActiveLink(link.path) ? 'text-[#3b82f6] font-bold' : ''
+                  className={`px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 hover:bg-slate-50 hover:text-[#3b82f6] relative group ${
+                    isActiveLink(link.path) ? 'text-[#3b82f6] bg-blue-50/50' : 'text-slate-600'
                   }`}
                 >
                   {link.name}
+                  <span className={`absolute bottom-1.5 left-4 right-4 h-0.5 bg-[#3b82f6] rounded-full transition-all duration-300 transform origin-left ${
+                    isActiveLink(link.path) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                  }`} />
                 </Link>
               ))}
             </nav>

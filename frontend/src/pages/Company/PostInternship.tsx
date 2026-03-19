@@ -31,6 +31,7 @@ export default function PostInternship() {
     duration: '',
     description: '',
     requirements: '',
+    image: '',
     salaryType: 'paid',
     minSalary: '',
     maxSalary: '',
@@ -75,6 +76,7 @@ export default function PostInternship() {
           duration: internship.duration_months?.toString() || '',
           description: internship.description || '',
           requirements: internship.requirements || '',
+          image: internship.image || '',
           salaryType: internship.stipend > 0 ? 'paid' : 'unpaid',
           minSalary: internship.stipend ? internship.stipend.toString() : '',
           maxSalary: internship.stipend ? internship.stipend.toString() : '',
@@ -227,6 +229,7 @@ export default function PostInternship() {
       duration_months: parseInt(formData.duration),
       description: formData.description,
       requirements: formData.requirements,
+      image: formData.image || null,
       stipend: formData.salaryType === 'paid' ? parseFloat(formData.minSalary) : 0,
       positions: formData.positions,
       application_deadline: formData.deadline,
@@ -309,6 +312,47 @@ export default function PostInternship() {
             Basic Information
           </h3>
           <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium leading-6 text-slate-900">Internship Image</label>
+              <div className="mt-2 flex items-center gap-4">
+                <div className="h-20 w-20 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
+                  {formData.image ? (
+                    <img src={formData.image} alt="Internship" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-slate-400">No Image</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer">
+                    Upload Image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          setFormData({ ...formData, image: String(reader.result || '') });
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                  {formData.image && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, image: '' })}
+                      className="text-xs text-red-600 hover:underline text-left"
+                    >
+                      Remove image
+                    </button>
+                  )}
+                  <p className="text-xs text-slate-500">PNG, JPG. Max ~2MB recommended.</p>
+                </div>
+              </div>
+            </div>
             <div>
               <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="title">Internship Title *</label>
               <div className="mt-2">

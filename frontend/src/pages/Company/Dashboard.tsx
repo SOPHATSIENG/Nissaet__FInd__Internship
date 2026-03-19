@@ -456,9 +456,13 @@ export default function Dashboard() {
                       >
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                              <PlusCircle size={20} />
-                            </div>
+                              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0 overflow-hidden">
+                                {job.image ? (
+                                  <img src={job.image} alt={job.title} className="h-full w-full object-cover" />
+                                ) : (
+                                  <PlusCircle size={20} />
+                                )}
+                              </div>
                             <div>
                               <p className="font-semibold text-slate-900 text-sm">{job.title}</p>
                               <p className="text-xs text-slate-500">{job.location} ? {job.type}</p>

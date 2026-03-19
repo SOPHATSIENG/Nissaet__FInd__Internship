@@ -372,15 +372,16 @@ const createInternship = async (req, res) => {
             return res.status(400).json({ message: 'Invalid request: createInternship should not be called with an ID' });
         }
 
-        const {
-            title,
-            description,
-            requirements,
-            responsibilities,
-            benefits,
-            location,
-            is_remote = false,
-            is_hybrid = false,
+          const {
+              title,
+              description,
+              image,
+              requirements,
+              responsibilities,
+              benefits,
+              location,
+              is_remote = false,
+              is_hybrid = false,
             type = 'full-time',
             duration_months,
             stipend = 0,
@@ -404,23 +405,23 @@ const createInternship = async (req, res) => {
             return res.status(400).json({ message: 'Required fields are missing' });
         }
 
-        const params = [
-            companyId, title, description, requirements || null, responsibilities || null,
-            benefits || null, location || null, is_remote ? 1 : 0, is_hybrid ? 1 : 0, type || 'full-time',
-            duration_months || null, stipend || 0, stipend_currency, positions || 1,
-            application_deadline || null, start_date || null, end_date || null, 'active'
-        ];
+          const params = [
+              companyId, title, description, image || null, requirements || null, responsibilities || null,
+              benefits || null, location || null, is_remote ? 1 : 0, is_hybrid ? 1 : 0, type || 'full-time',
+              duration_months || null, stipend || 0, stipend_currency, positions || 1,
+              application_deadline || null, start_date || null, end_date || null, 'active'
+          ];
 
         let result;
         try {
             result = await db.query(
-                `INSERT INTO internships (
-                    company_id, title, description, requirements, responsibilities, benefits,
-                    location, is_remote, is_hybrid, type, duration_months, stipend, stipend_currency,
-                    positions, application_deadline, start_date, end_date, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                params
-            );
+                  `INSERT INTO internships (
+                      company_id, title, description, image, requirements, responsibilities, benefits,
+                      location, is_remote, is_hybrid, type, duration_months, stipend, stipend_currency,
+                      positions, application_deadline, start_date, end_date, status
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  params
+              );
         } catch (error) {
             if (!isBadFieldError(error)) throw error;
             
@@ -478,14 +479,15 @@ const updateInternship = async (req, res) => {
             return res.status(404).json({ message: 'Internship not found or does not belong to your company' });
         }
 
-        const {
-            title,
-            description,
-            requirements,
-            location,
-            type = 'full-time',
-            duration_months,
-            stipend = 0,
+          const {
+              title,
+              description,
+              image,
+              requirements,
+              location,
+              type = 'full-time',
+              duration_months,
+              stipend = 0,
             stipend_currency = 'USD',
             positions = 1,
             application_deadline,
@@ -500,19 +502,20 @@ const updateInternship = async (req, res) => {
             await connection.beginTransaction();
 
             // Update internship
-            await connection.execute(
-                `UPDATE internships SET
-                    title = ?, description = ?, requirements = ?, location = ?,
-                    type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
-                    positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                 WHERE id = ?`,
-                [
-                    title,
-                    description,
-                    requirements || null,
-                    location,
-                    type,
+              await connection.execute(
+                  `UPDATE internships SET
+                      title = ?, description = ?, image = ?, requirements = ?, location = ?,
+                      type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
+                      positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
+                      updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?`,
+                  [
+                      title,
+                      description,
+                      image || null,
+                      requirements || null,
+                      location,
+                      type,
                     duration_months,
                     stipend,
                     stipend_currency,

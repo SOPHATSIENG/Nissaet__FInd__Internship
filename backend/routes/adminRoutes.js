@@ -8,6 +8,7 @@ router.use(authenticate, authorize('admin'));
 
 router.get('/users', adminController.getAllUsers);
 router.get('/stats', adminController.getStats);
+router.get('/reports', adminController.getReports);
 router.get('/verifications/company', adminController.getCompanyVerifications);
 router.put('/verifications/company/:id', adminController.updateCompanyVerificationStatus);
 router.get('/verifications/student', adminController.getStudentVerifications);

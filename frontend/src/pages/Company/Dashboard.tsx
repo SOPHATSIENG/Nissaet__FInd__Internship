@@ -444,16 +444,21 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                    <AnimatePresence mode="popLayout">
-                      {currentInternships.map((job: any) => (
-                      <motion.tr 
-                        key={job.id} 
-                        layout
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        className="group hover:bg-slate-50 transition-colors"
-                      >
+                      <AnimatePresence mode="popLayout">
+                        {currentInternships.map((job: any) => {
+                          const deadline = job.application_deadline ? new Date(job.application_deadline) : null;
+                          const now = new Date();
+                          const isExpired = deadline ? deadline < now : false;
+                          const isActive = String(job.status || '').toLowerCase() === 'active' && !isExpired;
+                          return (
+                        <motion.tr 
+                          key={job.id} 
+                          layout
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          className="group hover:bg-slate-50 transition-colors"
+                        >
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0 overflow-hidden">
@@ -485,9 +490,9 @@ export default function Dashboard() {
                         </td>
                         <td className="py-4 px-6">
                           <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                            job.status === 'active' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-800 ring-amber-600/20'
+                            isActive ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-800 ring-amber-600/20'
                           }`}>
-                            {job.status === 'active' ? 'Active' : 'Draft/Expired'}
+                              {isActive ? 'Active' : 'Expired'}
                           </span>
                         </td>
                         <td className="py-4 px-6 text-right">
@@ -539,7 +544,8 @@ export default function Dashboard() {
                           </div>
                         </td>
                       </motion.tr>
-                    ))}
+                          );
+                        })}
                   </AnimatePresence>
                 </tbody>
               </table>

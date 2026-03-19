@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   FileDown, 
   Calendar, 
@@ -39,23 +39,7 @@ import {
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useProfile } from '@/context/ProfileContext';
-
-const placementData = [
-  { name: 'IT & Software', value: 450 },
-  { name: 'Marketing', value: 320 },
-  { name: 'Design', value: 280 },
-  { name: 'Finance', value: 150 },
-];
-
-const growthData = [
-  { name: 'Week 1', students: 120, companies: 40, placements: 25 },
-  { name: 'Week 2', students: 180, companies: 55, placements: 42 },
-  { name: 'Week 3', students: 150, companies: 48, placements: 38 },
-  { name: 'Week 4', students: 210, companies: 62, placements: 55 },
-  { name: 'Week 5', students: 250, companies: 75, placements: 68 },
-  { name: 'Week 6', students: 230, companies: 70, placements: 60 },
-  { name: 'Week 7', students: 280, companies: 85, placements: 75 },
-];
+import api from '../../api/axios';
 
 const DATE_RANGES = [
   { label: 'Last 7 Days', value: '7d' },
@@ -76,6 +60,21 @@ export const Reports = () => {
   const [isDateOpen, setIsDateOpen] = useState(false);
   const [chartType, setChartType] = useState('area');
   const [activeMetric, setActiveMetric] = useState('students');
+  const [isExporting, setIsExporting] = useState(false);
+  const [isExportMode, setIsExportMode] = useState(false);
+  const [reportData, setReportData] = useState({
+    stats: {
+      students: { value: 0, trend: 0, isUp: true },
+      companies: { value: 0, trend: 0, isUp: true },
+      placements: { value: 0, trend: 0, isUp: true },
+    },
+    growth: [],
+    industry: [],
+    funnel: { views: 0, applications: 0, interviews: 0, placements: 0 }
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const reportRef = useRef<HTMLDivElement | null>(null);
 
   const colorMap: Record<string, string> = {
     emerald: '#10b981',
@@ -89,11 +88,136 @@ export const Reports = () => {
   const accentHex = colorMap[settings.accentColor] || colorMap.emerald;
   const COLORS = [accentHex, '#3b82f6', '#8b5cf6', '#f59e0b'];
 
+  useEffect(() => {
+    let isActive = true;
+    setIsLoading(true);
+    setError('');
+
+    api.adminGetReports({ range: dateRange })
+      .then((data) => {
+        if (!isActive) return;
+        setReportData(data || {});
+      })
+      .catch((err) => {
+        if (!isActive) return;
+        setError(err?.message || 'Unable to load report data.');
+      })
+      .finally(() => {
+        if (!isActive) return;
+        setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [dateRange]);
+
+  const formatNumber = (value: number) => Number(value || 0).toLocaleString();
+  const formatTrend = (value: number, isUp: boolean) => `${isUp ? '+' : '-'}${Number(value || 0).toFixed(1)}%`;
+
   const stats = [
-    { label: 'New Students', value: '1,240', metric: 'students', icon: Users, trend: '+12.5%', isUp: true },
-    { label: 'New Companies', value: '145', metric: 'companies', icon: Briefcase, trend: '+5.2%', isUp: true },
-    { label: 'Placements', value: '382', metric: 'placements', icon: Check, trend: '-2.1%', isUp: false },
+    {
+      label: 'New Students',
+      value: formatNumber(reportData?.stats?.students?.value || 0),
+      metric: 'students',
+      icon: Users,
+      trend: formatTrend(reportData?.stats?.students?.trend || 0, reportData?.stats?.students?.isUp ?? true),
+      isUp: reportData?.stats?.students?.isUp ?? true
+    },
+    {
+      label: 'New Companies',
+      value: formatNumber(reportData?.stats?.companies?.value || 0),
+      metric: 'companies',
+      icon: Briefcase,
+      trend: formatTrend(reportData?.stats?.companies?.trend || 0, reportData?.stats?.companies?.isUp ?? true),
+      isUp: reportData?.stats?.companies?.isUp ?? true
+    },
+    {
+      label: 'Placements',
+      value: formatNumber(reportData?.stats?.placements?.value || 0),
+      metric: 'placements',
+      icon: Check,
+      trend: formatTrend(reportData?.stats?.placements?.trend || 0, reportData?.stats?.placements?.isUp ?? true),
+      isUp: reportData?.stats?.placements?.isUp ?? true
+    },
   ];
+
+  const growthData = reportData?.growth?.length
+    ? reportData.growth
+    : [{ name: 'No data', students: 0, companies: 0, placements: 0 }];
+
+  const placementData = reportData?.industry?.length
+    ? reportData.industry
+    : [];
+  const placementTotal = useMemo(
+    () => placementData.reduce((sum, row) => sum + (row.value || 0), 0),
+    [placementData]
+  );
+
+  const funnel = reportData?.funnel || { views: 0, applications: 0, interviews: 0, placements: 0 };
+  const funnelMax = funnel.views > 0 ? funnel.views : Math.max(funnel.applications, funnel.interviews, funnel.placements, 1);
+
+  const funnelSteps = useMemo(() => ([
+    { label: 'Profile Views', value: formatNumber(funnel.views), percentage: funnelMax ? Math.round((funnel.views / funnelMax) * 100) : 0, color: 'bg-primary' },
+    { label: 'Applications', value: formatNumber(funnel.applications), percentage: funnelMax ? Math.round((funnel.applications / funnelMax) * 100) : 0, color: 'bg-blue-500' },
+    { label: 'Interviews', value: formatNumber(funnel.interviews), percentage: funnelMax ? Math.round((funnel.interviews / funnelMax) * 100) : 0, color: 'bg-indigo-500' },
+    { label: 'Placements', value: formatNumber(funnel.placements), percentage: funnelMax ? Math.round((funnel.placements / funnelMax) * 100) : 0, color: 'bg-violet-500' },
+  ]), [funnel, funnelMax]);
+
+  const appToInterviewRate = funnel.applications > 0 ? (funnel.interviews / funnel.applications) * 100 : 0;
+  const interviewToPlacementRate = funnel.interviews > 0 ? (funnel.placements / funnel.interviews) * 100 : 0;
+
+  const handleExportPdf = async () => {
+    if (isExporting || !reportRef.current) return;
+    setIsExporting(true);
+    setIsExportMode(true);
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const [{ default: html2canvas }, jspdfModule] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf')
+      ]);
+      const PdfCtor = (jspdfModule as any).jsPDF || (jspdfModule as any).default;
+
+      const element = reportRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+        scrollX: 0,
+        scrollY: -window.scrollY
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new PdfCtor('p', 'mm', 'a4');
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      pdf.save(`platform-reports-${stamp}.pdf`);
+    } catch (err) {
+      setError('Export failed. Please try again.');
+    } finally {
+      setIsExportMode(false);
+      setIsExporting(false);
+    }
+  };
 
   const renderChart = () => {
     const commonProps = {
@@ -146,12 +270,22 @@ export const Reports = () => {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-8 overflow-y-auto no-scrollbar max-w-7xl mx-auto w-full">
+    <div 
+      ref={reportRef} 
+      className={cn(
+        "flex flex-1 flex-col gap-8 p-8 no-scrollbar mx-auto w-full",
+        isExportMode ? "overflow-visible max-w-[1200px]" : "overflow-y-auto max-w-7xl"
+      )}
+    >
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
         <div className="flex flex-col gap-1">
           <h1 className="text-4xl font-black text-text-primary tracking-tight">Platform Reports</h1>
-          <p className="text-text-secondary text-lg">Comprehensive data and performance metrics.</p>
+          <p className="text-text-secondary text-lg">
+            Comprehensive data and performance metrics.
+            {isLoading && <span className="ml-2 text-xs font-bold text-primary uppercase tracking-widest">Loading...</span>}
+            {error && <span className="ml-2 text-xs font-bold text-rose-600 uppercase tracking-widest">{error}</span>}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center bg-surface border border-border rounded-xl p-1 shadow-sm">
@@ -162,8 +296,15 @@ export const Reports = () => {
               <Share2 className="size-5" />
             </button>
             <div className="w-px h-6 bg-border mx-1"></div>
-            <button className="flex items-center gap-2 bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-md">
-              <Download className="size-4" /> Export PDF
+            <button 
+              onClick={handleExportPdf}
+              disabled={isExporting}
+              className={cn(
+                "flex items-center gap-2 bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold transition-all shadow-md",
+                isExporting ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"
+              )}
+            >
+              <Download className="size-4" /> {isExporting ? 'Exporting...' : 'Export PDF'}
             </button>
           </div>
         </div>
@@ -212,14 +353,14 @@ export const Reports = () => {
               )}
             </AnimatePresence>
           </div>
-          <div className="relative flex-1 md:w-64">
+          {/* <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary size-4" />
             <input 
               type="text" 
               placeholder="Search metrics..." 
               className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm text-text-primary focus:border-primary focus:outline-none transition-all"
             />
-          </div>
+          </div> */}
         </div>
 
         <div className="flex items-center gap-1 bg-background p-1 rounded-xl border border-border">
@@ -300,7 +441,7 @@ export const Reports = () => {
           </div>
         </div>
         <div className="h-[450px] w-full mt-6 relative z-10">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             {renderChart()}
           </ResponsiveContainer>
         </div>
@@ -322,26 +463,32 @@ export const Reports = () => {
           
           <div className="flex flex-col lg:flex-row items-center gap-8">
             <div className="h-64 w-full lg:w-1/2">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={placementData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={70}
-                    outerRadius={90}
-                    paddingAngle={10}
-                    dataKey="value"
-                  >
-                    {placementData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)', padding: '12px' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {placementData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <PieChart>
+                    <Pie
+                      data={placementData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={90}
+                      paddingAngle={10}
+                      dataKey="value"
+                    >
+                      {placementData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '16px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)', padding: '12px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full flex items-center justify-center text-sm text-text-secondary font-semibold">
+                  No industry data for this range.
+                </div>
+              )}
             </div>
             
             <div className="flex flex-col gap-3 w-full lg:w-1/2">
@@ -352,8 +499,10 @@ export const Reports = () => {
                     <span className="text-sm text-text-primary font-bold">{item.name}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-text-primary font-black">{item.value}</span>
-                    <span className="text-[10px] text-text-secondary font-bold">({Math.round(item.value / 1200 * 100)}%)</span>
+                    <span className="text-sm text-text-primary font-black">{formatNumber(item.value)}</span>
+                    <span className="text-[10px] text-text-secondary font-bold">
+                      ({placementTotal ? Math.round((item.value / placementTotal) * 100) : 0}%)
+                    </span>
                   </div>
                 </div>
               ))}
@@ -372,12 +521,7 @@ export const Reports = () => {
           </div>
           
           <div className="flex flex-col gap-6">
-            {[
-              { label: 'Profile Views', value: '45,200', percentage: 100, color: 'bg-primary' },
-              { label: 'Applications', value: '12,400', percentage: 27, color: 'bg-blue-500' },
-              { label: 'Interviews', value: '3,200', percentage: 7, color: 'bg-indigo-500' },
-              { label: 'Placements', value: '1,540', percentage: 3, color: 'bg-violet-500' },
-            ].map((step, idx) => (
+            {funnelSteps.map((step, idx) => (
               <div key={step.label} className="flex flex-col gap-3">
                 <div className="flex justify-between items-end">
                   <div className="flex items-center gap-3">
@@ -408,7 +552,14 @@ export const Reports = () => {
             <div className="flex flex-col gap-1">
               <p className="text-sm font-bold text-text-primary">Conversion Insight</p>
               <p className="text-xs text-text-secondary leading-relaxed">
-                Your application-to-interview conversion rate has increased by <span className="font-black text-primary">2.4%</span> since last month. Consider optimizing the "Interview" stage for higher placement yields.
+                {funnel.applications === 0 ? (
+                  <>No conversion data yet for this range. Once applications arrive, insights will appear here.</>
+                ) : (
+                  <>
+                    Application-to-interview conversion is <span className="font-black text-primary">{appToInterviewRate.toFixed(1)}%</span>.
+                    Interview-to-placement conversion is <span className="font-black text-primary">{interviewToPlacementRate.toFixed(1)}%</span>.
+                  </>
+                )}
               </p>
             </div>
           </div>

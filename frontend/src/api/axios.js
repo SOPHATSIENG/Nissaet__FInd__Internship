@@ -138,6 +138,18 @@ export const api = {
     return request('/profile/notifications/card', { auth: true });
   },
 
+  markNotificationsRead(payload) {
+    return request('/profile/notifications/read', { method: 'PUT', auth: true, body: payload });
+  },
+
+  deleteNotification(id) {
+    return request(`/profile/notifications/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  clearNotifications() {
+    return request('/profile/notifications', { method: 'DELETE', auth: true });
+  },
+
   updatePassword(payload) {
     return request('/profile/security/password', { method: 'PUT', auth: true, body: payload });
   },
@@ -312,6 +324,15 @@ export const api = {
 
   adminGetStats() {
     return request('/admin/stats', { auth: true });
+  },
+
+  adminGetReports(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+    return request(`/admin/reports${query ? `?${query}` : ''}`, { auth: true });
   },
 
   adminDeleteUser(id) {

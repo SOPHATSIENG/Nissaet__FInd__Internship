@@ -81,30 +81,80 @@ export default function Dashboard() {
     try {
       setLoading(true);
       
-      const [internshipsResponse, statsResponse, trendsResponse] = await Promise.all([
+      const [internshipsResult, statsResult, trendsResult] = await Promise.allSettled([
         api.getCompanyInternships(),
         api.getDashboardStats(),
         api.getApplicationTrends()
       ]);
-      
-      setInternships(internshipsResponse.internships || []);
-      setDashboardData(statsResponse);
+
+      const internshipsResponse =
+        internshipsResult.status === 'fulfilled' ? internshipsResult.value : null;
+      const statsResponse =
+        statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const trendsResponse =
+        trendsResult.status === 'fulfilled' ? trendsResult.value : null;
+
+      const errors = [
+        internshipsResult.status === 'rejected' ? 'Failed to load internships.' : null,
+        statsResult.status === 'rejected' ? 'Failed to load dashboard stats.' : null,
+        trendsResult.status === 'rejected' ? 'Failed to load trends.' : null
+      ].filter(Boolean);
+
+      setError(errors.length ? errors.join(' ') : null);
+
+      const internshipsList = Array.isArray(internshipsResponse?.internships)
+        ? internshipsResponse.internships
+        : Array.isArray(internshipsResponse)
+          ? internshipsResponse
+          : [];
+
+      setInternships(internshipsList);
+
+      const now = new Date();
+      const totalPosted = internshipsList.length;
+      const activePosts = internshipsList.filter((job: any) => {
+        const isActive = String(job.status || '').toLowerCase() === 'active';
+        const deadline = job.application_deadline ? new Date(job.application_deadline) : null;
+        return isActive && (!deadline || deadline > now);
+      }).length;
+      const expiredPosts = totalPosted - activePosts;
+      const totalApplicants = internshipsList.reduce((sum: number, job: any) => {
+        const count = job.applicant_count ?? job.applications_count ?? 0;
+        return sum + (Number.isFinite(count) ? count : 0);
+      }, 0);
+
+      const derivedStats = {
+        totalPosted,
+        activePosts,
+        expiredPosts,
+        totalApplicants,
+        postsTrend: 'Stable',
+        statusDistribution: { pending: 0, shortlisted: 0, rejected: 0 },
+        recentApplicants: []
+      };
+
+      const mergedStats = {
+        ...derivedStats,
+        ...(statsResponse || {})
+      };
+
+      setDashboardData(mergedStats);
       setCurrentPage(1); // Reset to first page when new data is fetched
       
-      if (statsResponse) {
+      if (mergedStats) {
         setStats([
           { 
             label: 'Total Posted', 
-            value: statsResponse.totalPosted?.toString() || '0', 
+            value: mergedStats.totalPosted?.toString?.() || String(mergedStats.totalPosted ?? 0), 
             icon: FilePlus, 
             color: 'text-blue-600', 
             bg: 'bg-blue-50', 
-            trend: statsResponse.postsTrend || 'Stable',
+            trend: mergedStats.postsTrend || 'Stable',
             filter: 'all'
           },
           { 
             label: 'Total Applicants', 
-            value: statsResponse.totalApplicants?.toString() || '0', 
+            value: mergedStats.totalApplicants?.toString?.() || String(mergedStats.totalApplicants ?? 0), 
             icon: Users, 
             color: 'text-purple-600', 
             bg: 'bg-purple-50', 
@@ -113,7 +163,7 @@ export default function Dashboard() {
           },
           { 
             label: 'Active Posts', 
-            value: statsResponse.activePosts?.toString() || '0', 
+            value: mergedStats.activePosts?.toString?.() || String(mergedStats.activePosts ?? 0), 
             icon: CheckCircle, 
             color: 'text-emerald-600', 
             bg: 'bg-emerald-50', 
@@ -122,7 +172,7 @@ export default function Dashboard() {
           },
           { 
             label: 'Expired Posts', 
-            value: statsResponse.expiredPosts?.toString() || '0', 
+            value: mergedStats.expiredPosts?.toString?.() || String(mergedStats.expiredPosts ?? 0), 
             icon: History, 
             color: 'text-orange-600', 
             bg: 'bg-orange-50', 
@@ -132,9 +182,22 @@ export default function Dashboard() {
         ]);
       }
       
-      setTrends(trendsResponse.trends || []);
+      const normalizedRecent = Array.isArray(mergedStats?.recentApplicants)
+        ? mergedStats.recentApplicants.map((app: any) => ({
+            id: app.id,
+            student_id: app.student_id,
+            student_name: app.student_name || app.name || app.full_name || 'Unknown',
+            internship_title: app.internship_title || app.role || 'Internship',
+            created_at: app.created_at || app.time,
+            student_image: app.student_image || app.profile_image || null
+          }))
+        : [];
+
+      setRecentApplications(normalizedRecent);
+      setTrends(trendsResponse?.trends || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load dashboard data.');
     } finally {
       setLoading(false);
     }
@@ -350,28 +413,10 @@ export default function Dashboard() {
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
-            <h3 className="text-lg font-bold text-slate-900">
-              {activeFilter === 'all' ? 'Your Internships' : activeFilter === 'active' ? 'Active Internships' : 'Expired Internships'}
-            </h3>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setActiveFilter('all')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${activeFilter === 'all' ? 'bg-primary text-background-dark' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
-              >
-                All
-              </button>
-              <button 
-                onClick={() => setActiveFilter('active')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${activeFilter === 'active' ? 'bg-primary text-background-dark' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
-              >
-                Active
-              </button>
-              <button 
-                onClick={() => setActiveFilter('expired')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${activeFilter === 'expired' ? 'bg-primary text-background-dark' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
-              >
-                Expired
-              </button>
+            <h3 className="text-lg font-bold text-slate-900">Active Internships</h3>
+            <div className="flex items-center gap-3 text-slate-400">
+              <Filter size={16} />
+              <MoreVertical size={16} />
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -384,18 +429,18 @@ export default function Dashboard() {
                 <div className="h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
                   <FilePlus size={32} />
                 </div>
-                <p className="text-slate-500 font-medium">No {activeFilter !== 'all' ? activeFilter : ''} internships found.</p>
-                <Link to="/company/post" className="text-primary font-bold hover:underline mt-2 inline-block">Post your first internship</Link>
+                <p className="text-slate-500 font-medium">No active internships found.</p>
+                <Link to="/company/post" className="text-emerald-600 font-bold hover:underline mt-2 inline-block">Post your first internship</Link>
               </div>
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-100">
-                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Internship Title</th>
-                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Posted Date</th>
-                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applicants</th>
-                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                    <th className="py-4 px-6 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                  <tr className="bg-slate-50/60 border-b border-slate-100">
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Internship Title</th>
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Posted Date</th>
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Applicants</th>
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                    <th className="py-4 px-6 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -416,7 +461,7 @@ export default function Dashboard() {
                             </div>
                             <div>
                               <p className="font-semibold text-slate-900 text-sm">{job.title}</p>
-                              <p className="text-xs text-slate-500">{job.location} • {job.type}</p>
+                              <p className="text-xs text-slate-500">{job.location} ? {job.type}</p>
                             </div>
                           </div>
                         </td>
@@ -424,12 +469,15 @@ export default function Dashboard() {
                           {new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td className="py-4 px-6">
-                          <div className="flex items-center gap-2">
-                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
-                                <span className="text-xs font-medium text-slate-500">{job.applications_count || 0}</span>
+                          {((job.applicant_count ?? job.applications_count ?? 0) === 0) ? (
+                            <span className="text-xs text-slate-400">No applicants</span>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
+                                <span className="text-xs font-medium text-slate-500">{job.applicant_count ?? job.applications_count ?? 0}</span>
                               </div>
-                              <span className="text-xs text-slate-400 font-medium">Applicants</span>
-                          </div>
+                            </div>
+                          )}
                         </td>
                         <td className="py-4 px-6">
                           <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
@@ -493,7 +541,6 @@ export default function Dashboard() {
               </table>
             )}
           </div>
-          
           {/* Pagination Controls */}
           {filteredInternships.length > itemsPerPage && (
             <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">

@@ -759,9 +759,8 @@ const getAllCompanies = async (req, res) => {
  */
 const getCompanyInternships = async (req, res) => {
     try {
-        const userId = req.user.userId;
+        const userId = req.user?.userId || req.user?.id;
         const companyId = await getCompanyIdByUserId(userId);
-
         if (!companyId) {
             return res.status(404).json({ success: false, message: 'Company profile not found' });
         }
@@ -773,7 +772,7 @@ const getCompanyInternships = async (req, res) => {
                 c.logo AS company_logo,
                 COUNT(a.id) AS applicant_count
             FROM internships i
-            JOIN companies c ON i.company_id = c.id
+            LEFT JOIN companies c ON c.id = i.company_id
             LEFT JOIN applications a ON i.id = a.internship_id
             WHERE i.company_id = ? AND i.is_flagged = 0
             GROUP BY i.id
@@ -1002,8 +1001,8 @@ const unsaveInternship = async (req, res) => {
 
 const getDashboardStats = async (req, res) => {
     try {
-        const companyId = await getCompanyIdByUserId(req.user.userId);
-        
+        const userId = req.user?.userId || req.user?.id;
+        const companyId = await getCompanyIdByUserId(userId);
         if (!companyId) {
             return res.status(404).json({ message: 'Company not found' });
         }
@@ -1018,53 +1017,53 @@ const getDashboardStats = async (req, res) => {
 
         try {
             totalPostsResult = await db.query(
-                'SELECT COUNT(*) as total FROM internships WHERE company_id = ? AND is_flagged = 0',
+                `SELECT COUNT(*) as total FROM internships WHERE company_id = ? AND is_flagged = 0`,
                 [companyId]
             );
             activePostsResult = await db.query(
-                'SELECT COUNT(*) as active FROM internships WHERE company_id = ? AND status = "active" AND application_deadline > NOW() AND is_flagged = 0',
+                `SELECT COUNT(*) as active FROM internships WHERE company_id = ? AND status = "active" AND application_deadline > NOW() AND is_flagged = 0`,
                 [companyId]
             );
             expiredPostsResult = await db.query(
-                'SELECT COUNT(*) as expired FROM internships WHERE company_id = ? AND (status != "active" OR application_deadline <= NOW()) AND is_flagged = 0',
+                `SELECT COUNT(*) as expired FROM internships WHERE company_id = ? AND (status != "active" OR application_deadline <= NOW()) AND is_flagged = 0`,
                 [companyId]
             );
             totalApplicantsResult = await db.query(
-                'SELECT COALESCE(SUM(applications_count), 0) as total FROM internships WHERE company_id = ? AND is_flagged = 0',
+                `SELECT COALESCE(SUM(applications_count), 0) as total FROM internships WHERE company_id = ? AND is_flagged = 0`,
                 [companyId]
             );
             lastMonthResult = await db.query(
-                'SELECT COUNT(*) as last_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) AND is_flagged = 0',
+                `SELECT COUNT(*) as last_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) AND is_flagged = 0`,
                 [companyId]
             );
             previousMonthResult = await db.query(
-                'SELECT COUNT(*) as previous_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MONTH) AND created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH) AND is_flagged = 0',
+                `SELECT COUNT(*) as previous_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MONTH) AND created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH) AND is_flagged = 0`,
                 [companyId]
             );
         } catch (error) {
             if (!isBadFieldError(error)) throw error;
             totalPostsResult = await db.query(
-                'SELECT COUNT(*) as total FROM internships WHERE company_id = ?',
+                `SELECT COUNT(*) as total FROM internships WHERE company_id = ?`,
                 [companyId]
             );
             activePostsResult = await db.query(
-                'SELECT COUNT(*) as active FROM internships WHERE company_id = ? AND status = "active" AND application_deadline > NOW()',
+                `SELECT COUNT(*) as active FROM internships WHERE company_id = ? AND status = "active" AND application_deadline > NOW()`,
                 [companyId]
             );
             expiredPostsResult = await db.query(
-                'SELECT COUNT(*) as expired FROM internships WHERE company_id = ? AND (status != "active" OR application_deadline <= NOW())',
+                `SELECT COUNT(*) as expired FROM internships WHERE company_id = ? AND (status != "active" OR application_deadline <= NOW())`,
                 [companyId]
             );
             totalApplicantsResult = await db.query(
-                'SELECT COALESCE(SUM(applications_count), 0) as total FROM internships WHERE company_id = ?',
+                `SELECT COALESCE(SUM(applications_count), 0) as total FROM internships WHERE company_id = ?`,
                 [companyId]
             );
             lastMonthResult = await db.query(
-                'SELECT COUNT(*) as last_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)',
+                `SELECT COUNT(*) as last_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)`,
                 [companyId]
             );
             previousMonthResult = await db.query(
-                'SELECT COUNT(*) as previous_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MONTH) AND created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)',
+                `SELECT COUNT(*) as previous_month FROM internships WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MONTH) AND created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)`,
                 [companyId]
             );
         }
@@ -1076,15 +1075,21 @@ const getDashboardStats = async (req, res) => {
         const lastMonthPosts = lastMonthResult[0].last_month;
         const previousMonthPosts = previousMonthResult[0].previous_month;
 
-        // Get status distribution
-        const statusDistributionResult = await db.query(
-            `SELECT a.status, COUNT(*) as count
-             FROM applications a
-             JOIN internships i ON a.internship_id = i.id
-             WHERE i.company_id = ?
-             GROUP BY a.status`,
-            [companyId]
-        );
+        // Get status distribution (safe fallback)
+        let statusDistributionResult = [];
+        try {
+            statusDistributionResult = await db.query(
+                `SELECT a.status, COUNT(*) as count
+                 FROM applications a
+                 JOIN internships i ON a.internship_id = i.id
+                 WHERE i.company_id = ?
+                 GROUP BY a.status`,
+                [companyId]
+            );
+        } catch (error) {
+            console.warn('Status distribution query failed:', error.message);
+            statusDistributionResult = [];
+        }
 
         const statusDistribution = {
             pending: 0,
@@ -1099,24 +1104,30 @@ const getDashboardStats = async (req, res) => {
             else if (status === 'rejected') statusDistribution.rejected += row.count;
         });
 
-        // Get recent applicants
-        const recentApplicants = await db.query(
-            `SELECT 
-                a.id, 
-                a.student_id,
-                u.full_name as name, 
-                i.title as role, 
-                a.created_at as time,
-                u.profile_image
-             FROM applications a
-             JOIN students s ON a.student_id = s.id
-             JOIN users u ON s.user_id = u.id
-             JOIN internships i ON a.internship_id = i.id
-             WHERE i.company_id = ?
-             ORDER BY a.created_at DESC
-             LIMIT 3`,
-            [companyId]
-        );
+        // Get recent applicants (safe fallback)
+        let recentApplicants = [];
+        try {
+            recentApplicants = await db.query(
+                `SELECT 
+                    a.id, 
+                    a.student_id,
+                    u.full_name as name, 
+                    i.title as role, 
+                    a.created_at as time,
+                    u.profile_image
+                 FROM applications a
+                 JOIN students s ON a.student_id = s.id
+                 JOIN users u ON s.user_id = u.id
+                 JOIN internships i ON a.internship_id = i.id
+                 WHERE i.company_id = ?
+                 ORDER BY a.created_at DESC
+                 LIMIT 3`,
+                [companyId]
+            );
+        } catch (error) {
+            console.warn('Recent applicants query failed:', error.message);
+            recentApplicants = [];
+        }
 
         // Calculate trends
         let postsTrend = 'Stable';
@@ -1142,8 +1153,8 @@ const getDashboardStats = async (req, res) => {
 
 const getApplicationTrends = async (req, res) => {
     try {
-        const companyId = await getCompanyIdByUserId(req.user.userId);
-        
+        const userId = req.user?.userId || req.user?.id;
+        const companyId = await getCompanyIdByUserId(userId);
         if (!companyId) {
             return res.status(404).json({ message: 'Company not found' });
         }

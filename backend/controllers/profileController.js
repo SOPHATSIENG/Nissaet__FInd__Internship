@@ -627,7 +627,22 @@ const getNotificationCard = async (req, res) => {
             );
         }
 
-        const unreadCount = rows.reduce((count, row) => count + (toBoolean(row.is_read, false) ? 0 : 1), 0);
+        let unreadCount = 0;
+        try {
+            const countRows = await db.query(
+                `SELECT COUNT(*) AS total
+                 FROM notifications
+                 WHERE user_id = ? AND (is_read = 0 OR is_read IS NULL)`,
+                [userId]
+            );
+            unreadCount = Number(countRows?.[0]?.total || 0);
+        } catch (error) {
+            if (error && error.code === 'ER_BAD_FIELD_ERROR') {
+                unreadCount = rows.length;
+            } else {
+                throw error;
+            }
+        }
 
         return res.json({
             notifications: rows.map((row) => ({

@@ -124,6 +124,37 @@ const updateCompanyVerificationStatus = async (req, res) => {
                 'UPDATE companies SET is_verified = ? WHERE id = ?',
                 [status === 'approved' ? 1 : 0, companyId]
             );
+
+            try {
+                const companyRows = await db.query(
+                    'SELECT user_id, name AS company_name FROM companies WHERE id = ? LIMIT 1',
+                    [companyId]
+                );
+                if (companyRows.length > 0) {
+                    const companyUserId = companyRows[0].user_id;
+                    const companyName = companyRows[0].company_name || 'your company';
+                    const title = status === 'approved' ? 'Company verification approved' : 'Company verification rejected';
+                    const message =
+                        status === 'approved'
+                            ? `Your company "${companyName}" has been approved by the admin.`
+                            : `Your company "${companyName}" was rejected by the admin.${rejection_reason ? ` Reason: ${rejection_reason}` : ''}`;
+                    await db.query(
+                        `INSERT INTO notifications (user_id, title, message, type, related_entity_type, related_entity_id, action_url)
+                         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            companyUserId,
+                            title,
+                            message,
+                            'system',
+                            'verification',
+                            verificationId,
+                            '/company/verification'
+                        ]
+                    );
+                }
+            } catch (notifyError) {
+                console.error('Notification insert failed:', notifyError.message);
+            }
         }
 
         return res.json({ message: 'Verification updated', status });

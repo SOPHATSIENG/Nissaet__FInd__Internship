@@ -4,6 +4,10 @@ const db = require('../config/db');
  * Helper to identify database field errors (missing columns/tables)
  */
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
+const getInternshipColumns = async () => {
+    const rows = await db.query('SHOW COLUMNS FROM internships');
+    return new Set(rows.map((row) => row.Field));
+};
 
 /**
  * Helper to get company ID by user ID
@@ -446,34 +450,52 @@ const createInternship = async (req, res) => {
             return res.status(400).json({ message: 'Required fields are missing' });
         }
 
-          const params = [
-              companyId, title, description, image || null, requirements || null, responsibilities || null,
-              benefits || null, location || null, is_remote ? 1 : 0, is_hybrid ? 1 : 0, type || 'full-time',
-              duration_months || null, stipend || 0, stipend_currency, positions || 1,
-              application_deadline || null, start_date || null, end_date || null, 'active'
-          ];
+        const columns = await getInternshipColumns();
+        const insertColumns = [];
+        const insertValues = [];
 
-        let result;
-        try {
-            result = await db.query(
-                  `INSERT INTO internships (
-                      company_id, title, description, image, requirements, responsibilities, benefits,
-                      location, is_remote, is_hybrid, type, duration_months, stipend, stipend_currency,
-                      positions, application_deadline, start_date, end_date, status
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                  params
-              );
-        } catch (error) {
-            if (!isBadFieldError(error)) throw error;
-            
-            // Legacy schema fallback
-            const workMode = is_remote ? 'Remote' : (is_hybrid ? 'Hybrid' : 'On-site');
-            result = await db.query(
-                `INSERT INTO internships (company_id, title, description, location, work_mode, duration, deadline, is_active) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-                [companyId, title, description, location || null, workMode, duration_months ? `${duration_months} mo` : null, application_deadline || null]
-            );
+        const add = (column, value) => {
+            if (columns.has(column)) {
+                insertColumns.push(column);
+                insertValues.push(value);
+            }
+        };
+
+        const workMode = is_remote ? 'Remote' : (is_hybrid ? 'Hybrid' : 'On-site');
+        const durationValue = Number.isFinite(Number(duration_months)) ? Number(duration_months) : null;
+
+        add('company_id', companyId);
+        add('title', title);
+        add('description', description);
+        add('image', image || null);
+        add('requirements', requirements || null);
+        add('responsibilities', responsibilities || null);
+        add('benefits', benefits || null);
+        add('location', location || null);
+        add('is_remote', is_remote ? 1 : 0);
+        add('is_hybrid', is_hybrid ? 1 : 0);
+        add('type', type || 'full-time');
+        add('duration_months', durationValue);
+        add('duration', durationValue ? `${durationValue} mo` : null);
+        add('stipend', Number.isFinite(Number(stipend)) ? Number(stipend) : 0);
+        add('stipend_currency', stipend_currency);
+        add('positions', Number.isFinite(Number(positions)) ? Number(positions) : 1);
+        add('application_deadline', application_deadline || null);
+        add('deadline', application_deadline || null);
+        add('start_date', start_date || null);
+        add('end_date', end_date || null);
+        add('status', 'active');
+        add('is_active', 1);
+        add('work_mode', workMode);
+
+        if (insertColumns.length === 0) {
+            return res.status(500).json({ success: false, message: 'Internships table schema not supported' });
         }
+
+        const placeholders = insertColumns.map(() => '?').join(', ');
+        const sql = `INSERT INTO internships (${insertColumns.join(', ')}) VALUES (${placeholders})`;
+
+        const result = await db.query(sql, insertValues);
 
         const internshipId = result.insertId;
 

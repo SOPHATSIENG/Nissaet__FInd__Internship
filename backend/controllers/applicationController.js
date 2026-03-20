@@ -152,26 +152,30 @@ const applyForInternship = async (req, res) => {
             [internship_id]
         );
 
-        // Notify the company
-        const internshipRows = await db.query(
-            'SELECT i.title, c.user_id FROM internships i JOIN companies c ON i.company_id = c.id WHERE i.id = ?',
-            [internship_id]
-        );
-        
-        if (internshipRows.length > 0) {
-            const companyUserId = internshipRows[0].user_id;
-            const internshipTitle = internshipRows[0].title;
-            const studentName = req.user.fullName || 'A student';
-            
-            await createNotification(
-                companyUserId,
-                'New Application',
-                `${studentName} has applied for "${internshipTitle}"`,
-                'application',
-                'application',
-                result.insertId,
-                `/company/applications`
+        try {
+            // Notify the company
+            const internshipRows = await db.query(
+                'SELECT i.title, c.user_id FROM internships i JOIN companies c ON i.company_id = c.id WHERE i.id = ?',
+                [internship_id]
             );
+            
+            if (internshipRows.length > 0) {
+                const companyUserId = internshipRows[0].user_id;
+                const internshipTitle = internshipRows[0].title;
+                const studentName = req.user.fullName || 'A student';
+                
+                await createNotification(
+                    companyUserId,
+                    'New Application',
+                    `${studentName} has applied for "${internshipTitle}"`,
+                    'application',
+                    'application',
+                    result.insertId,
+                    `/company/applications`
+                );
+            }
+        } catch (notifyError) {
+            console.error('Notification insert failed:', notifyError.message);
         }
 
         return res.status(201).json({

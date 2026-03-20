@@ -38,6 +38,8 @@ const INITIAL_ROLE_PERMISSIONS: Record<string, string[]> = {
   'Student': ['view_dashboard', 'edit_profile'],
 };
 
+const toTitleCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+
 export const UserManagement = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -86,7 +88,8 @@ export const UserManagement = () => {
         // Capitalize role for display compatibility
         const normalized = data.map((u: any) => ({
           ...u,
-          role: u.role.charAt(0).toUpperCase() + u.role.slice(1),
+          role: toTitleCase(u.role || ''),
+          status: toTitleCase(u.status || 'active'),
           registrationDate: u.date,
           lastLogin: 'Active session'
         }));
@@ -159,15 +162,41 @@ export const UserManagement = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setUserList(prev => prev.map(user => 
-      user.id === editingUser.id 
-        ? { ...user, name: editName, email: editEmail, role: editRole, status: editStatus }
-        : user
-    ));
-    setIsEditModalOpen(false);
-    setEditingUser(null);
+    try {
+      const payload = {
+        name: editName,
+        email: editEmail,
+        role: editRole.toLowerCase(),
+        status: editStatus.toLowerCase()
+      };
+      const response = await api.adminUpdateUser(editingUser.id, payload);
+      const updated = response?.user || {
+        ...editingUser,
+        name: editName,
+        email: editEmail,
+        role: editRole.toLowerCase(),
+        status: editStatus.toLowerCase()
+      };
+
+      setUserList(prev => prev.map(user =>
+        user.id === editingUser.id
+          ? {
+              ...user,
+              name: updated.name,
+              email: updated.email,
+              role: toTitleCase(updated.role || editRole),
+              status: toTitleCase(updated.status || editStatus)
+            }
+          : user
+      ));
+      setIsEditModalOpen(false);
+      setEditingUser(null);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to update user.');
+    }
   };
 
   const togglePermission = (role: string, permissionId: string) => {
@@ -811,7 +840,7 @@ export const UserManagement = () => {
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate('/admin/student-profile');
+                                navigate(`/admin/student-profile?userId=${user.id}`);
                               }}
                               className="p-1.5 text-text-secondary-light hover:text-primary transition-colors"
                             >

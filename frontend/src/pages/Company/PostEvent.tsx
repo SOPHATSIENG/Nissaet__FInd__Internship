@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -67,6 +67,7 @@ export default function PostEvent() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const eventTypes = [
     { value: 'workshop', label: 'Workshop' },
@@ -194,6 +195,21 @@ export default function PostEvent() {
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     }));
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1000 * 1024) {
+      setError('Image size must be less than 1MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData(prev => ({ ...prev, image_url: String(reader.result || '') }));
+      setError('');
+    };
+    reader.readAsDataURL(file);
   };
 
   if (loading) {
@@ -452,16 +468,62 @@ export default function PostEvent() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Image className="inline w-4 h-4 mr-1" />
-              Event Image URL
+              Event Image
             </label>
-            <input
-              type="url"
-              name="image_url"
-              value={formData.image_url}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
-              placeholder="https://example.com/event-image.jpg"
-            />
+            <div className="space-y-3">
+              {formData.image_url ? (
+                <div className="relative overflow-hidden rounded-lg border border-gray-200">
+                  <img
+                    src={formData.image_url}
+                    alt="Event"
+                    className="h-40 w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
+                    className="absolute right-3 top-3 rounded-full bg-white/90 p-2 text-gray-600 shadow hover:bg-white"
+                    aria-label="Remove image"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-sm text-gray-500">
+                  No image selected
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  <Image className="h-4 w-4" />
+                  Upload Image
+                </button>
+                <span className="text-xs text-gray-500">PNG, JPG, GIF up to 1MB</span>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                Or paste an image URL below.
+              </div>
+              <input
+                type="url"
+                name="image_url"
+                value={formData.image_url}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
+                placeholder="https://example.com/event-image.jpg"
+              />
+            </div>
           </div>
 
           <div className="flex gap-4 pt-6 border-t border-gray-200">

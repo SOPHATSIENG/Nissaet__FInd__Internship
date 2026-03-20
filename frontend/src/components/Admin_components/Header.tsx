@@ -4,6 +4,7 @@ import { useProfile } from '@/context/ProfileContext';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import api from '../../api/axios';
 
 interface HeaderProps {
   title: string;
@@ -11,55 +12,45 @@ interface HeaderProps {
 }
 
 interface Notification {
-  id: string;
+  id: number | string;
   title: string;
   message: string;
   time: string;
   read: boolean;
   type: 'info' | 'success' | 'warning' | 'error';
+  actionUrl?: string | null;
 }
 
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    title: 'New User Registration',
-    message: 'Sarah Johnson has registered as a new student.',
-    time: '2 minutes ago',
-    read: false,
-    type: 'info',
-  },
-  {
-    id: '2',
-    title: 'System Update',
-    message: 'Platform maintenance scheduled for tonight at 2 AM.',
-    time: '1 hour ago',
-    read: false,
-    type: 'warning',
-  },
-  {
-    id: '3',
-    title: 'Application Approved',
-    message: 'Internship application #4829 has been approved.',
-    time: '3 hours ago',
-    read: true,
-    type: 'success',
-  },
-  {
-    id: '4',
-    title: 'Database Backup Failed',
-    message: 'Automatic backup failed due to connection timeout.',
-    time: 'Yesterday',
-    read: true,
-    type: 'error',
-  },
-];
+const timeAgo = (value?: string | null) => {
+  if (!value) return 'Just now';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const mapType = (value?: string) => {
+  if (value === 'application') return 'success';
+  if (value === 'reminder') return 'warning';
+  if (value === 'message') return 'info';
+  if (value === 'system') return 'info';
+  return 'info';
+};
 
 export const Header: React.FC<HeaderProps> = ({ title, children }) => {
   const { settings } = useProfile();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const isActivityFeed = true;
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -76,20 +67,85 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
     };
   }, []);
 
-  const markAsRead = (id: string) => {
+  const loadNotifications = async () => {
+    try {
+      if (isActivityFeed) {
+        const data = await api.adminGetDashboardOverview();
+        const items = Array.isArray(data?.activity) ? data.activity : [];
+        const mapped = items.map((item: any, idx: number) => ({
+          id: `${item.title || 'activity'}-${item.time || idx}`,
+          title: item.title || 'Activity',
+          message: item.desc || '',
+          time: timeAgo(item.time),
+          read: false,
+          type: mapType(item.type),
+          actionUrl: null
+        }));
+        setNotifications(mapped);
+        return;
+      }
+
+      const data = await api.getNotificationCard();
+      const items = Array.isArray(data?.notifications) ? data.notifications : Array.isArray(data?.items) ? data.items : [];
+      const mapped = items.map((item: any) => ({
+        id: item.id,
+        title: item.title || 'Notification',
+        message: item.message || '',
+        time: timeAgo(item.created_at),
+        read: Boolean(item.is_read),
+        type: mapType(item.type),
+        actionUrl: item.action_url || null
+      }));
+      setNotifications(mapped);
+    } catch (error) {
+      // Keep existing notifications on error
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    const id = window.setInterval(loadNotifications, 30000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const markAsRead = async (id: number | string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    if (isActivityFeed) return;
+    try {
+      await api.markNotificationsRead({ ids: [id] });
+    } catch (error) {
+      // Ignore failure
+    }
   };
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    if (isActivityFeed) return;
+    try {
+      await api.markNotificationsRead({ all: true });
+    } catch (error) {
+      // Ignore failure
+    }
   };
 
-  const deleteNotification = (id: string) => {
+  const deleteNotification = async (id: number | string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    if (isActivityFeed) return;
+    try {
+      await api.deleteNotification(id);
+    } catch (error) {
+      // Ignore failure
+    }
   };
 
-  const clearAllNotifications = () => {
+  const clearAllNotifications = async () => {
     setNotifications([]);
+    if (isActivityFeed) return;
+    try {
+      await api.clearNotifications();
+    } catch (error) {
+      // Ignore failure
+    }
   };
 
   const getIcon = (type: Notification['type']) => {
@@ -193,6 +249,10 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                                 "relative p-4 border-b border-border last:border-0 hover:bg-background/50 transition-colors group",
                                 !notification.read && "bg-primary/[0.02]"
                               )}
+                              onClick={() => {
+                                if (!notification.read) markAsRead(notification.id);
+                                if (notification.actionUrl) navigate(notification.actionUrl);
+                              }}
                             >
                               <div className="flex gap-3">
                                 <div className={cn(
@@ -259,7 +319,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
 
         <div 
           className="flex items-center gap-3 cursor-pointer hover:bg-white p-2 -m-2 rounded-xl transition-all hover:shadow-md hover:shadow-black/5 hover:scale-[1.02]"
-          onClick={() => navigate('/profile')}
+          onClick={() => navigate('/admin/profile')}
         >
           <div className="flex flex-col items-end">
             <span className="text-sm font-bold text-text-primary">{settings.name || 'Sophea Chan'}</span>

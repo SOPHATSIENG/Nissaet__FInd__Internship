@@ -85,12 +85,12 @@ export default function Applicants() {
         // Check if user is company
         if (userResponse.user?.role !== 'company') {
           console.error('User is not a company user! Role:', userResponse.user?.role);
-          alert('You must be logged in as a company user to view applicants.');
+          showNotification('You must be logged in as a company user to view applicants.', 'error');
           return;
         }
       } catch (error) {
         console.error('Error getting current user:', error);
-        alert('Error: Please log in again.');
+        showNotification('Error: Please log in again.', 'error');
       }
     };
     
@@ -271,17 +271,17 @@ export default function Applicants() {
       try {
         await api.updateApplicationStatus(id, apiStatus);
         console.log('[OK] Saved to database successfully');
-        alert(`Applicant status updated to ${newStatus}`);
+        showNotification(`Applicant status updated to ${newStatus}`, 'success');
       } catch (dbError) {
         console.log('[WARN] Database error, but UI updated:', dbError);
-        alert(`Applicant status updated to ${newStatus} (Local only)`);
+        showNotification(`Applicant status updated to ${newStatus} (Local only)`, 'warning');
       }
 
       console.log(`[OK] Applicant ${id} status changed to ${newStatus}`);
 
     } catch (error) {
       console.error('[ERROR] Error:', error);
-      alert('Failed to update status');
+      showNotification('Failed to update status', 'error');
     }
   };
 
@@ -867,13 +867,23 @@ export default function Applicants() {
                           </button>
                         ) : (
                           <>
-                            <button 
-                              onClick={() => openConfirmation(app.id, app.name, 'approve')}
-                              className="p-1.5 text-slate-400 hover:text-green-600 transition-colors" 
-                              title="Approve"
-                            >
-                              <CheckCircle size={20} />
-                            </button>
+                            {app.status === 'Shortlisted' ? (
+                              <div
+                                className="p-1.5 text-emerald-500"
+                                title="Approved"
+                                aria-label="Approved"
+                              >
+                                <CheckCircle size={20} />
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => openConfirmation(app.id, app.name, 'approve')}
+                                className="p-1.5 text-slate-400 hover:text-green-600 transition-colors" 
+                                title="Approve"
+                              >
+                                <CheckCircle size={20} />
+                              </button>
+                            )}
                             <button 
                               onClick={() => openConfirmation(app.id, app.name, 'reject')}
                               className="p-1.5 text-slate-400 hover:text-red-600 transition-colors" 

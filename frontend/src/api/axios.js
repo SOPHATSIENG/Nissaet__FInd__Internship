@@ -51,6 +51,30 @@ async function request(path, options = {}) {
   }
 
   const data = await response.json().catch(() => ({}));
+
+  if (response.status === 401) {
+    clearStoredToken();
+    if (typeof window !== 'undefined') {
+      const path = window.location?.pathname || '';
+      const target = path.startsWith('/admin') ? '/admin/login' : '/login';
+      if (window.location && window.location.pathname !== target) {
+        window.location.assign(target);
+      }
+    }
+  }
+  if (response.status === 403) {
+    const message = (data?.message || '').toLowerCase();
+    if (message.includes('suspended')) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app:account-suspended', { detail: { status: 'suspended' } }));
+        const path = window.location?.pathname || '';
+        const target = path.startsWith('/company') ? '/company/suspended' : '/suspended';
+        if (window.location && window.location.pathname !== target) {
+          window.location.assign(target);
+        }
+      }
+    }
+  }
   if (!response.ok) {
     const message = data?.message || data?.error || `Request failed with status ${response.status}`;
     console.error('API Error Details:', {
@@ -60,6 +84,13 @@ async function request(path, options = {}) {
       data: data
     });
     throw new Error(message);
+  }
+
+  const methodUpper = String(method || 'GET').toUpperCase();
+  if (methodUpper !== 'GET' && methodUpper !== 'HEAD') {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app:data-refresh'));
+    }
   }
 
   return data;
@@ -159,6 +190,18 @@ export const api = {
     return request('/profile/notifications/card', { auth: true });
   },
 
+  markNotificationsRead(payload) {
+    return request('/profile/notifications/read', { method: 'PUT', auth: true, body: payload });
+  },
+
+  deleteNotification(id) {
+    return request(`/profile/notifications/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  clearNotifications() {
+    return request('/profile/notifications', { method: 'DELETE', auth: true });
+  },
+
   updatePassword(payload) {
     return request('/profile/security/password', { method: 'PUT', auth: true, body: payload });
   },
@@ -192,6 +235,12 @@ export const api = {
     return request(`/internships/${id}`).then((data) => {
       return data;
     });
+  },
+
+  getCompanyInternshipById(id) {
+    return request(`/internships/company/${id}`, { auth: true })
+      .then((data) => data)
+      .catch(() => request(`/internships/${id}`).then((data) => data));
   },
 
   getCompanies(params = {}) {
@@ -313,6 +362,10 @@ export const api = {
     return request('/internships/company/mine', { auth: true });
   },
 
+  getCompanyArchivedInternships() {
+    return request('/internships/company/archived', { auth: true });
+  },
+
   createInternship(payload) {
     return request('/internships', { method: 'POST', auth: true, body: payload });
   },
@@ -323,6 +376,10 @@ export const api = {
 
   deleteInternship(id) {
     return request(`/internships/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  restoreInternship(id) {
+    return request(`/internships/${id}/restore`, { method: 'PUT', auth: true });
   },
 
   // Dashboard endpoints
@@ -393,8 +450,45 @@ export const api = {
     return request('/admin/stats', { auth: true });
   },
 
+  adminGetDashboardOverview() {
+    return request('/admin/dashboard/overview', { auth: true });
+  },
+
+  adminGetReports(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+    return request(`/admin/reports${query ? `?${query}` : ''}`, { auth: true });
+  },
+
+  adminGetSettings() {
+    return request('/admin/settings', { auth: true });
+  },
+
+  adminUpdateSettings(payload) {
+    return request('/admin/settings', { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminExportData() {
+    return request('/admin/settings/export', { method: 'POST', auth: true });
+  },
+
+  adminPurgeLogs() {
+    return request('/admin/settings/purge', { method: 'POST', auth: true });
+  },
+
+  adminGetStudentProfile(id) {
+    return request(`/admin/students/${id}/profile`, { auth: true });
+  },
+
   adminDeleteUser(id) {
     return request(`/admin/users/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  adminUpdateUser(id, payload) {
+    return request(`/admin/users/${id}`, { method: 'PUT', auth: true, body: payload });
   },
 
   adminGetCompanyVerifications() {

@@ -1,6 +1,7 @@
 import { Bookmark, BriefcaseBusiness, Calendar, Clock3, Code2, MapPin, Share2, WalletCards } from "lucide-react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { useAuth } from "../../context/AuthContext";
 import api from "../../api/axios";
 
 type Skill = {
@@ -27,23 +28,42 @@ type InternshipRecord = {
   type: string;
   work_mode: string;
   duration_months: number | null;
+  duration?: number | string | null;
   stipend: number | null;
   stipend_currency: string | null;
   application_deadline: string | null;
+  deadline?: string | null;
   created_at: string;
   skills?: Skill[];
+};
+
+type ApplicationInfo = {
+  id: number;
+  status: string;
+  cover_letter?: string | null;
+  created_at?: string | null;
+  resume_url?: string | null;
 };
 
 export default function InternshipDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated, user } = useAuth();
   const [internship, setInternship] = useState<InternshipRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [coverLetter, setCoverLetter] = useState('');
+  const [editCoverLetter, setEditCoverLetter] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [applicationInfo, setApplicationInfo] = useState<ApplicationInfo | null>(null);
+  const [isCheckingApplication, setIsCheckingApplication] = useState(false);
+  const [isUpdatingApplication, setIsUpdatingApplication] = useState(false);
+  const [isDeletingApplication, setIsDeletingApplication] = useState(false);
 
   useEffect(() => {
     fetchInternship();
@@ -53,7 +73,7 @@ export default function InternshipDetails() {
     let mounted = true;
 
     const loadSavedStatus = async () => {
-      if (!id) return;
+      if (!id || !isAuthenticated) return;
       try {
         const res = await api.getSavedInternships();
         const saved = Array.isArray(res?.internships)
@@ -69,7 +89,41 @@ export default function InternshipDetails() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [id, isAuthenticated]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadApplicationStatus = async () => {
+      if (!id || !isAuthenticated || user?.role !== 'student') {
+        if (mounted) {
+          setApplicationInfo(null);
+          setIsCheckingApplication(false);
+        }
+        return;
+      }
+      setIsCheckingApplication(true);
+      try {
+        const res = await api.getMyApplications({ limit: 1, internship_id: id });
+        const application = Array.isArray(res?.applications) && res.applications.length > 0
+          ? res.applications[0]
+          : null;
+        if (mounted) {
+          setApplicationInfo(application);
+          setEditCoverLetter(application?.cover_letter || '');
+        }
+      } catch (error) {
+        console.error('Error loading application status:', error);
+      } finally {
+        if (mounted) setIsCheckingApplication(false);
+      }
+    };
+
+    loadApplicationStatus();
+    return () => {
+      mounted = false;
+    };
+  }, [id, isAuthenticated, user?.role]);
 
   const fetchInternship = async () => {
     try {
@@ -87,6 +141,20 @@ export default function InternshipDetails() {
     }
   };
 
+  const handleApplyClick = () => {
+    if (!isAuthenticated) {
+      navigate('/register', { state: { from: location.pathname } });
+      return;
+    }
+
+    if (user?.role !== 'student') {
+      alert('Only students can apply for internships.');
+      return;
+    }
+
+    setShowApplyModal(true);
+  };
+
   const heroImage = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80';
 
   const salaryText = () => {
@@ -99,6 +167,7 @@ export default function InternshipDetails() {
   const internshipType = internship?.work_mode || internship?.type || 'Internship';
   const internshipDuration = internship?.duration_months ?? internship?.duration ?? 'Variable';
   const applicationDeadline = internship?.application_deadline || internship?.deadline;
+  const hasApplied = Boolean(applicationInfo);
 
   const getPostedTime = (dateStr: string) => {
     try {
@@ -120,16 +189,72 @@ export default function InternshipDetails() {
 
     setIsApplying(true);
     try {
-      await api.applyForInternship(id, coverLetter);
+      const applyResponse = await api.applyForInternship(id, coverLetter);
       alert('Application submitted successfully!');
+      setApplicationInfo({
+        id: applyResponse?.applicationId || Date.now(),
+        status: 'pending',
+        cover_letter: coverLetter,
+        created_at: new Date().toISOString(),
+      });
       setShowApplyModal(false);
       setCoverLetter('');
-      navigate('/student/internships');
+      if (id) {
+        navigate(`/internships/${id}`);
+      }
     } catch (error) {
       console.error('Error applying:', error);
       alert('Failed to submit application. Please try again.');
     } finally {
       setIsApplying(false);
+    }
+  };
+
+  const handleUpdateApplication = async () => {
+    if (!applicationInfo?.id) return;
+    setIsUpdatingApplication(true);
+    try {
+      await api.updateMyApplication(applicationInfo.id, editCoverLetter);
+      setApplicationInfo((prev) => prev ? { ...prev, cover_letter: editCoverLetter } : prev);
+      setShowEditModal(false);
+    } catch (error) {
+      console.error('Error updating application:', error);
+      alert('Failed to update application. Please try again.');
+    } finally {
+      setIsUpdatingApplication(false);
+    }
+  };
+
+  const handleDeleteApplication = async () => {
+    if (!applicationInfo?.id && !id) return;
+    setIsDeletingApplication(true);
+    try {
+      if (applicationInfo?.id) {
+        await api.deleteMyApplication(applicationInfo.id);
+      } else if (id) {
+        await api.deleteMyApplicationByInternship(id);
+      }
+      setApplicationInfo(null);
+      setEditCoverLetter('');
+      setShowDeleteModal(false);
+    } catch (error) {
+      console.error('Error deleting application:', error);
+      if (error?.message && error.message.includes('404') && id) {
+        try {
+          await api.deleteMyApplicationByInternship(id);
+          setApplicationInfo(null);
+          setEditCoverLetter('');
+          setShowDeleteModal(false);
+          return;
+        } catch (fallbackError) {
+          console.error('Error deleting application by internship:', fallbackError);
+          alert(fallbackError?.message || 'Failed to delete application. Please try again.');
+          return;
+        }
+      }
+      alert(error?.message || 'Failed to delete application. Please try again.');
+    } finally {
+      setIsDeletingApplication(false);
     }
   };
 
@@ -349,6 +474,54 @@ export default function InternshipDetails() {
                 </div>
               )}
 
+              {hasApplied && (
+                <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 shadow-sm">
+                  <h3 className="text-xl font-bold text-emerald-900 mb-3">Your Application</h3>
+                  <p className="text-sm text-emerald-800 font-semibold">
+                    Status: {applicationInfo?.status || 'pending'}
+                  </p>
+                  <p className="text-sm text-emerald-700 mt-1">
+                    Applied on{' '}
+                    {applicationInfo?.created_at
+                      ? new Date(applicationInfo.created_at).toLocaleDateString()
+                      : 'N/A'}
+                  </p>
+                  {applicationInfo?.cover_letter && (
+                    <div className="mt-4 rounded-xl border border-emerald-100 bg-white p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400 mb-2">
+                        Cover Letter
+                      </p>
+                      <p className="text-sm text-emerald-900 whitespace-pre-line">
+                        {applicationInfo.cover_letter}
+                      </p>
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowEditModal(true)}
+                      className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors"
+                    >
+                      Edit Application
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteModal(true)}
+                      disabled={isDeletingApplication}
+                      className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isDeletingApplication ? 'Deleting...' : 'Delete Application'}
+                    </button>
+                    <Link
+                      to="/account-settings"
+                      className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors"
+                    >
+                      View in My Applications
+                    </Link>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-[#3b82f6]/5 p-6 rounded-2xl border border-[#3b82f6]/10 shadow-sm">
                 <h3 className="text-xl font-bold text-slate-900 mb-4">About the Company</h3>
                 <p className="text-slate-600 text-sm mb-6 line-clamp-4">
@@ -372,10 +545,15 @@ export default function InternshipDetails() {
           </div>
           <button
             type="button"
-            onClick={() => setShowApplyModal(true)}
-            className="bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xl md:text-lg px-10 py-3 rounded-2xl shadow-[0_8px_24px_rgba(67,56,202,0.35)] transition-colors"
+            onClick={handleApplyClick}
+            disabled={hasApplied || isCheckingApplication}
+            className={`font-bold text-xl md:text-lg px-10 py-3 rounded-2xl transition-colors ${
+              hasApplied
+                ? 'bg-slate-200 text-slate-600 cursor-not-allowed'
+                : 'bg-indigo-700 hover:bg-indigo-800 text-white shadow-[0_8px_24px_rgba(67,56,202,0.35)]'
+            } ${isCheckingApplication ? 'opacity-70 cursor-wait' : ''}`}
           >
-            Apply for this Internship
+            {hasApplied ? 'Application Submitted' : 'Apply for this Internship'}
           </button>
         </div>
       </div>
@@ -445,6 +623,89 @@ export default function InternshipDetails() {
                   {isApplying ? 'Submitting...' : 'Submit Application'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Application Modal */}
+      {showEditModal && internship && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Edit Application</h2>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cover Letter <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={editCoverLetter}
+                  onChange={(e) => setEditCoverLetter(e.target.value)}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Update your cover letter..."
+                />
+              </div>
+              
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateApplication}
+                  disabled={isUpdatingApplication || !editCoverLetter.trim()}
+                  className="px-6 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isUpdatingApplication ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">Delete Application</h2>
+              <p className="text-sm text-gray-600 mt-2">
+                Delete your application? You can apply again after deleting.
+              </p>
+            </div>
+            <div className="p-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteApplication}
+                disabled={isDeletingApplication}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {isDeletingApplication ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>

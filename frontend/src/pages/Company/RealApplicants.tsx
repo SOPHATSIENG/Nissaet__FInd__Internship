@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from '../../api/axios';
 
 export default function RealApplicants() {
   const [applicants, setApplicants] = useState([]);
@@ -9,9 +10,8 @@ export default function RealApplicants() {
       try {
         console.log('🔥 Fetching REAL data directly from database...');
         
-        // Direct call to the new API endpoint
-        const response = await fetch('http://127.0.0.1:5003/api/applications/all');
-        const data = await response.json();
+        // Use the shared api utility instead of hardcoded URL
+        const data = await api.getAllApplications();
         
         console.log('📊 Raw API Response:', data);
         

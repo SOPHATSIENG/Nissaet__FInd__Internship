@@ -431,6 +431,15 @@ export const api = {
   applyForInternship(internshipId, coverLetter) {
     return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter } });
   },
+  updateMyApplication(applicationId, coverLetter) {
+    return request(`/applications/${applicationId}`, { method: 'PUT', auth: true, body: { cover_letter: coverLetter } });
+  },
+  deleteMyApplication(applicationId) {
+    return request(`/applications/${applicationId}`, { method: 'DELETE', auth: true });
+  },
+  deleteMyApplicationByInternship(internshipId) {
+    return request(`/applications/by-internship/${internshipId}`, { method: 'DELETE', auth: true });
+  },
 
   // Admin methods
   adminGetAllUsers() {
@@ -564,6 +573,29 @@ export const api = {
 
   companyGetVerificationRequests() {
     return request('/verification/company/mine', { auth: true });
+  },
+
+  // Notification endpoints
+  getNotifications(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/notifications${query ? `?${query}` : ''}`, { auth: true });
+  },
+
+  markNotificationAsRead(id) {
+    return request(`/notifications/${id}/read`, { method: 'PUT', auth: true });
+  },
+
+  markAllNotificationsAsRead() {
+    return request('/notifications/mark-all-read', { method: 'PUT', auth: true });
+  },
+
+  deleteNotification(id) {
+    return request(`/notifications/${id}`, { method: 'DELETE', auth: true });
   },
 };
 

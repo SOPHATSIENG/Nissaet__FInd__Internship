@@ -79,7 +79,7 @@ const getAllInternships = async (req, res) => {
     try {
         await normalizeInternshipStatusByDeadline();
         await expireInternshipsByDeadline();
-        const { search, location, skills, work_mode, salary_type, limit: queryLimit } = req.query;
+        const { search, location, industry, companySize, skills, work_mode, salary_type, limit: queryLimit } = req.query;
         const parsedLimit = Number.parseInt(queryLimit, 10);
         const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 100;
 
@@ -109,8 +109,8 @@ const getAllInternships = async (req, res) => {
                 c.name AS company_name,
                 c.logo AS company_logo,
                 c.industry AS company_industry,
-                c.headquarters AS company_location,
-                c.logo AS company_logo
+                c.company_size,
+                c.headquarters AS company_location
             FROM internships i
             JOIN companies c ON i.company_id = c.id
             WHERE i.status = 'active' AND i.is_flagged = 0
@@ -124,10 +124,35 @@ const getAllInternships = async (req, res) => {
             queryParams.push(searchPattern, searchPattern, searchPattern);
         }
 
-        if (location && location !== 'All Locations') {
-            query += ' AND (i.location LIKE ? OR c.headquarters LIKE ?)';
-            const locationPattern = `%${location}%`;
-            queryParams.push(locationPattern, locationPattern);
+        if (location) {
+            const locations = Array.isArray(location) ? location : (location.includes(',') ? location.split(',') : [location]);
+            const filteredLocations = locations.filter(loc => loc && loc !== 'All Locations');
+            if (filteredLocations.length > 0) {
+                const placeholders = filteredLocations.map(() => 'i.location LIKE ? OR c.headquarters LIKE ?').join(' OR ');
+                query += ` AND (${placeholders})`;
+                filteredLocations.forEach(loc => {
+                    const pattern = `%${loc}%`;
+                    queryParams.push(pattern, pattern);
+                });
+            }
+        }
+
+        if (industry) {
+            const industries = Array.isArray(industry) ? industry : (industry.includes(',') ? industry.split(',') : [industry]);
+            if (industries.length > 0) {
+                const placeholders = industries.map(() => '?').join(', ');
+                query += ` AND c.industry IN (${placeholders})`;
+                queryParams.push(...industries);
+            }
+        }
+
+        if (companySize) {
+            const sizes = Array.isArray(companySize) ? companySize : (companySize.includes(',') ? companySize.split(',') : [companySize]);
+            if (sizes.length > 0) {
+                const placeholders = sizes.map(() => '?').join(', ');
+                query += ` AND c.company_size IN (${placeholders})`;
+                queryParams.push(...sizes);
+            }
         }
 
         if (work_mode && work_mode !== 'All') {
@@ -144,7 +169,7 @@ const getAllInternships = async (req, res) => {
         }
 
         if (skills) {
-            const skillList = Array.isArray(skills) ? skills : [skills];
+            const skillList = Array.isArray(skills) ? (skills.includes(',') ? skills.split(',') : [skills]) : [skills];
             if (skillList.length > 0) {
                 query += ` AND i.id IN (
                     SELECT iskill.internship_id 
@@ -171,20 +196,49 @@ const getAllInternships = async (req, res) => {
             WHERE i.status = 'active' AND i.is_flagged = 0
         `;
         const countParams = [];
+        
         if (search) {
             countQuery += ' AND (i.title LIKE ? OR i.description LIKE ? OR c.name LIKE ?)';
             const searchPattern = `%${search}%`;
             countParams.push(searchPattern, searchPattern, searchPattern);
         }
-        if (location && location !== 'All Locations') {
-            countQuery += ' AND (i.location LIKE ? OR c.headquarters LIKE ?)';
-            const locationPattern = `%${location}%`;
-            countParams.push(locationPattern, locationPattern);
+        
+        if (location) {
+            const locations = Array.isArray(location) ? location : (location.includes(',') ? location.split(',') : [location]);
+            const filteredLocations = locations.filter(loc => loc && loc !== 'All Locations');
+            if (filteredLocations.length > 0) {
+                const placeholders = filteredLocations.map(() => 'i.location LIKE ? OR c.headquarters LIKE ?').join(' OR ');
+                countQuery += ` AND (${placeholders})`;
+                filteredLocations.forEach(loc => {
+                    const pattern = `%${loc}%`;
+                    countParams.push(pattern, pattern);
+                });
+            }
         }
+
+        if (industry) {
+            const industries = Array.isArray(industry) ? industry : (industry.includes(',') ? industry.split(',') : [industry]);
+            if (industries.length > 0) {
+                const placeholders = industries.map(() => '?').join(', ');
+                countQuery += ` AND c.industry IN (${placeholders})`;
+                countParams.push(...industries);
+            }
+        }
+
+        if (companySize) {
+            const sizes = Array.isArray(companySize) ? companySize : (companySize.includes(',') ? companySize.split(',') : [companySize]);
+            if (sizes.length > 0) {
+                const placeholders = sizes.map(() => '?').join(', ');
+                countQuery += ` AND c.company_size IN (${placeholders})`;
+                countParams.push(...sizes);
+            }
+        }
+        
         if (work_mode && work_mode !== 'All') {
             countQuery += ' AND i.type = ?';
             countParams.push(work_mode.toLowerCase());
         }
+        
         if (salary_type && salary_type !== 'All') {
             if (salary_type.toLowerCase() === 'paid') {
                 countQuery += ' AND i.stipend > 0';
@@ -192,8 +246,9 @@ const getAllInternships = async (req, res) => {
                 countQuery += ' AND i.stipend = 0';
             }
         }
+        
         if (skills) {
-            const skillList = Array.isArray(skills) ? skills : [skills];
+            const skillList = Array.isArray(skills) ? (skills.includes(',') ? skills.split(',') : [skills]) : [skills];
             if (skillList.length > 0) {
                 countQuery += ` AND i.id IN (
                     SELECT iskill.internship_id 
@@ -249,7 +304,6 @@ const getAllInternships = async (req, res) => {
         return res.status(500).json({ success: false, message: `Server error: ${message}` });
     }
 };
-
 /**
  * Get featured companies
  */

@@ -22,7 +22,13 @@ export default function Navbar() {
 
   const companyEmail = user?.email || '';
 
-  const avatarUrl = user?.profile_image || '';
+  const companyLogo =
+    user?.company_profile?.logo ||
+    user?.company_profile?.company_logo ||
+    user?.company_logo ||
+    '';
+
+  const avatarUrl = user?.profile_image || companyLogo || '';
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -78,10 +84,14 @@ export default function Navbar() {
       <div className="max-w-[1280px] mx-auto flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link to="/company" className="flex items-center gap-3 group">
-            <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
-              <Briefcase size={24} />
+            <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white overflow-hidden">
+              {companyLogo ? (
+                <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
+              ) : (
+                <Briefcase size={24} />
+              )}
             </div>
-            <h2 className="text-xl font-bold tracking-tight text-slate-900">InternCambodia</h2>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">{companyName}</h2>
           </Link>
         </div>
         <div className="flex items-center gap-6">

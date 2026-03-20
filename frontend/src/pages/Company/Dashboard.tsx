@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { 
   PlusCircle, 
   FilePlus, 
@@ -40,12 +41,48 @@ export default function Dashboard() {
     { label: 'Expired Posts', value: '0', icon: History, color: 'text-orange-600', bg: 'bg-orange-50', trend: '0%', filter: 'expired' },
   ]);
   const [trends, setTrends] = useState([]);
-  const [activeDropdown, setActiveDropdown] = useState(null);
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
+  const actionButtonRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
 
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
+
+  const getDeadlineEnd = (value?: string | null) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('-').map(Number);
+      return new Date(year, month - 1, day, 23, 59, 59, 999);
+    }
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const formatDeadlineDate = (value?: string | null) => {
+    if (!value) return 'No deadline';
+    const trimmed = value.trim();
+    if (!trimmed) return 'No deadline';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('-').map(Number);
+      const localDate = new Date(year, month - 1, day);
+      return localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return 'No deadline';
+    return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const isJobActive = (job: any, now: Date) => {
+    const isActiveStatus = String(job.status || '').toLowerCase() === 'active';
+    const deadlineEnd = getDeadlineEnd(job.application_deadline);
+    const isExpired = deadlineEnd ? deadlineEnd < now : false;
+    return isActiveStatus && !isExpired;
+  };
 
   // Calculate percentages from dashboard data
   const totalApps = dashboardData?.totalApplicants || 0;
@@ -60,8 +97,9 @@ export default function Dashboard() {
 
   const filteredInternships = React.useMemo(() => {
     if (activeFilter === 'all') return internships;
-    if (activeFilter === 'active') return internships.filter((i: any) => i.status === 'active');
-    if (activeFilter === 'expired') return internships.filter((i: any) => i.status !== 'active');
+    const now = new Date();
+    if (activeFilter === 'active') return internships.filter((i: any) => isJobActive(i, now));
+    if (activeFilter === 'expired') return internships.filter((i: any) => !isJobActive(i, now));
     return internships;
   }, [internships, activeFilter]);
 
@@ -77,34 +115,92 @@ export default function Dashboard() {
     fetchDashboardData();
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('[data-filter-menu]')) {
+        setIsFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       
-      const [internshipsResponse, statsResponse, trendsResponse] = await Promise.all([
+      const [internshipsResult, statsResult, trendsResult] = await Promise.allSettled([
         api.getCompanyInternships(),
         api.getDashboardStats(),
         api.getApplicationTrends()
       ]);
-      
-      setInternships(internshipsResponse.internships || []);
-      setDashboardData(statsResponse);
+
+      const internshipsResponse =
+        internshipsResult.status === 'fulfilled' ? internshipsResult.value : null;
+      const statsResponse =
+        statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const trendsResponse =
+        trendsResult.status === 'fulfilled' ? trendsResult.value : null;
+
+      const errors = [
+        internshipsResult.status === 'rejected' ? 'Failed to load internships.' : null,
+        statsResult.status === 'rejected' ? 'Failed to load dashboard stats.' : null,
+        trendsResult.status === 'rejected' ? 'Failed to load trends.' : null
+      ].filter(Boolean);
+
+      setError(errors.length ? errors.join(' ') : null);
+
+      const internshipsList = Array.isArray(internshipsResponse?.internships)
+        ? internshipsResponse.internships
+        : Array.isArray(internshipsResponse)
+          ? internshipsResponse
+          : [];
+
+      setInternships(internshipsList);
+
+      const now = new Date();
+      const totalPosted = internshipsList.length;
+      const activePosts = internshipsList.filter((job: any) => isJobActive(job, now)).length;
+      const expiredPosts = totalPosted - activePosts;
+      const totalApplicants = internshipsList.reduce((sum: number, job: any) => {
+        const count = job.applicant_count ?? job.applications_count ?? 0;
+        return sum + (Number.isFinite(count) ? count : 0);
+      }, 0);
+
+      const derivedStats = {
+        totalPosted,
+        activePosts,
+        expiredPosts,
+        totalApplicants,
+        postsTrend: 'Stable',
+        statusDistribution: { pending: 0, shortlisted: 0, rejected: 0 },
+        recentApplicants: []
+      };
+
+      const mergedStats = {
+        ...derivedStats,
+        ...(statsResponse || {})
+      };
+
+      setDashboardData(mergedStats);
       setCurrentPage(1); // Reset to first page when new data is fetched
       
-      if (statsResponse) {
+      if (mergedStats) {
         setStats([
           { 
             label: 'Total Posted', 
-            value: statsResponse.totalPosted?.toString() || '0', 
+            value: mergedStats.totalPosted?.toString?.() || String(mergedStats.totalPosted ?? 0), 
             icon: FilePlus, 
             color: 'text-blue-600', 
             bg: 'bg-blue-50', 
-            trend: statsResponse.postsTrend || 'Stable',
+            trend: mergedStats.postsTrend || 'Stable',
             filter: 'all'
           },
           { 
             label: 'Total Applicants', 
-            value: statsResponse.totalApplicants?.toString() || '0', 
+            value: mergedStats.totalApplicants?.toString?.() || String(mergedStats.totalApplicants ?? 0), 
             icon: Users, 
             color: 'text-purple-600', 
             bg: 'bg-purple-50', 
@@ -113,7 +209,7 @@ export default function Dashboard() {
           },
           { 
             label: 'Active Posts', 
-            value: statsResponse.activePosts?.toString() || '0', 
+            value: mergedStats.activePosts?.toString?.() || String(mergedStats.activePosts ?? 0), 
             icon: CheckCircle, 
             color: 'text-emerald-600', 
             bg: 'bg-emerald-50', 
@@ -122,7 +218,7 @@ export default function Dashboard() {
           },
           { 
             label: 'Expired Posts', 
-            value: statsResponse.expiredPosts?.toString() || '0', 
+            value: mergedStats.expiredPosts?.toString?.() || String(mergedStats.expiredPosts ?? 0), 
             icon: History, 
             color: 'text-orange-600', 
             bg: 'bg-orange-50', 
@@ -132,9 +228,43 @@ export default function Dashboard() {
         ]);
       }
       
-      setTrends(trendsResponse.trends || []);
+      let normalizedRecent = Array.isArray(mergedStats?.recentApplicants)
+        ? mergedStats.recentApplicants.map((app: any) => ({
+            id: app.id,
+            student_id: app.student_id,
+            student_name: app.student_name || app.name || app.full_name || 'Unknown',
+            internship_title: app.internship_title || app.role || 'Internship',
+            created_at: app.created_at || app.time,
+            student_image: app.student_image || app.profile_image || null
+          }))
+        : [];
+
+      if (normalizedRecent.length === 0) {
+        try {
+          const recentResponse = await api.getCompanyApplications({ page: 1, limit: 5 });
+          const items = Array.isArray(recentResponse?.applications)
+            ? recentResponse.applications
+            : Array.isArray(recentResponse)
+              ? recentResponse
+              : [];
+          normalizedRecent = items.map((app: any) => ({
+            id: app.id,
+            student_id: app.student_id,
+            student_name: app.student_name || app.name || app.full_name || 'Unknown',
+            internship_title: app.internship_title || app.role || 'Internship',
+            created_at: app.created_at || app.time || app.submitted_at,
+            student_image: app.student_image || app.profile_image || null
+          }));
+        } catch (recentError) {
+          console.warn('Recent applicants fallback failed:', recentError);
+        }
+      }
+
+      setRecentApplications(normalizedRecent);
+      setTrends(trendsResponse?.trends || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load dashboard data.');
     } finally {
       setLoading(false);
     }
@@ -156,8 +286,20 @@ export default function Dashboard() {
     }
   };
 
-  const toggleDropdown = (jobId) => {
-    setActiveDropdown(activeDropdown === jobId ? null : jobId);
+  const toggleDropdown = (jobId: number) => {
+    setActiveDropdown(prev => (prev === jobId ? null : jobId));
+  };
+
+  const updateDropdownPosition = () => {
+    if (!activeDropdown) return;
+    const button = actionButtonRefs.current.get(activeDropdown);
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const menuWidth = 192;
+    const padding = 8;
+    const left = Math.max(padding, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - padding));
+    const top = Math.min(rect.bottom - 4, window.innerHeight - padding);
+    setDropdownPosition({ top, left });
   };
 
   // Pagination helper functions
@@ -184,6 +326,21 @@ export default function Dashboard() {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
+  }, [activeDropdown]);
+
+  useEffect(() => {
+    if (!activeDropdown) {
+      setDropdownPosition(null);
+      return;
+    }
+    updateDropdownPosition();
+    const handleReposition = () => updateDropdownPosition();
+    window.addEventListener('scroll', handleReposition, true);
+    window.addEventListener('resize', handleReposition);
+    return () => {
+      window.removeEventListener('scroll', handleReposition, true);
+      window.removeEventListener('resize', handleReposition);
+    };
   }, [activeDropdown]);
 
   return (
@@ -350,27 +507,50 @@ export default function Dashboard() {
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
-            <h3 className="text-lg font-bold text-slate-900">
-              {activeFilter === 'all' ? 'Your Internships' : activeFilter === 'active' ? 'Active Internships' : 'Expired Internships'}
-            </h3>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setActiveFilter('all')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${activeFilter === 'all' ? 'bg-primary text-background-dark' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+            <h3 className="text-lg font-bold text-slate-900">Active Internships</h3>
+            <div className="flex items-center gap-3 text-slate-400" data-filter-menu>
+              <button
+                type="button"
+                onClick={() => setIsFilterOpen((prev) => !prev)}
+                className={`relative p-2 rounded-lg border border-slate-200 bg-white shadow-sm transition-colors ${
+                  isFilterOpen ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+                }`}
+                title="Filter"
               >
-                All
-              </button>
-              <button 
-                onClick={() => setActiveFilter('active')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${activeFilter === 'active' ? 'bg-primary text-background-dark' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
-              >
-                Active
-              </button>
-              <button 
-                onClick={() => setActiveFilter('expired')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${activeFilter === 'expired' ? 'bg-primary text-background-dark' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
-              >
-                Expired
+                <Filter size={16} />
+                <AnimatePresence>
+                  {isFilterOpen ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-3 w-44 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden"
+                    >
+                      {[
+                        { label: 'All', value: 'all' },
+                        { label: 'Active', value: 'active' },
+                        { label: 'Expired', value: 'expired' },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            setActiveFilter(option.value);
+                            setIsFilterOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                            activeFilter === option.value
+                              ? 'bg-blue-50 text-blue-600 font-semibold'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </button>
             </div>
           </div>
@@ -384,63 +564,80 @@ export default function Dashboard() {
                 <div className="h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
                   <FilePlus size={32} />
                 </div>
-                <p className="text-slate-500 font-medium">No {activeFilter !== 'all' ? activeFilter : ''} internships found.</p>
-                <Link to="/company/post" className="text-primary font-bold hover:underline mt-2 inline-block">Post your first internship</Link>
+                <p className="text-slate-500 font-medium">No active internships found.</p>
+                <Link to="/company/post" className="text-emerald-600 font-bold hover:underline mt-2 inline-block">Post your first internship</Link>
               </div>
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-100">
-                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Internship Title</th>
-                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Posted Date</th>
-                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applicants</th>
-                    <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                    <th className="py-4 px-6 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                  <tr className="bg-slate-50/60 border-b border-slate-100">
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Internship Title</th>
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Posted Date</th>
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Deadline</th>
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Applicants</th>
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                    <th className="py-4 px-6 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                    <AnimatePresence mode="popLayout">
-                      {currentInternships.map((job: any) => (
-                      <motion.tr 
-                        key={job.id} 
-                        layout
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        className="group hover:bg-slate-50 transition-colors"
-                      >
+                      <AnimatePresence mode="popLayout">
+                        {currentInternships.map((job: any) => {
+                          const now = new Date();
+                          const isActive = isJobActive(job, now);
+                          return (
+                        <motion.tr 
+                          key={job.id} 
+                          layout
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          className="group hover:bg-slate-50 transition-colors"
+                        >
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                              <PlusCircle size={20} />
-                            </div>
+                              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0 overflow-hidden">
+                                {job.image ? (
+                                  <img src={job.image} alt={job.title} className="h-full w-full object-cover" />
+                                ) : (
+                                  <PlusCircle size={20} />
+                                )}
+                              </div>
                             <div>
                               <p className="font-semibold text-slate-900 text-sm">{job.title}</p>
-                              <p className="text-xs text-slate-500">{job.location} • {job.type}</p>
+                              <p className="text-xs text-slate-500">{job.location} ? {job.type}</p>
                             </div>
                           </div>
                         </td>
                         <td className="py-4 px-6 text-sm text-slate-600">
                           {new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
+                        <td className="py-4 px-6 text-sm text-slate-600">
+                          {formatDeadlineDate(job.application_deadline)}
+                        </td>
                         <td className="py-4 px-6">
-                          <div className="flex items-center gap-2">
-                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
-                                <span className="text-xs font-medium text-slate-500">{job.applications_count || 0}</span>
+                          {((job.applicant_count ?? job.applications_count ?? 0) === 0) ? (
+                            <span className="text-xs text-slate-400">No applicants</span>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
+                                <span className="text-xs font-medium text-slate-500">{job.applicant_count ?? job.applications_count ?? 0}</span>
                               </div>
-                              <span className="text-xs text-slate-400 font-medium">Applicants</span>
-                          </div>
+                            </div>
+                          )}
                         </td>
                         <td className="py-4 px-6">
                           <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                            job.status === 'active' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-800 ring-amber-600/20'
+                            isActive ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-800 ring-amber-600/20'
                           }`}>
-                            {job.status === 'active' ? 'Active' : 'Draft/Expired'}
+                              {isActive ? 'Active' : 'Expired'}
                           </span>
                         </td>
                         <td className="py-4 px-6 text-right">
                           <div className="relative">
                             <button 
+                              ref={(el) => {
+                                actionButtonRefs.current.set(job.id, el);
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleDropdown(job.id);
@@ -450,50 +647,16 @@ export default function Dashboard() {
                             >
                               <MoreVertical size={18} />
                             </button>
-                            
-                            <AnimatePresence>
-                              {activeDropdown === job.id && (
-                                <motion.div 
-                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  transition={{ duration: 0.15 }}
-                                  className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg border border-slate-200 shadow-lg z-50 overflow-hidden"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button 
-                                    onClick={() => {
-                                      navigate(`/company/post/${job.id}`);
-                                      setActiveDropdown(null);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                                  >
-                                    <Edit3 size={14} />
-                                    Edit
-                                  </button>
-                                  <button 
-                                    onClick={() => {
-                                      setDeleteId(job.id);
-                                      setActiveDropdown(null);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                  >
-                                    <Trash2 size={14} />
-                                    Delete
-                                  </button>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
                           </div>
                         </td>
                       </motion.tr>
-                    ))}
+                          );
+                        })}
                   </AnimatePresence>
                 </tbody>
               </table>
             )}
           </div>
-          
           {/* Pagination Controls */}
           {filteredInternships.length > itemsPerPage && (
             <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
@@ -647,6 +810,46 @@ export default function Dashboard() {
           </div>
         )}
       </AnimatePresence>
+      {activeDropdown && dropdownPosition
+        ? ReactDOM.createPortal(
+            <AnimatePresence>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="fixed w-48 bg-white rounded-lg border border-slate-200 shadow-lg z-[100] overflow-hidden"
+                style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                                  <button 
+                                    onClick={() => {
+                                      const selected = currentInternships.find((item: any) => item.id === activeDropdown);
+                                      navigate(`/company/post/${activeDropdown}`, {
+                                        state: selected ? { internship: selected } : undefined
+                                      });
+                                      setActiveDropdown(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                  >
+                  <Edit3 size={14} />
+                  Edit
+                </button>
+                <button
+                  onClick={() => {
+                    setDeleteId(activeDropdown);
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </motion.div>
+            </AnimatePresence>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

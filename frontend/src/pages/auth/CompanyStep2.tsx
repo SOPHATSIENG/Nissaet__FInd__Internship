@@ -10,6 +10,7 @@ import { registrationStorage } from '../../utils/registrationStorage';
 export function CompanyStep2() {
   const navigate = useNavigate();
   const [logo, setLogo] = useState('');
+  const [logoName, setLogoName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [industry, setIndustry] = useState('');
   const [website, setWebsite] = useState('');
@@ -37,6 +38,7 @@ export function CompanyStep2() {
     setWebsite((step2?.website || '').trim());
     setCompanyBio((step2?.company_bio || '').trim());
     setLogo((step2?.logo || '').trim());
+    setLogoName((step2?.logo_name || '').trim());
   }, [navigate]);
 
   const handleNext = (e: React.FormEvent) => {
@@ -58,6 +60,7 @@ export function CompanyStep2() {
       contact_phone: contactPhone.trim() || null,
       company_bio: companyBio.trim() || null,
       logo: logo || null,
+      logo_name: logoName || null,
     });
 
     navigate('/register/company/step-3');
@@ -97,14 +100,29 @@ export function CompanyStep2() {
                     className="sr-only"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      setLogo(file ? file.name : '');
+                      if (!file) {
+                        setLogo('');
+                        setLogoName('');
+                        return;
+                      }
+                      if (file.size > 5 * 1024 * 1024) {
+                        setError('Logo must be less than 5MB.');
+                        return;
+                      }
+                      setError('');
+                      setLogoName(file.name);
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setLogo(String(reader.result || ''));
+                      };
+                      reader.readAsDataURL(file);
                     }}
                   />
                 </label>
                 <p className="pl-1">or drag and drop</p>
               </div>
               <p className="text-xs leading-5 text-slate-500">PNG, JPG, GIF up to 5MB</p>
-              {logo ? <p className="mt-2 text-xs font-medium text-slate-600">{logo}</p> : null}
+              {logoName ? <p className="mt-2 text-xs font-medium text-slate-600">{logoName}</p> : null}
             </div>
           </div>
         </div>

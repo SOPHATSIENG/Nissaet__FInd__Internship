@@ -1,20 +1,81 @@
 const db = require('../config/db');
+const { getProfileSettingsByUserId } = require('./profileController');
 
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
+
+const parseJsonField = (value, fallback) => {
+    if (value === null || value === undefined || value === '') return fallback;
+    if (typeof value === 'object') return value;
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        return fallback;
+    }
+};
+
+const defaultAdminSettings = {
+    platformName: 'Internship Cambodia',
+    supportEmail: 'support@internship.kh',
+    seoDescription: 'The leading platform for finding internships and early career opportunities in Cambodia.',
+    maintenanceMode: false,
+    defaultLanguage: 'English (US)',
+    timezone: '(GMT+07:00) Phnom Penh',
+    brandLogo: null,
+    brandFavicon: null,
+    authMethods: {
+        'Email & Password': true,
+        'Google OAuth': true,
+        'Microsoft Azure AD': false
+    },
+    bruteForceProtection: true,
+    ipWhitelist: ['192.168.1.1', '10.0.0.45'],
+    passwordMinLength: 8,
+    sessionTimeoutMinutes: 60,
+    emailTriggers: {
+        'New User Registration': true,
+        'Company Verification Request': true,
+        'System Error Alerts': true,
+        'Weekly Analytics Summary': false
+    },
+    slackWebhookUrl: '',
+    pushNotifications: true,
+    storage: {
+        totalGb: 100,
+        usedGb: 42.8,
+        databaseGb: 12.4,
+        mediaGb: 28.2,
+        logsGb: 2.2
+    },
+    lastBackupAt: null,
+    backupSchedule: 'Daily at 04:00 AM',
+    dataRetentionDays: 90
+};
 
 const getAllUsers = async (req, res) => {
     try {
         const users = await db.query(`
-            SELECT id, full_name as name, email, role, 
-            CASE WHEN role = 'admin' THEN 'Active' ELSE 'Active' END as status,
+            SELECT id, full_name as name, email, role,
+            COALESCE(status, 'active') as status,
             DATE_FORMAT(created_at, '%b %d, %Y') as date,
             LEFT(full_name, 1) as initial,
             'bg-blue-100' as color
-            FROM users 
+            FROM users
             ORDER BY created_at DESC
         `);
         res.json(users);
     } catch (error) {
+        if (isBadFieldError(error)) {
+            const users = await db.query(`
+                SELECT id, full_name as name, email, role,
+                'active' as status,
+                DATE_FORMAT(created_at, '%b %d, %Y') as date,
+                LEFT(full_name, 1) as initial,
+                'bg-blue-100' as color
+                FROM users
+                ORDER BY created_at DESC
+            `);
+            return res.json(users);
+        }
         console.error('Error fetching users:', error);
         res.status(500).json({ message: 'Server error' });
     }
@@ -424,6 +485,37 @@ const updateCompanyVerificationStatus = async (req, res) => {
                 'UPDATE companies SET is_verified = ? WHERE id = ?',
                 [status === 'approved' ? 1 : 0, companyId]
             );
+
+            try {
+                const companyRows = await db.query(
+                    'SELECT user_id, name AS company_name FROM companies WHERE id = ? LIMIT 1',
+                    [companyId]
+                );
+                if (companyRows.length > 0) {
+                    const companyUserId = companyRows[0].user_id;
+                    const companyName = companyRows[0].company_name || 'your company';
+                    const title = status === 'approved' ? 'Company verification approved' : 'Company verification rejected';
+                    const message =
+                        status === 'approved'
+                            ? `Your company "${companyName}" has been approved by the admin.`
+                            : `Your company "${companyName}" was rejected by the admin.${rejection_reason ? ` Reason: ${rejection_reason}` : ''}`;
+                    await db.query(
+                        `INSERT INTO notifications (user_id, title, message, type, related_entity_type, related_entity_id, action_url)
+                         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            companyUserId,
+                            title,
+                            message,
+                            'system',
+                            'verification',
+                            verificationId,
+                            '/company/verification'
+                        ]
+                    );
+                }
+            } catch (notifyError) {
+                console.error('Notification insert failed:', notifyError.message);
+            }
         }
 
         return res.json({ message: 'Verification updated', status });
@@ -1132,9 +1224,424 @@ const getJobTypes = async (req, res) => {
     }
 };
 
+const getAdminStudentProfile = async (req, res) => {
+    const userId = Number(req.params.id);
+    if (!userId) {
+        return res.status(400).json({ message: 'Student user id is required' });
+    }
+
+    try {
+        const users = await db.query('SELECT id, role, created_at FROM users WHERE id = ? LIMIT 1', [userId]);
+        if (!users || users.length === 0) {
+            return res.status(404).json({ message: 'Student not found' });
+        }
+        if (users[0].role !== 'student') {
+            return res.status(404).json({ message: 'Student not found' });
+        }
+
+        const profile = await getProfileSettingsByUserId(userId);
+        if (!profile) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        return res.json({
+            profile,
+            meta: {
+                userId,
+                createdAt: users[0].created_at
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching admin student profile:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const buildMonthBuckets = (monthsBack) => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1);
+    const buckets = [];
+    for (let i = 0; i < monthsBack; i += 1) {
+        const date = new Date(start.getFullYear(), start.getMonth() + i, 1);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        buckets.push({
+            key,
+            label: date.toLocaleDateString('en-US', { month: 'short' }),
+            start: new Date(date),
+            end: new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
+        });
+    }
+    return buckets;
+};
+
+const getDashboardOverview = async (req, res) => {
+    try {
+        const monthBuckets = buildMonthBuckets(6);
+        const rangeStart = toMysqlDateTime(monthBuckets[0].start);
+        const rangeEnd = toMysqlDateTime(monthBuckets[monthBuckets.length - 1].end);
+
+        let growthRows = [];
+        try {
+            growthRows = await db.query(
+                `SELECT DATE_FORMAT(created_at, '%Y-%m') AS ym, COUNT(*) AS count
+                 FROM internships
+                 WHERE created_at BETWEEN ? AND ?
+                 GROUP BY ym
+                 ORDER BY ym ASC`,
+                [rangeStart, rangeEnd]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                console.error('Dashboard growth query failed:', error);
+            }
+        }
+
+        const growthMap = new Map(growthRows.map(row => [row.ym, Number(row.count || 0)]));
+        const growth = monthBuckets.map(bucket => ({
+            name: bucket.label,
+            value: growthMap.get(bucket.key) || 0
+        }));
+
+        let skillsRows = [];
+        try {
+            skillsRows = await db.query(
+                `SELECT s.name, COUNT(isk.internship_id) AS value
+                 FROM skills s
+                 LEFT JOIN internship_skills isk ON isk.skill_id = s.id
+                 GROUP BY s.id, s.name
+                 ORDER BY value DESC, s.name ASC
+                 LIMIT 6`
+            );
+        } catch (error) {
+            if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                console.error('Dashboard skills query failed:', error);
+            }
+        }
+
+        const skills = skillsRows.map(row => ({
+            name: row.name,
+            value: Number(row.value || 0)
+        }));
+
+        const events = [];
+        try {
+            const users = await db.query(
+                `SELECT full_name, role, created_at
+                 FROM users
+                 ORDER BY created_at DESC
+                 LIMIT 5`
+            );
+            users.forEach((user) => {
+                events.push({
+                    title: `New ${String(user.role || 'User').replace(/^\w/, c => c.toUpperCase())} Registration`,
+                    desc: `${user.full_name || 'New user'} joined the platform`,
+                    time: user.created_at,
+                    type: 'info'
+                });
+            });
+        } catch (error) {
+            if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                console.error('Dashboard users activity query failed:', error);
+            }
+        }
+
+        try {
+            const internships = await db.query(
+                `SELECT i.title, i.created_at, c.company_name
+                 FROM internships i
+                 LEFT JOIN companies c ON i.company_id = c.id
+                 ORDER BY i.created_at DESC
+                 LIMIT 5`
+            );
+            internships.forEach((internship) => {
+                events.push({
+                    title: 'Internship Posted',
+                    desc: `${internship.company_name || 'A company'} posted "${internship.title || 'an internship'}"`,
+                    time: internship.created_at,
+                    type: 'success'
+                });
+            });
+        } catch (error) {
+            if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                console.error('Dashboard internships activity query failed:', error);
+            }
+        }
+
+        try {
+            const verifications = await db.query(
+                `SELECT status, reviewed_at, company_name
+                 FROM company_verifications
+                 WHERE reviewed_at IS NOT NULL
+                 ORDER BY reviewed_at DESC
+                 LIMIT 5`
+            );
+            verifications.forEach((verification) => {
+                const status = String(verification.status || '').toLowerCase();
+                const isApproved = status === 'approved';
+                events.push({
+                    title: `Verification ${isApproved ? 'Approved' : 'Rejected'}`,
+                    desc: `${verification.company_name || 'Company'} verification ${isApproved ? 'approved' : 'rejected'}`,
+                    time: verification.reviewed_at,
+                    type: isApproved ? 'success' : 'warning'
+                });
+            });
+        } catch (error) {
+            if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                console.error('Dashboard verifications activity query failed:', error);
+            }
+        }
+
+        const activity = events
+            .filter(event => event.time)
+            .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+            .slice(0, 6);
+
+        return res.json({ growth, skills, activity });
+    } catch (error) {
+        console.error('Error fetching admin dashboard overview:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const normalizeUserStatus = (value) => {
+    if (!value) return 'active';
+    const normalized = String(value).trim().toLowerCase();
+    if (['active', 'pending', 'suspended'].includes(normalized)) return normalized;
+    return 'active';
+};
+
+const updateAdminUser = async (req, res) => {
+    const userId = Number(req.params.id);
+    if (!userId) {
+        return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const { name, email, role, status } = req.body || {};
+    const updates = [];
+    const params = [];
+
+    if (name !== undefined) {
+        updates.push('full_name = ?');
+        params.push(String(name).trim());
+    }
+    if (email !== undefined) {
+        updates.push('email = ?');
+        params.push(String(email).trim());
+    }
+    if (role !== undefined) {
+        const normalizedRole = String(role).trim().toLowerCase();
+        if (!['student', 'company', 'admin'].includes(normalizedRole)) {
+            return res.status(400).json({ message: 'Invalid role' });
+        }
+        updates.push('role = ?');
+        params.push(normalizedRole);
+    }
+    if (status !== undefined) {
+        const normalizedStatus = normalizeUserStatus(status);
+        updates.push('status = ?');
+        params.push(normalizedStatus);
+    }
+
+    if (updates.length === 0) {
+        return res.status(400).json({ message: 'No fields to update' });
+    }
+
+    try {
+        params.push(userId);
+        await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+
+        const rows = await db.query(
+            `SELECT id, full_name as name, email, role, COALESCE(status, 'active') as status,
+             DATE_FORMAT(created_at, '%b %d, %Y') as date,
+             LEFT(full_name, 1) as initial,
+             'bg-blue-100' as color
+             FROM users WHERE id = ? LIMIT 1`,
+            [userId]
+        );
+
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        return res.json({ user: rows[0] });
+    } catch (error) {
+        if (isBadFieldError(error)) {
+            return res.status(400).json({ message: 'User status column missing. Run migrations.' });
+        }
+        console.error('Error updating user:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const normalizeAdminSettingsRow = (row) => {
+    const authMethods = parseJsonField(row.auth_methods, defaultAdminSettings.authMethods);
+    const emailTriggers = parseJsonField(row.email_triggers, defaultAdminSettings.emailTriggers);
+    const ipWhitelist = parseJsonField(row.ip_whitelist, defaultAdminSettings.ipWhitelist);
+
+    return {
+        platformName: row.platform_name || defaultAdminSettings.platformName,
+        supportEmail: row.support_email || defaultAdminSettings.supportEmail,
+        seoDescription: row.seo_description || defaultAdminSettings.seoDescription,
+        maintenanceMode: Boolean(row.maintenance_mode),
+        defaultLanguage: row.default_language || defaultAdminSettings.defaultLanguage,
+        timezone: row.timezone || defaultAdminSettings.timezone,
+        brandLogo: row.brand_logo || null,
+        brandFavicon: row.brand_favicon || null,
+        authMethods,
+        bruteForceProtection: row.brute_force_protection === null ? defaultAdminSettings.bruteForceProtection : Boolean(row.brute_force_protection),
+        ipWhitelist: Array.isArray(ipWhitelist) ? ipWhitelist : defaultAdminSettings.ipWhitelist,
+        passwordMinLength: Number(row.password_min_length || defaultAdminSettings.passwordMinLength),
+        sessionTimeoutMinutes: Number(row.session_timeout_minutes || defaultAdminSettings.sessionTimeoutMinutes),
+        emailTriggers,
+        slackWebhookUrl: row.slack_webhook_url || '',
+        pushNotifications: row.push_notifications === null ? defaultAdminSettings.pushNotifications : Boolean(row.push_notifications),
+        storage: {
+            totalGb: Number(row.storage_total_gb ?? defaultAdminSettings.storage.totalGb),
+            usedGb: Number(row.storage_used_gb ?? defaultAdminSettings.storage.usedGb),
+            databaseGb: Number(row.storage_database_gb ?? defaultAdminSettings.storage.databaseGb),
+            mediaGb: Number(row.storage_media_gb ?? defaultAdminSettings.storage.mediaGb),
+            logsGb: Number(row.storage_logs_gb ?? defaultAdminSettings.storage.logsGb)
+        },
+        lastBackupAt: row.last_backup_at ? new Date(row.last_backup_at).toISOString() : null,
+        backupSchedule: row.backup_schedule || defaultAdminSettings.backupSchedule,
+        dataRetentionDays: row.data_retention_days === null || row.data_retention_days === undefined
+            ? defaultAdminSettings.dataRetentionDays
+            : Number(row.data_retention_days)
+    };
+};
+
+const getAdminSettings = async (req, res) => {
+    try {
+        const rows = await db.query('SELECT * FROM admin_settings ORDER BY id ASC LIMIT 1');
+        if (!rows || rows.length === 0) {
+            return res.json({ settings: defaultAdminSettings });
+        }
+        return res.json({ settings: normalizeAdminSettingsRow(rows[0]) });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.status(500).json({ message: 'Admin settings table not found. Run migrations first.' });
+        }
+        console.error('Error fetching admin settings:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateAdminSettings = async (req, res) => {
+    try {
+        const rows = await db.query('SELECT * FROM admin_settings ORDER BY id ASC LIMIT 1');
+        const current = rows && rows.length > 0 ? normalizeAdminSettingsRow(rows[0]) : defaultAdminSettings;
+        const payload = req.body || {};
+
+        const merged = {
+            ...current,
+            ...payload,
+            authMethods: { ...current.authMethods, ...(payload.authMethods || {}) },
+            emailTriggers: { ...current.emailTriggers, ...(payload.emailTriggers || {}) },
+            storage: { ...current.storage, ...(payload.storage || {}) },
+            ipWhitelist: Array.isArray(payload.ipWhitelist) ? payload.ipWhitelist : current.ipWhitelist
+        };
+
+        await db.query(
+            `UPDATE admin_settings SET
+                platform_name = ?,
+                support_email = ?,
+                seo_description = ?,
+                maintenance_mode = ?,
+                default_language = ?,
+                timezone = ?,
+                brand_logo = ?,
+                brand_favicon = ?,
+                auth_methods = ?,
+                brute_force_protection = ?,
+                ip_whitelist = ?,
+                password_min_length = ?,
+                session_timeout_minutes = ?,
+                email_triggers = ?,
+                slack_webhook_url = ?,
+                push_notifications = ?,
+                storage_total_gb = ?,
+                storage_used_gb = ?,
+                storage_database_gb = ?,
+                storage_media_gb = ?,
+                storage_logs_gb = ?,
+                last_backup_at = ?,
+                backup_schedule = ?,
+                data_retention_days = ?
+            WHERE id = ?`,
+            [
+                merged.platformName,
+                merged.supportEmail,
+                merged.seoDescription,
+                merged.maintenanceMode ? 1 : 0,
+                merged.defaultLanguage,
+                merged.timezone,
+                merged.brandLogo,
+                merged.brandFavicon,
+                JSON.stringify(merged.authMethods || {}),
+                merged.bruteForceProtection ? 1 : 0,
+                JSON.stringify(merged.ipWhitelist || []),
+                Number(merged.passwordMinLength || 0),
+                Number(merged.sessionTimeoutMinutes || 0),
+                JSON.stringify(merged.emailTriggers || {}),
+                merged.slackWebhookUrl || '',
+                merged.pushNotifications ? 1 : 0,
+                Number(merged.storage.totalGb || 0),
+                Number(merged.storage.usedGb || 0),
+                Number(merged.storage.databaseGb || 0),
+                Number(merged.storage.mediaGb || 0),
+                Number(merged.storage.logsGb || 0),
+                merged.lastBackupAt ? toMysqlDateTime(new Date(merged.lastBackupAt)) : null,
+                merged.backupSchedule || '',
+                merged.dataRetentionDays === null || merged.dataRetentionDays === undefined ? null : Number(merged.dataRetentionDays),
+                rows && rows.length > 0 ? rows[0].id : 1
+            ]
+        );
+
+        return res.json({ success: true, settings: merged });
+    } catch (error) {
+        console.error('Error updating admin settings:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const exportAdminData = async (req, res) => {
+    try {
+        const now = new Date();
+        await db.query(
+            'UPDATE admin_settings SET last_backup_at = ? WHERE id = 1',
+            [toMysqlDateTime(now)]
+        );
+        return res.json({ success: true, lastBackupAt: now.toISOString() });
+    } catch (error) {
+        console.error('Error exporting admin data:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const purgeAdminLogs = async (req, res) => {
+    try {
+        const rows = await db.query('SELECT storage_used_gb, storage_logs_gb FROM admin_settings WHERE id = 1');
+        const currentUsed = Number(rows?.[0]?.storage_used_gb || 0);
+        const currentLogs = Number(rows?.[0]?.storage_logs_gb || 0);
+        const nextUsed = Math.max(0, currentUsed - currentLogs);
+        const now = new Date();
+
+        await db.query(
+            'UPDATE admin_settings SET storage_logs_gb = 0, storage_used_gb = ?, last_purge_at = ? WHERE id = 1',
+            [nextUsed, toMysqlDateTime(now)]
+        );
+
+        return res.json({ success: true, storageLogsGb: 0, storageUsedGb: nextUsed });
+    } catch (error) {
+        console.error('Error purging admin logs:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     getAllUsers,
     getStats,
+    getDashboardOverview,
     getCompanyVerifications,
     updateCompanyVerificationStatus,
     getStudentVerifications,
@@ -1155,5 +1662,11 @@ module.exports = {
     flagInternshipForAdmin,
     unflagInternshipForAdmin,
     getJobTypes,
-    getReports
+    getReports,
+    getAdminSettings,
+    updateAdminSettings,
+    exportAdminData,
+    purgeAdminLogs,
+    getAdminStudentProfile,
+    updateAdminUser
 };

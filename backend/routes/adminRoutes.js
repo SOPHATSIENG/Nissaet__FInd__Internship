@@ -8,7 +8,14 @@ router.use(authenticate, authorize('admin'));
 
 router.get('/users', adminController.getAllUsers);
 router.get('/stats', adminController.getStats);
+router.get('/dashboard/overview', adminController.getDashboardOverview);
 router.get('/reports', adminController.getReports);
+router.get('/settings', adminController.getAdminSettings);
+router.put('/settings', adminController.updateAdminSettings);
+router.post('/settings/export', adminController.exportAdminData);
+router.post('/settings/purge', adminController.purgeAdminLogs);
+router.get('/students/:id/profile', adminController.getAdminStudentProfile);
+router.put('/users/:id', adminController.updateAdminUser);
 router.get('/verifications/company', adminController.getCompanyVerifications);
 router.put('/verifications/company/:id', adminController.updateCompanyVerificationStatus);
 router.get('/verifications/student', adminController.getStudentVerifications);

@@ -7,6 +7,8 @@ import {
   CheckCircle, 
   XCircle, 
   Hourglass,
+  Users,
+  DollarSign,
   ChevronRight,
   Search,
   Filter
@@ -18,6 +20,7 @@ import api from '../../api/axios';
 export default function MyApplications() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [selectedApp, setSelectedApp] = useState<any>(null);
 
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,9 @@ export default function MyApplications() {
           const postedDate = postedAt
             ? new Date(postedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
             : '';
+          const deadlineDate = app.application_deadline
+            ? new Date(app.application_deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '';
           const companyName = app.company_name || 'Your Company';
           return {
             id: app.id,
@@ -48,9 +54,16 @@ export default function MyApplications() {
             company: companyName,
             location: app.location || 'Remote',
             appliedDate: postedDate,
+            deadlineDate,
             status: normalizeStatus(app.status),
             duration: app.duration_months ? `${app.duration_months} Months` : 'N/A',
             type: app.type || 'Internship',
+            description: app.description || '',
+            requirements: app.requirements || '',
+            positions: app.positions ?? 1,
+            stipend: app.stipend,
+            stipendCurrency: app.stipend_currency || 'USD',
+            image: app.image || '',
             logo: app.company_logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&background=0D8ABC&color=fff`
           };
         });
@@ -159,7 +172,7 @@ export default function MyApplications() {
               >
                 <div className="p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
                   <div className="h-16 w-16 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
-                    <img src={app.logo} alt={app.company} className="h-full w-full object-cover" />
+                    <img src={app.image || app.logo} alt={app.company} className="h-full w-full object-cover" />
                   </div>
                   
                   <div className="flex-1 min-w-0">
@@ -194,19 +207,13 @@ export default function MyApplications() {
                   </div>
                   
                   <div className="flex items-center gap-3 w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0 border-slate-50">
-                    <Link
-                      to={`/company/post/${app.id}`}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedApp(app)}
                       className="flex-1 md:flex-none px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all text-center"
                     >
                       View Details
-                    </Link>
-                    <Link 
-                      to={`/evaluation/${app.id}`}
-                      className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700 transition-all"
-                    >
-                      Check Evaluation
-                      <ChevronRight size={16} />
-                    </Link>
+                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -231,6 +238,97 @@ export default function MyApplications() {
           </div>
         )}
       </div>
+
+      {selectedApp && (
+        <div className="fixed inset-0 z-[80]">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setSelectedApp(null)}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+              <div className="p-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="text-2xl font-bold text-slate-900">{selectedApp.internshipTitle}</h3>
+                      <span className="inline-flex items-center rounded-lg px-3 py-1 text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                        {String(selectedApp.type || '').toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
+                      <div className="h-8 w-8 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                        <img src={selectedApp.image || selectedApp.logo} alt={selectedApp.company} className="h-full w-full object-cover" />
+                      </div>
+                      <span className="font-semibold">{selectedApp.company}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                      <MapPin size={16} className="text-slate-400" />
+                      <span>{selectedApp.location}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedApp(null)}
+                    className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                    aria-label="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="mt-5 text-sm text-slate-700 leading-relaxed">
+                  {selectedApp.description || 'No description provided.'}
+                </div>
+
+                <div className="mt-4 text-sm">
+                  <span className="font-semibold text-slate-800">Requirements:</span>{' '}
+                  <span className="text-slate-700">{selectedApp.requirements || 'N/A'}</span>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <Users size={16} className="text-slate-400" />
+                    <span>{selectedApp.positions ?? 'N/A'} positions</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={16} className="text-slate-400" />
+                    <span>
+                      {selectedApp.stipend != null
+                        ? `${selectedApp.stipendCurrency} ${Number(selectedApp.stipend).toLocaleString()}`
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} className="text-slate-400" />
+                    <span>{selectedApp.deadlineDate || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock size={16} className="text-slate-400" />
+                    <span>Posted {selectedApp.appliedDate || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedApp(null)}
+                  className="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
+                >
+                  Close
+                </button>
+                <Link
+                  to={`/company/post/${selectedApp.id}`}
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl shadow-sm hover:bg-emerald-600 transition-all"
+                >
+                  Open Full Page
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

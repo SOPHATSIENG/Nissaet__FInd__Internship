@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown, Calendar } from 'lucide-react';
+import { Search, Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown, Calendar, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
@@ -12,6 +12,8 @@ export default function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationCard, setNotificationCard] = useState<{ unreadCount: number; items: any[] } | null>(null);
+  const [suppressUnreadAt, setSuppressUnreadAt] = useState<number | null>(null);
+  const [logoError, setLogoError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const companyName =
@@ -22,7 +24,44 @@ export default function Navbar() {
 
   const companyEmail = user?.email || '';
 
-  const avatarUrl = user?.profile_image || '';
+  const companyLogo =
+    user?.company_profile?.logo ||
+    user?.company_profile?.company_logo ||
+    user?.company_logo ||
+    '';
+
+  const toAbsoluteUrl = (value: string) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
+      return raw;
+    }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const base = apiBase.replace(/\/api\/?$/, '');
+    if (raw.startsWith('/')) return `${base}${raw}`;
+    return `${base}/${raw}`;
+  };
+
+  const resolvedLogo = toAbsoluteUrl(companyLogo);
+
+  const avatarUrl = user?.profile_image || resolvedLogo || companyLogo || '';
+  const accountStatus = String(user?.status || 'active').toLowerCase();
+
+  const hasNewSinceSuppress = () => {
+    if (!notificationCard?.items?.length) return false;
+    if (!suppressUnreadAt) return true;
+    return notificationCard.items.some((item: any) => {
+      const t = new Date(item.created_at || item.createdAt || item.timestamp || 0).getTime();
+      return t > suppressUnreadAt;
+    });
+  };
+
+  const companyInitials = companyName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('');
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -35,40 +74,42 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const loadNotificationCard = useCallback(async () => {
+    try {
+      if (!user) {
+        setNotificationCard(null);
+        return;
+      }
+      const data = await api.getNotificationCard();
+      const unreadCount = Number(data?.unread_count ?? data?.unreadCount ?? 0) || 0;
+      const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.notifications) ? data.notifications : [];
+      setNotificationCard({ unreadCount, items });
+    } catch (error) {
+      setNotificationCard(null);
+    }
+  }, [user]);
+
   useEffect(() => {
     let mounted = true;
-
-    const loadNotificationCard = async () => {
-      try {
-        if (!user) {
-          if (mounted) setNotificationCard(null);
-          return;
-        }
-        const data = await api.getNotificationCard();
-        const unreadCount = Number(data?.unread_count ?? data?.unreadCount ?? 0) || 0;
-        const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.notifications) ? data.notifications : [];
-        if (mounted) {
-          setNotificationCard({ unreadCount, items });
-        }
-      } catch (error) {
-        if (mounted) setNotificationCard(null);
-      }
+    const guardedLoad = async () => {
+      if (!mounted) return;
+      await loadNotificationCard();
     };
-
-    loadNotificationCard();
-    const id = window.setInterval(loadNotificationCard, 30000);
+    guardedLoad();
+    const id = window.setInterval(guardedLoad, 30000);
     return () => {
       mounted = false;
       window.clearInterval(id);
     };
-  }, [user]);
+  }, [loadNotificationCard]);
 
   const navLinks = [
     { name: 'Dashboard', path: '/company', icon: LayoutDashboard },
     { name: 'Post Internship', path: '/company/post', icon: Send },
     { name: 'Events', path: '/company/events', icon: Calendar },
     { name: 'Applicants', path: '/company/applicants', icon: Users },
-    { name: 'My Applications', path: '/company/my-applications', icon: Briefcase },
+    { name: 'Employment', path: '/company/my-applications', icon: Briefcase },
+    { name: 'Archived', path: '/company/archived', icon: History },
     { name: 'Settings', path: '/company/settings', icon: SettingsIcon },
   ];
 
@@ -77,10 +118,21 @@ export default function Navbar() {
       <div className="max-w-[1280px] mx-auto flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link to="/company" className="flex items-center gap-3 group">
-            <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
-              <Briefcase size={24} />
+            <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white overflow-hidden font-bold text-sm">
+              {resolvedLogo && !logoError ? (
+                <img
+                  src={resolvedLogo}
+                  alt={companyName}
+                  className="h-full w-full object-cover"
+                  onError={() => setLogoError(true)}
+                />
+              ) : companyInitials ? (
+                <span>{companyInitials}</span>
+              ) : (
+                <Briefcase size={24} />
+              )}
             </div>
-            <h2 className="text-xl font-bold tracking-tight text-slate-900">InternCambodia</h2>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">{companyName}</h2>
           </Link>
         </div>
         <div className="flex items-center gap-6">
@@ -108,11 +160,23 @@ export default function Navbar() {
               onClick={() => {
                 setIsNotificationsOpen((current) => !current);
                 setIsProfileOpen(false);
+                setNotificationCard((prev) =>
+                  prev
+                    ? {
+                        unreadCount: 0,
+                        items: Array.isArray(prev.items)
+                          ? prev.items.map((item) => ({ ...item, is_read: true }))
+                          : prev.items
+                      }
+                    : prev
+                );
+                setSuppressUnreadAt(Date.now());
+                loadNotificationCard();
               }}
               className="relative p-2 text-slate-400 hover:text-slate-600"
             >
               <Bell size={24} />
-              {(notificationCard?.unreadCount || 0) > 0 ? (
+              {(notificationCard?.unreadCount || 0) > 0 && hasNewSinceSuppress() ? (
                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
                   {notificationCard.unreadCount > 99 ? '99+' : notificationCard.unreadCount}
                 </span>
@@ -191,7 +255,14 @@ export default function Navbar() {
                   className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-[60]"
                 >
                   <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                    <p className="text-sm font-semibold text-slate-900">{companyName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{companyName}</p>
+                      {accountStatus === 'suspended' && (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase border border-rose-200">
+                          Suspended
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500 truncate">{companyEmail}</p>
                   </div>
                   <div className="p-2">

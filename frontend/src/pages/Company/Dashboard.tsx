@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { 
   PlusCircle, 
   FilePlus, 
@@ -40,10 +41,12 @@ export default function Dashboard() {
     { label: 'Expired Posts', value: '0', icon: History, color: 'text-orange-600', bg: 'bg-orange-50', trend: '0%', filter: 'expired' },
   ]);
   const [trends, setTrends] = useState([]);
-  const [activeDropdown, setActiveDropdown] = useState(null);
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
+  const actionButtonRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
 
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
@@ -262,8 +265,20 @@ export default function Dashboard() {
     }
   };
 
-  const toggleDropdown = (jobId) => {
-    setActiveDropdown(activeDropdown === jobId ? null : jobId);
+  const toggleDropdown = (jobId: number) => {
+    setActiveDropdown(prev => (prev === jobId ? null : jobId));
+  };
+
+  const updateDropdownPosition = () => {
+    if (!activeDropdown) return;
+    const button = actionButtonRefs.current.get(activeDropdown);
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const menuWidth = 192;
+    const padding = 8;
+    const left = Math.max(padding, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - padding));
+    const top = Math.min(rect.bottom - 4, window.innerHeight - padding);
+    setDropdownPosition({ top, left });
   };
 
   // Pagination helper functions
@@ -290,6 +305,21 @@ export default function Dashboard() {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
+  }, [activeDropdown]);
+
+  useEffect(() => {
+    if (!activeDropdown) {
+      setDropdownPosition(null);
+      return;
+    }
+    updateDropdownPosition();
+    const handleReposition = () => updateDropdownPosition();
+    window.addEventListener('scroll', handleReposition, true);
+    window.addEventListener('resize', handleReposition);
+    return () => {
+      window.removeEventListener('scroll', handleReposition, true);
+      window.removeEventListener('resize', handleReposition);
+    };
   }, [activeDropdown]);
 
   return (
@@ -584,6 +614,9 @@ export default function Dashboard() {
                         <td className="py-4 px-6 text-right">
                           <div className="relative">
                             <button 
+                              ref={(el) => {
+                                actionButtonRefs.current.set(job.id, el);
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleDropdown(job.id);
@@ -593,40 +626,6 @@ export default function Dashboard() {
                             >
                               <MoreVertical size={18} />
                             </button>
-                            
-                            <AnimatePresence>
-                              {activeDropdown === job.id && (
-                                <motion.div 
-                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  transition={{ duration: 0.15 }}
-                                  className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg border border-slate-200 shadow-lg z-50 overflow-hidden"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button 
-                                    onClick={() => {
-                                      navigate(`/company/post/${job.id}`);
-                                      setActiveDropdown(null);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                                  >
-                                    <Edit3 size={14} />
-                                    Edit
-                                  </button>
-                                  <button 
-                                    onClick={() => {
-                                      setDeleteId(job.id);
-                                      setActiveDropdown(null);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                  >
-                                    <Trash2 size={14} />
-                                    Delete
-                                  </button>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
                           </div>
                         </td>
                       </motion.tr>
@@ -790,6 +789,43 @@ export default function Dashboard() {
           </div>
         )}
       </AnimatePresence>
+      {activeDropdown && dropdownPosition
+        ? ReactDOM.createPortal(
+            <AnimatePresence>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="fixed w-48 bg-white rounded-lg border border-slate-200 shadow-lg z-[100] overflow-hidden"
+                style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => {
+                    navigate(`/company/post/${activeDropdown}`);
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <Edit3 size={14} />
+                  Edit
+                </button>
+                <button
+                  onClick={() => {
+                    setDeleteId(activeDropdown);
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </motion.div>
+            </AnimatePresence>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

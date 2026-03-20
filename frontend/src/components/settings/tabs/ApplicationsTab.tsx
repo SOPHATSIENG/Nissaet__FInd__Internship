@@ -1,6 +1,15 @@
 import {ExternalLink} from 'lucide-react';
 import {Link} from 'react-router-dom';
 
+const normalizeResumeUrl = (url?: string) => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  return `https://${trimmed}`;
+};
+
 export function ApplicationsTab({ applications }: { applications: any[] }) {
   if (!applications.length) {
     return (
@@ -53,15 +62,22 @@ export function ApplicationsTab({ applications }: { applications: any[] }) {
               >
                 <ExternalLink className="w-4 h-4" /> View Internship
               </Link>
-              {app.resume_url && (
-                <a
-                  href={app.resume_url}
-                  target="_blank"
-                  rel="noreferrer"
+              {app.company_id ? (
+                <Link
+                  to={`/companies/${app.company_id}`}
                   className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
                 >
-                  View Resume
-                </a>
+                  View Company Profile
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  title="Company not available"
+                  className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg border border-emerald-100 text-emerald-300 bg-emerald-50 cursor-not-allowed"
+                >
+                  View Company Profile
+                </button>
               )}
             </div>
           </div>

@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { createNotification } = require('./notificationController');
 
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
 
@@ -119,10 +120,29 @@ const updateCompanyVerificationStatus = async (req, res) => {
         );
 
         const companyId = verificationRows?.[0]?.company_id;
+        const userId = verificationRows?.[0]?.user_id;
+        
         if (companyId) {
             await db.queryRaw(
                 'UPDATE companies SET is_verified = ? WHERE id = ?',
                 [status === 'approved' ? 1 : 0, companyId]
+            );
+        }
+
+        if (userId) {
+            const title = status === 'approved' ? 'Company Verified' : 'Verification Update';
+            const message = status === 'approved' 
+                ? 'Congratulations! Your company has been verified. You can now post internships.'
+                : `Your company verification was not approved. Reason: ${rejection_reason || 'Please contact support for more details.'}`;
+            
+            await createNotification(
+                userId,
+                title,
+                message,
+                'system',
+                'company_verification',
+                verificationId,
+                '/company/settings'
             );
         }
 
@@ -193,6 +213,30 @@ const updateStudentVerificationStatus = async (req, res) => {
 
         if (rows.affectedRows === 0) {
             return res.status(404).json({ message: 'Verification request not found' });
+        }
+
+        // Notify the student
+        const [verificationRows] = await db.queryRaw(
+            'SELECT user_id FROM student_verifications WHERE id = ? LIMIT 1',
+            [verificationId]
+        );
+
+        const userId = verificationRows?.[0]?.user_id;
+        if (userId) {
+            const title = status === 'approved' ? 'Profile Verified' : 'Verification Update';
+            const message = status === 'approved' 
+                ? 'Great news! Your student profile has been verified. You now have a verified badge.'
+                : `Your student verification was not approved. Reason: ${rejection_reason || 'Please contact support for more details.'}`;
+            
+            await createNotification(
+                userId,
+                title,
+                message,
+                'system',
+                'student_verification',
+                verificationId,
+                '/account-settings'
+            );
         }
 
         return res.json({ message: 'Verification updated', status });

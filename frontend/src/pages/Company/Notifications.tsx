@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   Building2, 
   Lock, 
@@ -6,17 +6,17 @@ import {
   CreditCard,
   Mail,
   Smartphone,
-  Globe,
   Check,
-  MessageSquare,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Trash2
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import api from '../../api/axios';
+import { useNotifications } from '../../context/NotificationContext';
 
 export default function Notifications() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'activity' | 'settings'>('activity');
+  const { notifications, loading, markAsRead, deleteNotification, markAllAsRead } = useNotifications();
 
   const navItems = [
     { name: 'Company Profile', icon: Building2, path: '/company/settings' },
@@ -24,35 +24,6 @@ export default function Notifications() {
     { name: 'Notifications', icon: Bell, path: '/company/notifications' },
     { name: 'Billing', icon: CreditCard, path: '/company/billing' },
   ];
-
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  useEffect(() => {
-    let mounted = true;
-    const loadNotifications = async () => {
-      try {
-        setLoading(true);
-        const data = await api.getNotificationCard();
-        const items = Array.isArray(data?.notifications) ? data.notifications : Array.isArray(data?.items) ? data.items : [];
-        if (mounted) {
-          setNotifications(items);
-        }
-      } catch (error: any) {
-        if (mounted) {
-          setErrorMessage(error?.message || 'Failed to load notifications.');
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    loadNotifications();
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const formattedNotifications = useMemo(() => {
     return notifications.map((notif) => ({
@@ -151,64 +122,86 @@ export default function Notifications() {
 
         <div className="flex-1">
           {activeTab === 'activity' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {errorMessage && (
-                <div className="col-span-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-                  {errorMessage}
-                </div>
-              )}
-              {loading ? (
-                <div className="col-span-full py-20 bg-white rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
-                  <div className="p-4 bg-slate-50 rounded-full mb-4">
-                    <Bell size={40} className="opacity-20" />
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-900">Loading notifications...</h3>
-                  <p className="text-sm mt-1">Fetching the latest updates.</p>
-                </div>
-              ) : formattedNotifications.length > 0 ? (
-                formattedNotifications.map((notif) => (
-                  <div
-                    key={notif.id}
-                    className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${
-                      notif.is_read ? '' : 'ring-1 ring-primary/20'
-                    }`}
+            <div className="space-y-6">
+              {notifications.length > 0 && (
+                <div className="flex justify-end">
+                  <button 
+                    onClick={markAllAsRead}
+                    className="text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-2"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-bold text-slate-900">{notif.title || 'Notification'}</h3>
-                        <p className="text-xs text-slate-500 mt-1">{notif.timeLabel}</p>
-                      </div>
-                      <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border ${
-                        notif.type === 'system' ? 'border-blue-200 bg-blue-50 text-blue-600' :
-                        notif.type === 'message' ? 'border-emerald-200 bg-emerald-50 text-emerald-600' :
-                        notif.type === 'reminder' ? 'border-amber-200 bg-amber-50 text-amber-600' :
-                        'border-slate-200 bg-slate-50 text-slate-500'
-                      }`}>
-                        {notif.type || 'system'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-600 mt-3 whitespace-pre-line">
-                      {notif.message || 'No message provided.'}
-                    </p>
-                    {notif.action_url && (
-                      <button
-                        onClick={() => window.location.assign(notif.action_url)}
-                        className="mt-4 text-sm font-semibold text-primary hover:underline"
-                      >
-                        Open related item
-                      </button>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className="col-span-full py-20 bg-white rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
-                  <div className="p-4 bg-slate-50 rounded-full mb-4">
-                    <Bell size={40} className="opacity-20" />
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-900">All caught up!</h3>
-                  <p className="text-sm mt-1">No new application messages at the moment.</p>
+                    <Check size={16} />
+                    Mark all as read
+                  </button>
                 </div>
               )}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {loading ? (
+                  <div className="col-span-full py-20 bg-white rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
+                    <div className="p-4 bg-slate-50 rounded-full mb-4">
+                      <Bell size={40} className="opacity-20" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900">Loading notifications...</h3>
+                    <p className="text-sm mt-1">Fetching the latest updates.</p>
+                  </div>
+                ) : formattedNotifications.length > 0 ? (
+                  formattedNotifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all ${
+                        notif.is_read ? 'opacity-75' : 'ring-2 ring-blue-500/10 border-blue-100'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            {!notif.is_read && <div className="w-2 h-2 rounded-full bg-blue-600"></div>}
+                            <h3 className="text-base font-bold text-slate-900">{notif.title || 'Notification'}</h3>
+                          </div>
+                          <p className="text-xs text-slate-500">{notif.timeLabel}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {!notif.is_read && (
+                            <button 
+                              onClick={() => markAsRead(notif.id)}
+                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Mark as read"
+                            >
+                              <Check size={18} />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => deleteNotification(notif.id)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-slate-600 mt-3 whitespace-pre-line">
+                        {notif.message || 'No message provided.'}
+                      </p>
+                      {notif.action_url && (
+                        <Link
+                          to={notif.action_url}
+                          className="inline-block mt-4 text-sm font-bold text-blue-600 hover:text-blue-700"
+                        >
+                          View Details &rarr;
+                        </Link>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full py-20 bg-white rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
+                    <div className="p-4 bg-slate-50 rounded-full mb-4">
+                      <Bell size={40} className="opacity-20" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900">All caught up!</h3>
+                    <p className="text-sm mt-1">No new application messages at the moment.</p>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-6">

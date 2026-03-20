@@ -42,9 +42,9 @@ export default function StudentProfile() {
         } else {
           setError('Profile not found');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching student profile:', err);
-        setError('Failed to load profile');
+        setError(err?.message || 'Failed to load profile');
       } finally {
         setLoading(false);
       }

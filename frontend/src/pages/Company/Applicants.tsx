@@ -1103,7 +1103,7 @@ export default function Applicants() {
                       Download Resume
                     </button>
                     <Link 
-                      to={`/student/${viewingApplicant.id}`}
+                      to={`/company/student/${viewingApplicant.student_id || viewingApplicant.id}`}
                       className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all"
                     >
                       <ExternalLink size={18} />

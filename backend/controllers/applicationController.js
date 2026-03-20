@@ -1,4 +1,5 @@
 ﻿const db = require('../config/db');
+const { createNotification } = require('./notificationController');
 
 const getCompanyIdByUserId = async (userId) => {
     const rows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
@@ -51,6 +52,11 @@ const getMyApplications = async (req, res) => {
         }
 
         const { page, limit, offset } = parsePagination(req.query);
+        const internshipFilterRaw = req.query?.internship_id;
+        const internshipFilter = Number.isFinite(Number(internshipFilterRaw))
+            ? Number(internshipFilterRaw)
+            : null;
+        const hasInternshipFilter = internshipFilter && internshipFilter > 0;
 
         const applications = await db.query(
             `SELECT
@@ -76,14 +82,20 @@ const getMyApplications = async (req, res) => {
              JOIN internships i ON a.internship_id = i.id
              JOIN companies c ON i.company_id = c.id
              WHERE a.student_id = ?
+             ${hasInternshipFilter ? 'AND a.internship_id = ?' : ''}
              ORDER BY a.applied_at DESC
              LIMIT ? OFFSET ?`,
-            [studentId, limit, offset]
+            hasInternshipFilter
+                ? [studentId, internshipFilter, limit, offset]
+                : [studentId, limit, offset]
         );
 
         const countRows = await db.query(
-            'SELECT COUNT(*) AS total FROM applications WHERE student_id = ?',
-            [studentId]
+            `SELECT COUNT(*) AS total
+             FROM applications
+             WHERE student_id = ?
+             ${hasInternshipFilter ? 'AND internship_id = ?' : ''}`,
+            hasInternshipFilter ? [studentId, internshipFilter] : [studentId]
         );
         const total = Number(countRows[0]?.total || 0);
         const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
@@ -139,6 +151,28 @@ const applyForInternship = async (req, res) => {
             'UPDATE internships SET applications_count = applications_count + 1 WHERE id = ?',
             [internship_id]
         );
+
+        // Notify the company
+        const internshipRows = await db.query(
+            'SELECT i.title, c.user_id FROM internships i JOIN companies c ON i.company_id = c.id WHERE i.id = ?',
+            [internship_id]
+        );
+        
+        if (internshipRows.length > 0) {
+            const companyUserId = internshipRows[0].user_id;
+            const internshipTitle = internshipRows[0].title;
+            const studentName = req.user.fullName || 'A student';
+            
+            await createNotification(
+                companyUserId,
+                'New Application',
+                `${studentName} has applied for "${internshipTitle}"`,
+                'application',
+                'application',
+                result.insertId,
+                `/company/applications`
+            );
+        }
 
         return res.status(201).json({
             message: 'Application submitted successfully',
@@ -320,6 +354,45 @@ const updateApplicationStatus = async (req, res) => {
         // Update the status in database
         await db.query('UPDATE applications SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, id]);
 
+        // Notify the student
+        const studentInfoRows = await db.query(
+            `SELECT u.id as user_id, i.title as internship_title, c.name as company_name
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN users u ON s.user_id = u.id
+             JOIN internships i ON a.internship_id = i.id
+             JOIN companies c ON i.company_id = c.id
+             WHERE a.id = ?`,
+            [id]
+        );
+
+        if (studentInfoRows.length > 0) {
+            const { user_id, internship_title, company_name } = studentInfoRows[0];
+            let title = 'Application Update';
+            let message = `Your application for "${internship_title}" at ${company_name} has been updated to: ${status}`;
+
+            if (status === 'shortlisted') {
+                title = 'Application Shortlisted!';
+                message = `Congratulations! You have been shortlisted for "${internship_title}" at ${company_name}.`;
+            } else if (status === 'rejected') {
+                title = 'Application Status';
+                message = `We regret to inform you that your application for "${internship_title}" at ${company_name} was not selected at this time.`;
+            } else if (status === 'accepted') {
+                title = 'Application Accepted!';
+                message = `Great news! Your application for "${internship_title}" at ${company_name} has been accepted.`;
+            }
+
+            await createNotification(
+                user_id,
+                title,
+                message,
+                'application',
+                'application',
+                id,
+                `/profile/applications`
+            );
+        }
+
         console.log(`âœ… Successfully updated application ${id} to status: ${status}`);
 
         return res.json({ 
@@ -331,6 +404,159 @@ const updateApplicationStatus = async (req, res) => {
     } catch (error) {
         console.error('Error updating application status:', error);
         return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const updateMyApplication = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        if (req.user?.role !== 'student') {
+            return res.status(403).json({ message: 'Only students can update their applications' });
+        }
+
+        const studentId = await getStudentIdByUserId(userId);
+        if (!studentId) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const applicationId = Number(req.params.id);
+        if (!applicationId) {
+            return res.status(400).json({ message: 'Application ID is required' });
+        }
+
+        const coverLetter = typeof req.body?.cover_letter === 'string' ? req.body.cover_letter.trim() : null;
+
+        const result = await db.query(
+            'UPDATE applications SET cover_letter = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND student_id = ?',
+            [coverLetter || null, applicationId, studentId]
+        );
+
+        if (!result?.affectedRows) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        return res.json({ message: 'Application updated successfully' });
+    } catch (error) {
+        console.error('Error updating application:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const deleteMyApplication = async (req, res) => {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    if (req.user?.role !== 'student') {
+        return res.status(403).json({ message: 'Only students can delete their applications' });
+    }
+
+    const studentId = await getStudentIdByUserId(userId);
+    if (!studentId) {
+        return res.status(404).json({ message: 'Student profile not found' });
+    }
+
+    const applicationId = Number(req.params.id);
+    if (!applicationId) {
+        return res.status(400).json({ message: 'Application ID is required' });
+    }
+
+    const connection = await db.connection();
+    try {
+        await connection.beginTransaction();
+
+        const [rows] = await connection.execute(
+            'SELECT id, internship_id FROM applications WHERE id = ? AND student_id = ? LIMIT 1',
+            [applicationId, studentId]
+        );
+
+        if (!rows || rows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const internshipId = rows[0].internship_id;
+
+        await connection.execute('DELETE FROM applications WHERE id = ? AND student_id = ?', [applicationId, studentId]);
+
+        if (internshipId) {
+            await connection.execute(
+                'UPDATE internships SET applications_count = GREATEST(applications_count - 1, 0) WHERE id = ?',
+                [internshipId]
+            );
+        }
+
+        await connection.commit();
+        return res.json({ message: 'Application deleted successfully' });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error deleting application:', error);
+        return res.status(500).json({ message: 'Server error' });
+    } finally {
+        connection.release();
+    }
+};
+
+const deleteMyApplicationByInternship = async (req, res) => {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    if (req.user?.role !== 'student') {
+        return res.status(403).json({ message: 'Only students can delete their applications' });
+    }
+
+    const studentId = await getStudentIdByUserId(userId);
+    if (!studentId) {
+        return res.status(404).json({ message: 'Student profile not found' });
+    }
+
+    const internshipId = Number(req.params.internship_id);
+    if (!internshipId) {
+        return res.status(400).json({ message: 'Internship ID is required' });
+    }
+
+    const connection = await db.connection();
+    try {
+        await connection.beginTransaction();
+
+        const [rows] = await connection.execute(
+            'SELECT id FROM applications WHERE internship_id = ? AND student_id = ? LIMIT 1',
+            [internshipId, studentId]
+        );
+
+        if (!rows || rows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        await connection.execute(
+            'DELETE FROM applications WHERE internship_id = ? AND student_id = ?',
+            [internshipId, studentId]
+        );
+
+        await connection.execute(
+            'UPDATE internships SET applications_count = GREATEST(applications_count - 1, 0) WHERE id = ?',
+            [internshipId]
+        );
+
+        await connection.commit();
+        return res.json({ message: 'Application deleted successfully' });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error deleting application by internship:', error);
+        return res.status(500).json({ message: 'Server error' });
+    } finally {
+        connection.release();
     }
 };
 
@@ -552,6 +778,9 @@ module.exports = {
     getStudentApplications,
     getInternshipApplications,
     updateApplicationStatus,
+    updateMyApplication,
+    deleteMyApplication,
+    deleteMyApplicationByInternship,
     getCompanyApplications,
     getAllApplications,
     bulkUpdateApplicationStatus,

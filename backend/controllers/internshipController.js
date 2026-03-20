@@ -259,63 +259,6 @@ const getAllInternships = async (req, res) => {
         return res.status(500).json({ success: false, message: `Server error: ${message}` });
     }
 };
-            const skillList = Array.isArray(skills) ? skills : [skills];
-            if (skillList.length > 0) {
-                countQuery += ` AND i.id IN (
-                    SELECT iskill.internship_id 
-                    FROM internship_skills iskill 
-                    JOIN skills s ON iskill.skill_id = s.id 
-                    WHERE s.name IN (?)
-                )`;
-                countParams.push(skillList);
-            }
-        }
-
-        let internships;
-        let total = 0;
-
-        try {
-            const countResult = await db.query(countQuery, countParams);
-            total = countResult[0]?.total || 0;
-            internships = await db.query(query, queryParams);
-        } catch (error) {
-            console.warn('Primary query failed:', error);
-            // Fallback for legacy schema or SQL differences
-            try {
-                let fallbackSql = `
-                    SELECT
-                        i.*,
-                        c.name AS company_name,
-                        c.logo AS company_logo,
-                        c.headquarters AS company_location
-                    FROM internships i
-                    JOIN companies c ON i.company_id = c.id
-                    WHERE i.status = 'active'
-                    ORDER BY i.created_at DESC
-                    LIMIT ?
-                `;
-                internships = await db.query(fallbackSql, [limit || 10]);
-                total = internships.length;
-            } catch (fallbackError) {
-                console.error('Fallback query failed:', fallbackError);
-                throw fallbackError;
-            }
-        }
-
-        return res.json({ 
-            success: true,
-            total,
-            count: internships.length,
-            internships 
-        });
-    } catch (error) {
-        console.error('Error fetching internships:', error);
-        const message = error?.message || 'Server error';
-        // include fallback detail for debugging in dev only
-        return res.status(500).json({ success: false, message: `Server error: ${message}` });
-    }
-};
-
 /**
  * Get featured companies
  */

@@ -214,13 +214,6 @@ export default function MyApplications() {
                     >
                       View Details
                     </button>
-                    <Link 
-                      to={`/evaluation/${app.id}`}
-                      className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700 transition-all"
-                    >
-                      Check Evaluation
-                      <ChevronRight size={16} />
-                    </Link>
                   </div>
                 </div>
               </motion.div>

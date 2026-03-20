@@ -16,13 +16,14 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/axios';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
 
 export default function PostInternship() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEditMode = !!id && id !== 'undefined' && id !== 'null';
 
   const [formData, setFormData] = useState({
@@ -57,8 +58,31 @@ export default function PostInternship() {
   const requirementsRef = useRef(null);
   const [showPreview, setShowPreview] = useState({ description: false, requirements: false });
 
+  const applyInternshipToForm = (internship) => {
+    if (!internship) return;
+    setFormData({
+      title: internship.title || '',
+      location: internship.location || 'Phnom Penh',
+      duration: internship.duration_months?.toString() || internship.duration?.toString?.() || '',
+      description: internship.description || '',
+      requirements: internship.requirements || '',
+      image: internship.image || '',
+      salaryType: internship.stipend > 0 ? 'paid' : 'unpaid',
+      minSalary: internship.stipend ? internship.stipend.toString() : '',
+      maxSalary: internship.stipend ? internship.stipend.toString() : '',
+      skills: internship.skills || [],
+      positions: internship.positions || 1,
+      deadline: internship.application_deadline ? String(internship.application_deadline).split('T')[0] : ''
+    });
+  };
+
   useEffect(() => {
     if (isEditMode) {
+      const stateInternship = location.state?.internship;
+      if (stateInternship) {
+        applyInternshipToForm(stateInternship);
+        return;
+      }
       fetchInternshipData();
     }
   }, [id, isEditMode]);
@@ -66,25 +90,9 @@ export default function PostInternship() {
   const fetchInternshipData = async () => {
     try {
       setLoading(true);
-      const response = await api.getInternshipById(id);
+      const response = await api.getCompanyInternshipById(id);
       const internship = response.internship;
-      
-      if (internship) {
-        setFormData({
-          title: internship.title || '',
-          location: internship.location || 'Phnom Penh',
-          duration: internship.duration_months?.toString() || '',
-          description: internship.description || '',
-          requirements: internship.requirements || '',
-          image: internship.image || '',
-          salaryType: internship.stipend > 0 ? 'paid' : 'unpaid',
-          minSalary: internship.stipend ? internship.stipend.toString() : '',
-          maxSalary: internship.stipend ? internship.stipend.toString() : '',
-          skills: [], // Will be populated separately if needed
-          positions: internship.positions || 1,
-          deadline: internship.application_deadline ? internship.application_deadline.split('T')[0] : ''
-        });
-      }
+      applyInternshipToForm(internship);
     } catch (error) {
       console.error('Error fetching internship data:', error);
       alert('Failed to load internship data. Please try again.');

@@ -36,6 +36,26 @@ const expireInternshipsByDeadline = async (companyId = null) => {
     }
 };
 
+/**
+ * Helper to reopen/close internships based on deadline (keeps archived as-is)
+ */
+const normalizeInternshipStatusByDeadline = async (companyId = null) => {
+    const baseSql = `
+        UPDATE internships
+        SET status = CASE
+            WHEN application_deadline IS NOT NULL AND application_deadline < CURDATE() THEN 'closed'
+            ELSE 'active'
+        END
+        WHERE status != 'archived'
+          AND application_deadline IS NOT NULL
+    `;
+    if (companyId) {
+        await db.query(`${baseSql} AND company_id = ?`, [companyId]);
+    } else {
+        await db.query(baseSql);
+    }
+};
+
 // Helper function to build IN clause with proper placeholders
 const buildInClause = (columnName, items) => {
     if (!items || items.length === 0) {
@@ -53,6 +73,7 @@ const buildInClause = (columnName, items) => {
  */
 const getAllInternships = async (req, res) => {
     try {
+        await normalizeInternshipStatusByDeadline();
         await expireInternshipsByDeadline();
         const { search, location, skills, work_mode, salary_type, limit: queryLimit } = req.query;
         const parsedLimit = Number.parseInt(queryLimit, 10);
@@ -516,36 +537,76 @@ const updateInternship = async (req, res) => {
             skills = []
         } = req.body;
 
+        const today = new Date();
+        const deadlineDate = application_deadline ? new Date(application_deadline) : null;
+        const nextStatus =
+            deadlineDate && !Number.isNaN(deadlineDate.getTime()) && deadlineDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                ? 'closed'
+                : 'active';
+
         const connection = await db.connection();
         
         try {
             await connection.beginTransaction();
 
-            // Update internship
-              await connection.execute(
-                  `UPDATE internships SET
-                      title = ?, description = ?, image = ?, requirements = ?, location = ?,
-                      type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
-                      positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
-                      updated_at = CURRENT_TIMESTAMP
-                   WHERE id = ?`,
-                  [
-                      title,
-                      description,
-                      image || null,
-                      requirements || null,
-                      location,
-                      type,
-                    duration_months,
-                    stipend,
-                    stipend_currency,
-                    positions,
-                    application_deadline,
-                    start_date || null,
-                    end_date || null,
-                    id
-                ]
-            );
+            // Update internship (allow reopening by deadline)
+            try {
+                await connection.execute(
+                    `UPDATE internships SET
+                        title = ?, description = ?, image = ?, requirements = ?, location = ?,
+                        type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
+                        positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
+                        status = ?,
+                        is_flagged = 0,
+                        updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ?`,
+                    [
+                        title,
+                        description,
+                        image || null,
+                        requirements || null,
+                        location,
+                        type,
+                        duration_months,
+                        stipend,
+                        stipend_currency,
+                        positions,
+                        application_deadline,
+                        start_date || null,
+                        end_date || null,
+                        nextStatus,
+                        id
+                    ]
+                );
+            } catch (error) {
+                if (!isBadFieldError(error)) throw error;
+                await connection.execute(
+                    `UPDATE internships SET
+                        title = ?, description = ?, image = ?, requirements = ?, location = ?,
+                        type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
+                        positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
+                        status = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ?`,
+                    [
+                        title,
+                        description,
+                        image || null,
+                        requirements || null,
+                        location,
+                        type,
+                        duration_months,
+                        stipend,
+                        stipend_currency,
+                        positions,
+                        application_deadline,
+                        start_date || null,
+                        end_date || null,
+                        nextStatus,
+                        id
+                    ]
+                );
+            }
 
             // Handle skills - remove existing skills and add new ones
             await connection.execute(
@@ -610,8 +671,23 @@ const deleteInternship = async (req, res) => {
             if (existing[0].company_id !== companyId) return res.status(403).json({ message: 'Forbidden' });
         }
 
-        await db.query('DELETE FROM internships WHERE id = ?', [id]);
-        return res.json({ success: true, message: 'Internship deleted' });
+        try {
+            await db.query(
+                `UPDATE internships
+                 SET status = 'archived', is_flagged = 1
+                 WHERE id = ?`,
+                [id]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            await db.query(
+                `UPDATE internships
+                 SET status = 'archived'
+                 WHERE id = ?`,
+                [id]
+            );
+        }
+        return res.json({ success: true, message: 'Internship archived' });
     } catch (error) {
         console.error('Delete failed:', error);
         return res.status(500).json({ message: 'Server error' });
@@ -788,6 +864,7 @@ const getCompanyInternships = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Company profile not found' });
         }
 
+        await normalizeInternshipStatusByDeadline(companyId);
         await expireInternshipsByDeadline(companyId);
 
         const sql = `
@@ -1032,6 +1109,7 @@ const getDashboardStats = async (req, res) => {
             return res.status(404).json({ message: 'Company not found' });
         }
 
+        await normalizeInternshipStatusByDeadline(companyId);
         await expireInternshipsByDeadline(companyId);
 
         // Get total posts
@@ -1178,6 +1256,194 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
+/**
+ * Get internship details by ID for the authenticated company (any status)
+ */
+const getCompanyInternshipById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user?.userId || req.user?.id;
+        const companyId = await getCompanyIdByUserId(userId);
+        if (!companyId) {
+            return res.status(404).json({ success: false, message: 'Company profile not found' });
+        }
+
+        const sql = `
+            SELECT
+                i.id,
+                i.company_id,
+                i.title,
+                i.description,
+                i.requirements,
+                i.responsibilities,
+                i.benefits,
+                i.location,
+                i.is_remote,
+                i.is_hybrid,
+                i.type,
+                i.type AS work_mode,
+                i.duration_months,
+                i.duration_months AS duration,
+                i.stipend,
+                i.stipend_currency,
+                i.application_deadline,
+                i.application_deadline AS deadline,
+                i.start_date,
+                i.end_date,
+                i.status,
+                i.views_count AS views,
+                i.applications_count,
+                i.created_at,
+                i.updated_at,
+                c.name AS company_name,
+                c.headquarters AS company_location,
+                c.description AS company_description,
+                c.logo AS company_logo,
+                c.website AS company_website,
+                c.industry AS company_industry,
+                c.company_size
+             FROM internships i
+             JOIN companies c ON i.company_id = c.id
+             WHERE i.id = ? AND i.company_id = ?
+        `;
+
+        let results;
+        try {
+            results = await db.query(sql, [id, companyId]);
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            results = await db.query(
+                `SELECT i.*, c.company_name, c.logo AS company_logo 
+                 FROM internships i 
+                 JOIN companies c ON i.company_id = c.id 
+                 WHERE i.id = ? AND i.company_id = ?`,
+                [id, companyId]
+            );
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({ success: false, message: 'Internship not found' });
+        }
+
+        const internship = results[0];
+
+        try {
+            const skills = await db.query(`
+                SELECT s.id, s.name, s.category, isk.skill_level, isk.is_required
+                FROM internship_skills isk
+                JOIN skills s ON isk.skill_id = s.id
+                WHERE isk.internship_id = ?
+            `, [id]);
+            internship.skills = skills;
+        } catch (err) {
+            internship.skills = [];
+        }
+
+        return res.json({ success: true, internship });
+    } catch (error) {
+        console.error('Error fetching company internship details:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * Get archived internships for the authenticated company
+ */
+const getCompanyArchivedInternships = async (req, res) => {
+    try {
+        const userId = req.user?.userId || req.user?.id;
+        const companyId = await getCompanyIdByUserId(userId);
+        if (!companyId) {
+            return res.status(404).json({ success: false, message: 'Company profile not found' });
+        }
+
+        await expireInternshipsByDeadline(companyId);
+
+        const sql = `
+            SELECT
+                i.*,
+                c.name AS company_name,
+                c.logo AS company_logo,
+                COUNT(a.id) AS applicant_count
+            FROM internships i
+            LEFT JOIN companies c ON c.id = i.company_id
+            LEFT JOIN applications a ON i.id = a.internship_id
+            WHERE i.company_id = ? AND i.status = 'archived'
+            GROUP BY i.id
+            ORDER BY i.created_at DESC
+        `;
+        let internships;
+        try {
+            internships = await db.query(sql, [companyId]);
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            const fallbackSql = `
+                SELECT
+                    i.*,
+                    COUNT(a.id) AS applicant_count
+                FROM internships i
+                LEFT JOIN applications a ON i.id = a.internship_id
+                WHERE i.company_id = ? AND i.status = 'archived'
+                GROUP BY i.id
+                ORDER BY i.created_at DESC
+            `;
+            internships = await db.query(fallbackSql, [companyId]);
+        }
+
+        return res.json({ success: true, internships });
+    } catch (error) {
+        console.error('Error fetching archived internships:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * Restore an archived internship
+ */
+const restoreInternship = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (req.user && req.user.role === 'company') {
+            const companyId = await getCompanyIdByUserId(req.user.userId);
+            const existing = await db.query('SELECT company_id FROM internships WHERE id = ?', [id]);
+            if (existing.length === 0) return res.status(404).json({ message: 'Not found' });
+            if (existing[0].company_id !== companyId) return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        try {
+            await db.query(
+                `UPDATE internships
+                 SET status = CASE
+                     WHEN application_deadline IS NOT NULL AND application_deadline < CURDATE()
+                     THEN 'closed'
+                     ELSE 'active'
+                 END,
+                 is_flagged = 0
+                 WHERE id = ?`,
+                [id]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            await db.query(
+                `UPDATE internships
+                 SET status = CASE
+                     WHEN application_deadline IS NOT NULL AND application_deadline < CURDATE()
+                     THEN 'closed'
+                     ELSE 'active'
+                 END
+                 WHERE id = ?`,
+                [id]
+            );
+        }
+
+        return res.json({ success: true, message: 'Internship restored' });
+    } catch (error) {
+        console.error('Restore failed:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const getApplicationTrends = async (req, res) => {
     try {
         const userId = req.user?.userId || req.user?.id;
@@ -1227,8 +1493,11 @@ module.exports = {
     getFeaturedCompanies,
     getAllCompanies,
     getInternshipById,
+    getCompanyInternshipById,
     createInternship,
     getCompanyInternships,
+    getCompanyArchivedInternships,
+    restoreInternship,
     deleteInternship,
     updateInternship,
     getDashboardStats,

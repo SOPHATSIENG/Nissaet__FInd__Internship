@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown, Calendar } from 'lucide-react';
+import { Search, Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown, Calendar, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
@@ -69,6 +69,7 @@ export default function Navbar() {
     { name: 'Events', path: '/company/events', icon: Calendar },
     { name: 'Applicants', path: '/company/applicants', icon: Users },
     { name: 'Employment', path: '/company/my-applications', icon: Briefcase },
+    { name: 'Archived', path: '/company/archived', icon: History },
     { name: 'Settings', path: '/company/settings', icon: SettingsIcon },
   ];
 

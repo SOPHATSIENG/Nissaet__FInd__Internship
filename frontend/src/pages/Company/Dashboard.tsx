@@ -801,13 +801,16 @@ export default function Dashboard() {
                 style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <button
-                  onClick={() => {
-                    navigate(`/company/post/${activeDropdown}`);
-                    setActiveDropdown(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                >
+                                  <button 
+                                    onClick={() => {
+                                      const selected = currentInternships.find((item: any) => item.id === activeDropdown);
+                                      navigate(`/company/post/${activeDropdown}`, {
+                                        state: selected ? { internship: selected } : undefined
+                                      });
+                                      setActiveDropdown(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                  >
                   <Edit3 size={14} />
                   Edit
                 </button>

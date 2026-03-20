@@ -212,6 +212,26 @@ const getStudentIdByUserId = async (conn, userId) => {
 
 const createCompanyProfile = async (conn, userId, payload = {}) => {
     const companySize = VALID_COMPANY_SIZES.has(payload.company_size) ? payload.company_size : null;
+    const logoValue = payload.logo || null;
+    if (logoValue && String(logoValue).length > 255) {
+        try {
+            const [rows] = await conn.execute(
+                `SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH AS max_len
+                 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'companies'
+                   AND COLUMN_NAME = 'logo'
+                 LIMIT 1`
+            );
+            const column = rows?.[0];
+            const dataType = String(column?.DATA_TYPE || '').toLowerCase();
+            if (dataType && !['longtext', 'text', 'mediumtext'].includes(dataType)) {
+                await conn.execute(`ALTER TABLE companies MODIFY COLUMN logo LONGTEXT`);
+            }
+        } catch (error) {
+            console.warn('Could not ensure companies.logo is LONGTEXT:', error.message);
+        }
+    }
     try {
         await conn.execute(
             `INSERT INTO companies
@@ -223,7 +243,7 @@ const createCompanyProfile = async (conn, userId, payload = {}) => {
                 payload.company_bio || payload.bio || null,
                 payload.industry || null,
                 payload.website || null,
-                payload.logo || null,
+                logoValue,
                 companySize,
                 payload.founded_year || null,
                 payload.location || payload.headquarters || null

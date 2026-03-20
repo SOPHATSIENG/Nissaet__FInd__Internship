@@ -12,6 +12,7 @@ export default function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationCard, setNotificationCard] = useState<{ unreadCount: number; items: any[] } | null>(null);
+  const [logoError, setLogoError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const companyName =
@@ -28,7 +29,28 @@ export default function Navbar() {
     user?.company_logo ||
     '';
 
+  const toAbsoluteUrl = (value: string) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
+      return raw;
+    }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const base = apiBase.replace(/\/api\/?$/, '');
+    if (raw.startsWith('/')) return `${base}${raw}`;
+    return `${base}/${raw}`;
+  };
+
+  const resolvedLogo = toAbsoluteUrl(companyLogo);
+
   const avatarUrl = user?.profile_image || companyLogo || '';
+
+  const companyInitials = companyName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('');
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -84,9 +106,16 @@ export default function Navbar() {
       <div className="max-w-[1280px] mx-auto flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link to="/company" className="flex items-center gap-3 group">
-            <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white overflow-hidden">
-              {companyLogo ? (
-                <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
+            <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white overflow-hidden font-bold text-sm">
+              {resolvedLogo && !logoError ? (
+                <img
+                  src={resolvedLogo}
+                  alt={companyName}
+                  className="h-full w-full object-cover"
+                  onError={() => setLogoError(true)}
+                />
+              ) : companyInitials ? (
+                <span>{companyInitials}</span>
               ) : (
                 <Briefcase size={24} />
               )}

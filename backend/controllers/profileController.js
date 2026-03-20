@@ -18,6 +18,25 @@ const toBoolean = (value, fallback = false) => {
 };
 
 const updateCompanyProfile = async (userId, updates) => {
+    if (updates?.logo && String(updates.logo).length > 255) {
+        try {
+            const columns = await db.query(
+                `SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH AS max_len
+                 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'companies'
+                   AND COLUMN_NAME = 'logo'
+                 LIMIT 1`
+            );
+            const column = columns?.[0];
+            const dataType = String(column?.DATA_TYPE || '').toLowerCase();
+            if (dataType && !['longtext', 'text', 'mediumtext'].includes(dataType)) {
+                await db.query(`ALTER TABLE companies MODIFY COLUMN logo LONGTEXT`);
+            }
+        } catch (error) {
+            console.warn('Could not ensure companies.logo is LONGTEXT:', error.message);
+        }
+    }
     const companyColumns = await getTableColumns('companies');
     const entries = Object.entries(updates).filter(([column, value]) => companyColumns.has(column) && value !== undefined);
     if (entries.length === 0) return;

@@ -28,6 +28,7 @@ import Applicants from '../pages/Company/Applicants';
 import AllApplicants from '../pages/Company/AllApplicants';
 import RealApplicants from '../pages/Company/RealApplicants';
 import MyApplications from '../pages/Company/MyApplications';
+import ArchivedInternships from '../pages/Company/ArchivedInternships';
 import Settings from '../pages/Company/Settings';
 import Security from '../pages/Company/Security';
 import Notifications from '../pages/Company/Notifications';
@@ -268,6 +269,7 @@ export default function WebRouter() {
           <Route path="all-applicants" element={<AllApplicants />} />
           <Route path="real-applicants" element={<RealApplicants />} />
           <Route path="my-applications" element={<MyApplications />} />
+          <Route path="archived" element={<ArchivedInternships />} />
           <Route path="settings" element={<Settings />} />
           <Route path="security" element={<Security />} />
           <Route path="notifications" element={<Notifications />} />

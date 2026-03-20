@@ -63,6 +63,7 @@ export default function MyApplications() {
             positions: app.positions ?? 1,
             stipend: app.stipend,
             stipendCurrency: app.stipend_currency || 'USD',
+            image: app.image || '',
             logo: app.company_logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&background=0D8ABC&color=fff`
           };
         });
@@ -171,7 +172,7 @@ export default function MyApplications() {
               >
                 <div className="p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
                   <div className="h-16 w-16 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
-                    <img src={app.logo} alt={app.company} className="h-full w-full object-cover" />
+                    <img src={app.image || app.logo} alt={app.company} className="h-full w-full object-cover" />
                   </div>
                   
                   <div className="flex-1 min-w-0">
@@ -213,13 +214,6 @@ export default function MyApplications() {
                     >
                       View Details
                     </button>
-                    <Link 
-                      to={`/evaluation/${app.id}`}
-                      className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700 transition-all"
-                    >
-                      Check Evaluation
-                      <ChevronRight size={16} />
-                    </Link>
                   </div>
                 </div>
               </motion.div>
@@ -264,7 +258,7 @@ export default function MyApplications() {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
                       <div className="h-8 w-8 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
-                        <img src={selectedApp.logo} alt={selectedApp.company} className="h-full w-full object-cover" />
+                        <img src={selectedApp.image || selectedApp.logo} alt={selectedApp.company} className="h-full w-full object-cover" />
                       </div>
                       <span className="font-semibold">{selectedApp.company}</span>
                     </div>

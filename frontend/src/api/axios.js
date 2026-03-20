@@ -206,6 +206,12 @@ export const api = {
     });
   },
 
+  getCompanyInternshipById(id) {
+    return request(`/internships/company/${id}`, { auth: true })
+      .then((data) => data)
+      .catch(() => request(`/internships/${id}`).then((data) => data));
+  },
+
   getCompanies(params = {}) {
     const query = new URLSearchParams(
       Object.entries(params)
@@ -325,6 +331,10 @@ export const api = {
     return request('/internships/company/mine', { auth: true });
   },
 
+  getCompanyArchivedInternships() {
+    return request('/internships/company/archived', { auth: true });
+  },
+
   createInternship(payload) {
     return request('/internships', { method: 'POST', auth: true, body: payload });
   },
@@ -335,6 +345,10 @@ export const api = {
 
   deleteInternship(id) {
     return request(`/internships/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  restoreInternship(id) {
+    return request(`/internships/${id}/restore`, { method: 'PUT', auth: true });
   },
 
   // Dashboard endpoints

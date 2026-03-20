@@ -140,6 +140,36 @@ const applyForInternship = async (req, res) => {
             [internship_id]
         );
 
+        try {
+            const companyRows = await db.query(
+                `SELECT u.id AS user_id, i.title
+                 FROM internships i
+                 JOIN companies c ON i.company_id = c.id
+                 JOIN users u ON c.user_id = u.id
+                 WHERE i.id = ?
+                 LIMIT 1`,
+                [internship_id]
+            );
+            if (companyRows.length > 0) {
+                const { user_id, title } = companyRows[0];
+                await db.query(
+                    `INSERT INTO notifications (user_id, title, message, type, related_entity_type, related_entity_id, action_url)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        user_id,
+                        'New application received',
+                        `A student applied for "${title}".`,
+                        'info',
+                        'application',
+                        result.insertId,
+                        '/company/applicants'
+                    ]
+                );
+            }
+        } catch (notifyError) {
+            console.error('Notification insert failed:', notifyError.message);
+        }
+
         return res.status(201).json({
             message: 'Application submitted successfully',
             applicationId: result.insertId

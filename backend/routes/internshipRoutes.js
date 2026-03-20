@@ -13,6 +13,8 @@ router.get('/companies', internshipController.getAllCompanies);
 // Company routes (must be before /:id to avoid conflicts)
 router.get('/company', authenticate, authorize('company'), internshipController.getCompanyInternships);
 router.get('/company/mine', authenticate, authorize('company'), internshipController.getCompanyInternships);
+router.get('/company/archived', authenticate, authorize('company'), internshipController.getCompanyArchivedInternships);
+router.get('/company/:id', authenticate, authorize('company'), internshipController.getCompanyInternshipById);
 
 // Student routes (must be before /:id to avoid conflicts)
 router.get('/matching', authenticate, authorize('student'), internshipController.getMatchingInternships);
@@ -33,6 +35,7 @@ router.delete('/:id/save', authenticate, authorize('student'), internshipControl
 // CRUD operations
 router.post('/', authenticate, authorize('company', 'admin'), internshipController.createInternship);
 router.put('/:id', authenticate, authorize('company', 'admin'), internshipController.updateInternship);
+router.put('/:id/restore', authenticate, authorize('company', 'admin'), internshipController.restoreInternship);
 router.delete('/:id', authenticate, authorize('company', 'admin'), internshipController.deleteInternship);
 
 module.exports = router;

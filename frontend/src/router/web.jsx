@@ -49,13 +49,18 @@ import { StudentProfile as AdminStudentProfile } from '../pages/Admine/StudentPr
 import { motion, AnimatePresence } from 'motion/react';
 import { ProfileProvider } from '../context/ProfileContext';
 import { Outlet } from 'react-router-dom';
+import { Suspended } from '../pages/Suspended';
 
 function RequireAuth({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (String(user?.status || '').toLowerCase() === 'suspended') {
+    return <Navigate to="/suspended" replace />;
   }
 
   return children;
@@ -66,6 +71,10 @@ function RequireStudentArea({ children }) {
 
   if (!isAuthenticated) {
     return children;
+  }
+
+  if (String(user?.status || '').toLowerCase() === 'suspended') {
+    return <Navigate to="/suspended" replace />;
   }
 
   if (user?.role === 'admin') {
@@ -91,6 +100,10 @@ function RequireCompany({ children }) {
 
   if (user?.role !== 'company') {
     return <Navigate to="/" replace />;
+  }
+
+  if (String(user?.status || '').toLowerCase() === 'suspended' && location.pathname !== '/company/suspended') {
+    return <Navigate to="/company/suspended" replace />;
   }
 
   const isVerified = user?.company_profile?.is_verified === 1 || user?.company_profile?.is_verified === true;
@@ -154,11 +167,24 @@ function RequireAdmin({ children }) {
 
 const PageWrapper = ({ children }) => {
   const location = useLocation();
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const handler = () => setRefreshKey((prev) => prev + 1);
+    window.addEventListener('app:data-refresh', handler);
+    return () => window.removeEventListener('app:data-refresh', handler);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app:route-change', { detail: { path: location.pathname } }));
+    }
+  }, [location.pathname]);
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key={location.pathname}
+        key={`${location.pathname}-${refreshKey}`}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -10 }}
@@ -206,6 +232,8 @@ export default function WebRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/suspended" element={<Suspended />} />
+        <Route path="/company/suspended" element={<Suspended />} />
         {/* Public Auth Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/admin/login" element={<AdminLogin />} />

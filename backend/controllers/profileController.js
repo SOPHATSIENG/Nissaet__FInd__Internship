@@ -784,5 +784,6 @@ module.exports = {
     clearNotifications,
     updateNotificationSettings,
     updateTwoFactorSettings,
-    updatePassword
+    updatePassword,
+    getProfileSettingsByUserId
 };

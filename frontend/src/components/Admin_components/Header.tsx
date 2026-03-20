@@ -50,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const isActivityFeed = true;
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -68,6 +69,22 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
 
   const loadNotifications = async () => {
     try {
+      if (isActivityFeed) {
+        const data = await api.adminGetDashboardOverview();
+        const items = Array.isArray(data?.activity) ? data.activity : [];
+        const mapped = items.map((item: any, idx: number) => ({
+          id: `${item.title || 'activity'}-${item.time || idx}`,
+          title: item.title || 'Activity',
+          message: item.desc || '',
+          time: timeAgo(item.time),
+          read: false,
+          type: mapType(item.type),
+          actionUrl: null
+        }));
+        setNotifications(mapped);
+        return;
+      }
+
       const data = await api.getNotificationCard();
       const items = Array.isArray(data?.notifications) ? data.notifications : Array.isArray(data?.items) ? data.items : [];
       const mapped = items.map((item: any) => ({
@@ -93,6 +110,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
 
   const markAsRead = async (id: number | string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    if (isActivityFeed) return;
     try {
       await api.markNotificationsRead({ ids: [id] });
     } catch (error) {
@@ -102,6 +120,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
 
   const markAllAsRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    if (isActivityFeed) return;
     try {
       await api.markNotificationsRead({ all: true });
     } catch (error) {
@@ -111,6 +130,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
 
   const deleteNotification = async (id: number | string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    if (isActivityFeed) return;
     try {
       await api.deleteNotification(id);
     } catch (error) {
@@ -120,6 +140,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
 
   const clearAllNotifications = async () => {
     setNotifications([]);
+    if (isActivityFeed) return;
     try {
       await api.clearNotifications();
     } catch (error) {
@@ -298,7 +319,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
 
         <div 
           className="flex items-center gap-3 cursor-pointer hover:bg-white p-2 -m-2 rounded-xl transition-all hover:shadow-md hover:shadow-black/5 hover:scale-[1.02]"
-          onClick={() => navigate('/profile')}
+          onClick={() => navigate('/admin/profile')}
         >
           <div className="flex flex-col items-end">
             <span className="text-sm font-bold text-text-primary">{settings.name || 'Sophea Chan'}</span>

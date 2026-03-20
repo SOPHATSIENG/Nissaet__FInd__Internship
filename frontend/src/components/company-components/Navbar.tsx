@@ -23,6 +23,7 @@ export default function Navbar() {
   const companyEmail = user?.email || '';
 
   const avatarUrl = user?.profile_image || '';
+  const accountStatus = String(user?.status || 'active').toLowerCase();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -190,7 +191,14 @@ export default function Navbar() {
                   className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-[60]"
                 >
                   <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                    <p className="text-sm font-semibold text-slate-900">{companyName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{companyName}</p>
+                      {accountStatus === 'suspended' && (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase border border-rose-200">
+                          Suspended
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500 truncate">{companyEmail}</p>
                   </div>
                   <div className="p-2">

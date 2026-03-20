@@ -43,9 +43,43 @@ export default function Dashboard() {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
+
+  const getDeadlineEnd = (value?: string | null) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('-').map(Number);
+      return new Date(year, month - 1, day, 23, 59, 59, 999);
+    }
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const formatDeadlineDate = (value?: string | null) => {
+    if (!value) return 'No deadline';
+    const trimmed = value.trim();
+    if (!trimmed) return 'No deadline';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('-').map(Number);
+      const localDate = new Date(year, month - 1, day);
+      return localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return 'No deadline';
+    return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const isJobActive = (job: any, now: Date) => {
+    const isActiveStatus = String(job.status || '').toLowerCase() === 'active';
+    const deadlineEnd = getDeadlineEnd(job.application_deadline);
+    const isExpired = deadlineEnd ? deadlineEnd < now : false;
+    return isActiveStatus && !isExpired;
+  };
 
   // Calculate percentages from dashboard data
   const totalApps = dashboardData?.totalApplicants || 0;
@@ -60,8 +94,9 @@ export default function Dashboard() {
 
   const filteredInternships = React.useMemo(() => {
     if (activeFilter === 'all') return internships;
-    if (activeFilter === 'active') return internships.filter((i: any) => i.status === 'active');
-    if (activeFilter === 'expired') return internships.filter((i: any) => i.status !== 'active');
+    const now = new Date();
+    if (activeFilter === 'active') return internships.filter((i: any) => isJobActive(i, now));
+    if (activeFilter === 'expired') return internships.filter((i: any) => !isJobActive(i, now));
     return internships;
   }, [internships, activeFilter]);
 
@@ -76,6 +111,18 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('[data-filter-menu]')) {
+        setIsFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
 
   const fetchDashboardData = async () => {
     try {
@@ -112,11 +159,7 @@ export default function Dashboard() {
 
       const now = new Date();
       const totalPosted = internshipsList.length;
-      const activePosts = internshipsList.filter((job: any) => {
-        const isActive = String(job.status || '').toLowerCase() === 'active';
-        const deadline = job.application_deadline ? new Date(job.application_deadline) : null;
-        return isActive && (!deadline || deadline > now);
-      }).length;
+      const activePosts = internshipsList.filter((job: any) => isJobActive(job, now)).length;
       const expiredPosts = totalPosted - activePosts;
       const totalApplicants = internshipsList.reduce((sum: number, job: any) => {
         const count = job.applicant_count ?? job.applications_count ?? 0;
@@ -414,9 +457,50 @@ export default function Dashboard() {
         <div className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
             <h3 className="text-lg font-bold text-slate-900">Active Internships</h3>
-            <div className="flex items-center gap-3 text-slate-400">
-              <Filter size={16} />
-              <MoreVertical size={16} />
+            <div className="flex items-center gap-3 text-slate-400" data-filter-menu>
+              <button
+                type="button"
+                onClick={() => setIsFilterOpen((prev) => !prev)}
+                className={`relative p-2 rounded-lg border border-slate-200 bg-white shadow-sm transition-colors ${
+                  isFilterOpen ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+                }`}
+                title="Filter"
+              >
+                <Filter size={16} />
+                <AnimatePresence>
+                  {isFilterOpen ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-3 w-44 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden"
+                    >
+                      {[
+                        { label: 'All', value: 'all' },
+                        { label: 'Active', value: 'active' },
+                        { label: 'Expired', value: 'expired' },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            setActiveFilter(option.value);
+                            setIsFilterOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                            activeFilter === option.value
+                              ? 'bg-blue-50 text-blue-600 font-semibold'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -438,6 +522,7 @@ export default function Dashboard() {
                   <tr className="bg-slate-50/60 border-b border-slate-100">
                     <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Internship Title</th>
                     <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Posted Date</th>
+                    <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Deadline</th>
                     <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Applicants</th>
                     <th className="py-4 px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
                     <th className="py-4 px-6 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
@@ -446,10 +531,8 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-slate-100">
                       <AnimatePresence mode="popLayout">
                         {currentInternships.map((job: any) => {
-                          const deadline = job.application_deadline ? new Date(job.application_deadline) : null;
                           const now = new Date();
-                          const isExpired = deadline ? deadline < now : false;
-                          const isActive = String(job.status || '').toLowerCase() === 'active' && !isExpired;
+                          const isActive = isJobActive(job, now);
                           return (
                         <motion.tr 
                           key={job.id} 
@@ -476,6 +559,9 @@ export default function Dashboard() {
                         </td>
                         <td className="py-4 px-6 text-sm text-slate-600">
                           {new Date(job.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-slate-600">
+                          {formatDeadlineDate(job.application_deadline)}
                         </td>
                         <td className="py-4 px-6">
                           {((job.applicant_count ?? job.applications_count ?? 0) === 0) ? (

@@ -68,7 +68,7 @@ export default function Navbar() {
     { name: 'Post Internship', path: '/company/post', icon: Send },
     { name: 'Events', path: '/company/events', icon: Calendar },
     { name: 'Applicants', path: '/company/applicants', icon: Users },
-    { name: 'My Applications', path: '/company/my-applications', icon: Briefcase },
+    { name: 'Employment', path: '/company/my-applications', icon: Briefcase },
     { name: 'Settings', path: '/company/settings', icon: SettingsIcon },
   ];
 

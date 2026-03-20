@@ -17,6 +17,25 @@ const getCompanyIdByUserId = async (userId) => {
     return companyId;
 };
 
+/**
+ * Helper to auto-close internships past their application deadline.
+ * Uses CURDATE() so a date-only deadline stays active through the end of that day.
+ */
+const expireInternshipsByDeadline = async (companyId = null) => {
+    const baseSql = `
+        UPDATE internships
+        SET status = 'closed'
+        WHERE status = 'active'
+          AND application_deadline IS NOT NULL
+          AND application_deadline < CURDATE()
+    `;
+    if (companyId) {
+        await db.query(`${baseSql} AND company_id = ?`, [companyId]);
+    } else {
+        await db.query(baseSql);
+    }
+};
+
 // Helper function to build IN clause with proper placeholders
 const buildInClause = (columnName, items) => {
     if (!items || items.length === 0) {
@@ -34,6 +53,7 @@ const buildInClause = (columnName, items) => {
  */
 const getAllInternships = async (req, res) => {
     try {
+        await expireInternshipsByDeadline();
         const { search, location, skills, work_mode, salary_type, limit: queryLimit } = req.query;
         const parsedLimit = Number.parseInt(queryLimit, 10);
         const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 100;
@@ -768,6 +788,8 @@ const getCompanyInternships = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Company profile not found' });
         }
 
+        await expireInternshipsByDeadline(companyId);
+
         const sql = `
             SELECT
                 i.*,
@@ -1009,6 +1031,8 @@ const getDashboardStats = async (req, res) => {
         if (!companyId) {
             return res.status(404).json({ message: 'Company not found' });
         }
+
+        await expireInternshipsByDeadline(companyId);
 
         // Get total posts
         let totalPostsResult;

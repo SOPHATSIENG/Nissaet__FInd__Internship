@@ -593,6 +593,14 @@ const getNotificationCard = async (req, res) => {
             return res.status(401).json({ message: 'Authentication required' });
         }
 
+        try {
+            await db.query('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND (is_read = 0 OR is_read IS NULL)', [userId]);
+        } catch (error) {
+            if (error && error.code !== 'ER_BAD_FIELD_ERROR') {
+                throw error;
+            }
+        }
+
         let rows = [];
         try {
             rows = await db.query(

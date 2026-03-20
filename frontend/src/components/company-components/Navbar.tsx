@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown, Calendar, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -12,6 +12,7 @@ export default function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationCard, setNotificationCard] = useState<{ unreadCount: number; items: any[] } | null>(null);
+  const [suppressUnreadAt, setSuppressUnreadAt] = useState<number | null>(null);
   const [logoError, setLogoError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +46,15 @@ export default function Navbar() {
 
   const avatarUrl = user?.profile_image || companyLogo || '';
 
+  const hasNewSinceSuppress = () => {
+    if (!notificationCard?.items?.length) return false;
+    if (!suppressUnreadAt) return true;
+    return notificationCard.items.some((item: any) => {
+      const t = new Date(item.created_at || item.createdAt || item.timestamp || 0).getTime();
+      return t > suppressUnreadAt;
+    });
+  };
+
   const companyInitials = companyName
     .split(' ')
     .filter(Boolean)
@@ -63,33 +73,34 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const loadNotificationCard = useCallback(async () => {
+    try {
+      if (!user) {
+        setNotificationCard(null);
+        return;
+      }
+      const data = await api.getNotificationCard();
+      const unreadCount = Number(data?.unread_count ?? data?.unreadCount ?? 0) || 0;
+      const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.notifications) ? data.notifications : [];
+      setNotificationCard({ unreadCount, items });
+    } catch (error) {
+      setNotificationCard(null);
+    }
+  }, [user]);
+
   useEffect(() => {
     let mounted = true;
-
-    const loadNotificationCard = async () => {
-      try {
-        if (!user) {
-          if (mounted) setNotificationCard(null);
-          return;
-        }
-        const data = await api.getNotificationCard();
-        const unreadCount = Number(data?.unread_count ?? data?.unreadCount ?? 0) || 0;
-        const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.notifications) ? data.notifications : [];
-        if (mounted) {
-          setNotificationCard({ unreadCount, items });
-        }
-      } catch (error) {
-        if (mounted) setNotificationCard(null);
-      }
+    const guardedLoad = async () => {
+      if (!mounted) return;
+      await loadNotificationCard();
     };
-
-    loadNotificationCard();
-    const id = window.setInterval(loadNotificationCard, 30000);
+    guardedLoad();
+    const id = window.setInterval(guardedLoad, 30000);
     return () => {
       mounted = false;
       window.clearInterval(id);
     };
-  }, [user]);
+  }, [loadNotificationCard]);
 
   const navLinks = [
     { name: 'Dashboard', path: '/company', icon: LayoutDashboard },
@@ -148,11 +159,23 @@ export default function Navbar() {
               onClick={() => {
                 setIsNotificationsOpen((current) => !current);
                 setIsProfileOpen(false);
+                setNotificationCard((prev) =>
+                  prev
+                    ? {
+                        unreadCount: 0,
+                        items: Array.isArray(prev.items)
+                          ? prev.items.map((item) => ({ ...item, is_read: true }))
+                          : prev.items
+                      }
+                    : prev
+                );
+                setSuppressUnreadAt(Date.now());
+                loadNotificationCard();
               }}
               className="relative p-2 text-slate-400 hover:text-slate-600"
             >
               <Bell size={24} />
-              {(notificationCard?.unreadCount || 0) > 0 ? (
+              {(notificationCard?.unreadCount || 0) > 0 && hasNewSinceSuppress() ? (
                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
                   {notificationCard.unreadCount > 99 ? '99+' : notificationCard.unreadCount}
                 </span>

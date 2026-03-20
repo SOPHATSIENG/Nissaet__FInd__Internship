@@ -32,7 +32,7 @@ export const Sidebar = () => {
 
   const navBase =
     "flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[15px] font-semibold transition-all duration-200 group";
-  const navActive = "bg-blue-600 text-white shadow-lg shadow-blue-600/30";
+  const navActive = "bg-blue-600 text-white shadow-lg shadow-blue-600/30 hover:bg-blue-600";
   const navInactive = "text-slate-500 hover:bg-slate-50 hover:text-slate-700";
 
   return (
@@ -51,6 +51,7 @@ export const Sidebar = () => {
           <NavLink
             key={item.path}
             to={item.path}
+            end={item.path === '/admin'}
             className={({ isActive }) => cn(
               navBase,
               isActive ? navActive : navInactive

@@ -39,6 +39,306 @@ const getStats = async (req, res) => {
     }
 };
 
+const toMysqlDateTime = (date) => {
+    if (!(date instanceof Date)) return null;
+    return date.toISOString().slice(0, 19).replace('T', ' ');
+};
+
+const normalizeDateRange = (range, start, end) => {
+    const now = new Date();
+    let endDate = end ? new Date(end) : now;
+    if (Number.isNaN(endDate.getTime())) endDate = now;
+    endDate.setHours(23, 59, 59, 999);
+
+    let startDate;
+    if (range === 'custom' && start) {
+        startDate = new Date(start);
+    } else {
+        const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
+        startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - (days - 1));
+        startDate.setHours(0, 0, 0, 0);
+    }
+
+    if (Number.isNaN(startDate.getTime())) {
+        startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - 29);
+        startDate.setHours(0, 0, 0, 0);
+    }
+
+    const rangeDays = Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
+    return { startDate, endDate, rangeDays };
+};
+
+const getYearWeekNumber = (date) => {
+    const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = target.getUTCDay() || 7;
+    target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+    const weekNum = Math.ceil((((target - yearStart) / 86400000) + 1) / 7);
+    return (target.getUTCFullYear() * 100) + weekNum;
+};
+
+const formatLabel = (date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+const buildBuckets = (startDate, endDate, unit) => {
+    const buckets = [];
+    const cursor = new Date(startDate);
+    cursor.setHours(0, 0, 0, 0);
+
+    if (unit === 'day') {
+        while (cursor <= endDate) {
+            const key = cursor.toISOString().slice(0, 10);
+            buckets.push({
+                key,
+                label: formatLabel(cursor),
+                start: new Date(cursor),
+                end: new Date(cursor)
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        return buckets;
+    }
+
+    while (cursor <= endDate) {
+        const weekStart = new Date(cursor);
+        const weekEnd = new Date(cursor);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        if (weekEnd > endDate) weekEnd.setTime(endDate.getTime());
+        buckets.push({
+            key: getYearWeekNumber(weekStart),
+            label: `${formatLabel(weekStart)} - ${formatLabel(weekEnd)}`,
+            start: new Date(weekStart),
+            end: new Date(weekEnd)
+        });
+        cursor.setDate(cursor.getDate() + 7);
+    }
+
+    return buckets;
+};
+
+const buildTrend = (current, previous) => {
+    if (!previous) {
+        return { trend: current > 0 ? 100 : 0, isUp: current >= previous };
+    }
+    const diff = ((current - previous) / previous) * 100;
+    return { trend: Math.abs(diff), isUp: diff >= 0 };
+};
+
+const getReports = async (req, res) => {
+    try {
+        const { range = '30d', start, end } = req.query || {};
+        const { startDate, endDate, rangeDays } = normalizeDateRange(range, start, end);
+        const unit = rangeDays <= 31 ? 'day' : 'week';
+        const startStr = toMysqlDateTime(startDate);
+        const endStr = toMysqlDateTime(endDate);
+
+        const prevEnd = new Date(startDate.getTime() - 1000);
+        const prevStart = new Date(startDate);
+        prevStart.setDate(prevStart.getDate() - rangeDays);
+        const prevStartStr = toMysqlDateTime(prevStart);
+        const prevEndStr = toMysqlDateTime(prevEnd);
+
+        const studentTotalQuery = db.query(
+            "SELECT COUNT(*) as count FROM users WHERE role = 'student' AND created_at BETWEEN ? AND ?",
+            [startStr, endStr]
+        );
+        const companyTotalQuery = db.query(
+            "SELECT COUNT(*) as count FROM companies WHERE created_at BETWEEN ? AND ?",
+            [startStr, endStr]
+        );
+        const placementTotalQuery = db.query(
+            "SELECT COUNT(*) as count FROM applications WHERE status = 'accepted' AND updated_at BETWEEN ? AND ?",
+            [startStr, endStr]
+        );
+
+        const studentPrevQuery = db.query(
+            "SELECT COUNT(*) as count FROM users WHERE role = 'student' AND created_at BETWEEN ? AND ?",
+            [prevStartStr, prevEndStr]
+        );
+        const companyPrevQuery = db.query(
+            "SELECT COUNT(*) as count FROM companies WHERE created_at BETWEEN ? AND ?",
+            [prevStartStr, prevEndStr]
+        );
+        const placementPrevQuery = db.query(
+            "SELECT COUNT(*) as count FROM applications WHERE status = 'accepted' AND updated_at BETWEEN ? AND ?",
+            [prevStartStr, prevEndStr]
+        );
+
+        const unitField = unit === 'day' ? 'DATE' : 'YEARWEEK';
+        const unitMode = unit === 'day' ? '' : ', 1';
+
+        const studentTrendQuery = db.query(
+            `SELECT ${unitField}(created_at${unitMode}) as period, COUNT(*) as count
+             FROM users
+             WHERE role = 'student' AND created_at BETWEEN ? AND ?
+             GROUP BY period
+             ORDER BY period ASC`,
+            [startStr, endStr]
+        );
+        const companyTrendQuery = db.query(
+            `SELECT ${unitField}(created_at${unitMode}) as period, COUNT(*) as count
+             FROM companies
+             WHERE created_at BETWEEN ? AND ?
+             GROUP BY period
+             ORDER BY period ASC`,
+            [startStr, endStr]
+        );
+        const placementTrendQuery = db.query(
+            `SELECT ${unitField}(updated_at${unitMode}) as period, COUNT(*) as count
+             FROM applications
+             WHERE status = 'accepted' AND updated_at BETWEEN ? AND ?
+             GROUP BY period
+             ORDER BY period ASC`,
+            [startStr, endStr]
+        );
+
+        const [
+            [studentTotal],
+            [companyTotal],
+            [placementTotal],
+            [studentPrev],
+            [companyPrev],
+            [placementPrev],
+            studentTrendRows,
+            companyTrendRows,
+            placementTrendRows
+        ] = await Promise.all([
+            studentTotalQuery,
+            companyTotalQuery,
+            placementTotalQuery,
+            studentPrevQuery,
+            companyPrevQuery,
+            placementPrevQuery,
+            studentTrendQuery,
+            companyTrendQuery,
+            placementTrendQuery
+        ]);
+
+        const buckets = buildBuckets(startDate, endDate, unit);
+        const normalizePeriod = (value) => {
+            if (unit === 'day') return value instanceof Date ? value.toISOString().slice(0, 10) : value;
+            return Number(value);
+        };
+
+        const studentMap = new Map(studentTrendRows.map(row => [normalizePeriod(row.period), Number(row.count)]));
+        const companyMap = new Map(companyTrendRows.map(row => [normalizePeriod(row.period), Number(row.count)]));
+        const placementMap = new Map(placementTrendRows.map(row => [normalizePeriod(row.period), Number(row.count)]));
+
+        const growth = buckets.map((bucket) => ({
+            name: bucket.label,
+            students: studentMap.get(bucket.key) || 0,
+            companies: companyMap.get(bucket.key) || 0,
+            placements: placementMap.get(bucket.key) || 0
+        }));
+
+        let industry = [];
+        try {
+            industry = await db.query(
+                `SELECT COALESCE(c.industry, 'Other') AS name, COUNT(*) AS value
+                 FROM applications a
+                 JOIN internships i ON a.internship_id = i.id
+                 JOIN companies c ON i.company_id = c.id
+                 WHERE a.status = 'accepted' AND a.updated_at BETWEEN ? AND ?
+                 GROUP BY name
+                 ORDER BY value DESC
+                 LIMIT 6`,
+                [startStr, endStr]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                console.error('Industry distribution query failed:', error);
+            }
+        }
+
+        if (!industry || industry.length === 0) {
+            try {
+                industry = await db.query(
+                    `SELECT COALESCE(c.industry, 'Other') AS name, COUNT(*) AS value
+                     FROM internships i
+                     JOIN companies c ON i.company_id = c.id
+                     WHERE i.created_at BETWEEN ? AND ?
+                     GROUP BY name
+                     ORDER BY value DESC
+                     LIMIT 6`,
+                    [startStr, endStr]
+                );
+            } catch (error) {
+                industry = [];
+            }
+        }
+
+        let viewsCount = 0;
+        try {
+            const [views] = await db.query(
+                `SELECT COUNT(*) AS count
+                 FROM page_views
+                 WHERE viewed_at BETWEEN ? AND ?
+                 AND entity_type IN ('internship', 'company', 'profile')`,
+                [startStr, endStr]
+            );
+            viewsCount = Number(views?.count || 0);
+        } catch (error) {
+            if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                console.error('Page views query failed:', error);
+            }
+        }
+
+        if (viewsCount === 0) {
+            try {
+                const [viewsFallback] = await db.query(
+                    `SELECT SUM(views_count) AS count
+                     FROM internships
+                     WHERE created_at BETWEEN ? AND ?`,
+                    [startStr, endStr]
+                );
+                viewsCount = Number(viewsFallback?.count || 0);
+            } catch (error) {
+                viewsCount = 0;
+            }
+        }
+
+        const [applicationTotal] = await db.query(
+            "SELECT COUNT(*) as count FROM applications WHERE applied_at BETWEEN ? AND ?",
+            [startStr, endStr]
+        );
+        const [interviewTotal] = await db.query(
+            "SELECT COUNT(*) as count FROM applications WHERE status = 'reviewing' AND updated_at BETWEEN ? AND ?",
+            [startStr, endStr]
+        );
+
+        const stats = {
+            students: Number(studentTotal?.count || 0),
+            companies: Number(companyTotal?.count || 0),
+            placements: Number(placementTotal?.count || 0)
+        };
+
+        const studentTrend = buildTrend(stats.students, Number(studentPrev?.count || 0));
+        const companyTrend = buildTrend(stats.companies, Number(companyPrev?.count || 0));
+        const placementTrend = buildTrend(stats.placements, Number(placementPrev?.count || 0));
+
+        return res.json({
+            range: { start: startDate.toISOString(), end: endDate.toISOString(), unit },
+            stats: {
+                students: { value: stats.students, trend: studentTrend.trend, isUp: studentTrend.isUp },
+                companies: { value: stats.companies, trend: companyTrend.trend, isUp: companyTrend.isUp },
+                placements: { value: stats.placements, trend: placementTrend.trend, isUp: placementTrend.isUp }
+            },
+            growth,
+            industry: industry.map(item => ({ name: item.name || 'Other', value: Number(item.value || 0) })),
+            funnel: {
+                views: viewsCount,
+                applications: Number(applicationTotal?.count || 0),
+                interviews: Number(interviewTotal?.count || 0),
+                placements: stats.placements
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching report data:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const normalizeDocuments = (value) => {
     if (!value) return [];
     if (Array.isArray(value)) return value;
@@ -854,5 +1154,6 @@ module.exports = {
     updateInternshipForAdmin,
     flagInternshipForAdmin,
     unflagInternshipForAdmin,
-    getJobTypes
+    getJobTypes,
+    getReports
 };

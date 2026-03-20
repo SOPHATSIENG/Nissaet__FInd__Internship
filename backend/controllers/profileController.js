@@ -564,6 +564,70 @@ const getNotificationCard = async (req, res) => {
     }
 };
 
+const markNotificationsRead = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const { ids, all } = req.body || {};
+        if (all === true) {
+            await db.query('UPDATE notifications SET is_read = 1 WHERE user_id = ?', [userId]);
+            return res.json({ success: true });
+        }
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ message: 'Notification ids are required' });
+        }
+
+        await db.query(
+            `UPDATE notifications SET is_read = 1 WHERE user_id = ? AND id IN (${ids.map(() => '?').join(',')})`,
+            [userId, ...ids]
+        );
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Mark notifications read error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const deleteNotification = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const { id } = req.params;
+        const [result] = await db.queryRaw('DELETE FROM notifications WHERE id = ? AND user_id = ?', [id, userId]);
+        if (!result.affectedRows) {
+            return res.status(404).json({ message: 'Notification not found' });
+        }
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Delete notification error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const clearNotifications = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        await db.query('DELETE FROM notifications WHERE user_id = ?', [userId]);
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Clear notifications error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const updateTwoFactorSettings = async (req, res) => {
     try {
         const userId = getAuthenticatedUserId(req);
@@ -767,6 +831,9 @@ module.exports = {
     updateEducationSettings,
     updateSkillsSettings,
     getNotificationCard,
+    markNotificationsRead,
+    deleteNotification,
+    clearNotifications,
     updateNotificationSettings,
     updateTwoFactorSettings,
     updatePassword,

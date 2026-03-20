@@ -18,6 +18,70 @@ const toBoolean = (value, fallback = false) => {
 };
 
 const updateCompanyProfile = async (userId, updates) => {
+    if (updates?.name || updates?.company_name) {
+        const proposedName = String(updates.name || updates.company_name || '').trim().replace(/\s+/g, ' ');
+        if (proposedName) {
+            const checkDuplicates = async (sql, params) => {
+                const rows = await db.query(sql, params);
+                if (rows?.length) {
+                    throw new Error('Company name already exists');
+                }
+            };
+            try {
+                const columns = await db.query(
+                    `SELECT COLUMN_NAME
+                     FROM INFORMATION_SCHEMA.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE()
+                       AND TABLE_NAME = 'companies'`
+                );
+                const columnSet = new Set((columns || []).map((row) => row.COLUMN_NAME));
+                const clauses = [];
+                const params = [];
+                if (columnSet.has('name')) {
+                    clauses.push('LOWER(TRIM(name)) = LOWER(?)');
+                    params.push(proposedName);
+                }
+                if (columnSet.has('company_name')) {
+                    clauses.push('LOWER(TRIM(company_name)) = LOWER(?)');
+                    params.push(proposedName);
+                }
+                if (clauses.length > 0) {
+                    await checkDuplicates(
+                        `SELECT user_id FROM companies
+                         WHERE (${clauses.join(' OR ')})
+                           AND user_id <> ?
+                         LIMIT 1`,
+                        [...params, userId]
+                    );
+                }
+            } catch (error) {
+                if (error?.message === 'Company name already exists') throw error;
+                try {
+                    await checkDuplicates(
+                        `SELECT user_id FROM companies
+                         WHERE LOWER(TRIM(company_name)) = LOWER(?)
+                           AND user_id <> ?
+                         LIMIT 1`,
+                        [proposedName, userId]
+                    );
+                } catch (fallbackError) {
+                    if (fallbackError?.message === 'Company name already exists') throw fallbackError;
+                    try {
+                        await checkDuplicates(
+                            `SELECT user_id FROM companies
+                             WHERE LOWER(TRIM(name)) = LOWER(?)
+                               AND user_id <> ?
+                             LIMIT 1`,
+                            [proposedName, userId]
+                        );
+                    } catch (fallbackError2) {
+                        if (fallbackError2?.message === 'Company name already exists') throw fallbackError2;
+                        throw error;
+                    }
+                }
+            }
+        }
+    }
     if (updates?.logo && String(updates.logo).length > 255) {
         try {
             const columns = await db.query(
@@ -723,6 +787,9 @@ const updateCompanySettings = async (req, res) => {
             company_profile: refreshed[0] || null,
         });
     } catch (error) {
+        if (error?.message === 'Company name already exists') {
+            return res.status(400).json({ message: 'Company name already exists' });
+        }
         console.error('Update company settings error:', error);
         return res.status(500).json({ message: 'Server error' });
     }

@@ -212,6 +212,64 @@ const getStudentIdByUserId = async (conn, userId) => {
 
 const createCompanyProfile = async (conn, userId, payload = {}) => {
     const companySize = VALID_COMPANY_SIZES.has(payload.company_size) ? payload.company_size : null;
+    const rawCompanyName = payload.company_name || payload.name || payload.full_name || 'Company';
+    const companyName = String(rawCompanyName || '').trim().replace(/\s+/g, ' ');
+
+    if (companyName) {
+        const normalized = companyName;
+        const checkDuplicates = async (sql, params) => {
+            const [rows] = await conn.execute(sql, params);
+            if (rows?.length) {
+                throw new Error('Company name already exists');
+            }
+        };
+        try {
+            const [cols] = await conn.execute(
+                `SELECT COLUMN_NAME
+                 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'companies'`
+            );
+            const columnSet = new Set((cols || []).map((row) => row.COLUMN_NAME));
+            const clauses = [];
+            const params = [];
+            if (columnSet.has('name')) {
+                clauses.push('LOWER(TRIM(name)) = LOWER(?)');
+                params.push(normalized);
+            }
+            if (columnSet.has('company_name')) {
+                clauses.push('LOWER(TRIM(company_name)) = LOWER(?)');
+                params.push(normalized);
+            }
+            if (clauses.length > 0) {
+                await checkDuplicates(
+                    `SELECT id FROM companies WHERE ${clauses.join(' OR ')} LIMIT 1`,
+                    params
+                );
+            }
+        } catch (error) {
+            if (error?.message === 'Company name already exists') throw error;
+            // Fallbacks for unknown schema or permission issues
+            try {
+                await checkDuplicates(
+                    `SELECT id FROM companies WHERE LOWER(TRIM(company_name)) = LOWER(?) LIMIT 1`,
+                    [normalized]
+                );
+            } catch (fallbackError) {
+                if (fallbackError?.message === 'Company name already exists') throw fallbackError;
+                try {
+                    await checkDuplicates(
+                        `SELECT id FROM companies WHERE LOWER(TRIM(name)) = LOWER(?) LIMIT 1`,
+                        [normalized]
+                    );
+                } catch (fallbackError2) {
+                    if (fallbackError2?.message === 'Company name already exists') throw fallbackError2;
+                    throw error;
+                }
+            }
+        }
+    }
+
     const logoValue = payload.logo || null;
     if (logoValue && String(logoValue).length > 255) {
         try {
@@ -239,7 +297,7 @@ const createCompanyProfile = async (conn, userId, payload = {}) => {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 userId,
-                payload.company_name || payload.name || payload.full_name || 'Company',
+                companyName,
                 payload.company_bio || payload.bio || null,
                 payload.industry || null,
                 payload.website || null,
@@ -485,6 +543,9 @@ const register = async (req, res) => {
         if (conn) {
             await conn.rollback();
         }
+        if (error?.message === 'Company name already exists') {
+            return res.status(400).json({ message: 'Company name already exists' });
+        }
         console.error('Registration error:', error);
         return res.status(500).json({ message: 'Server error' });
     } finally {
@@ -619,6 +680,9 @@ const registerCompanyComplete = async (req, res) => {
     } catch (error) {
         if (conn) {
             await conn.rollback();
+        }
+        if (error?.message === 'Company name already exists') {
+            return res.status(400).json({ message: 'Company name already exists' });
         }
         console.error('Company registration error:', error);
         return res.status(500).json({ message: 'Server error' });

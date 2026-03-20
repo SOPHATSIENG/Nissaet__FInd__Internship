@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { History, MoreVertical, AlertTriangle } from 'lucide-react';
+import { History, MoreVertical, AlertTriangle, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../api/axios';
 
@@ -22,6 +22,7 @@ export default function ArchivedInternships() {
   const [internships, setInternships] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const actionButtonRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
@@ -50,6 +51,15 @@ export default function ArchivedInternships() {
       mounted = false;
     };
   }, []);
+
+  const filteredInternships = internships.filter((job: any) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      String(job.title || '').toLowerCase().includes(q) ||
+      String(job.location || '').toLowerCase().includes(q)
+    );
+  });
 
   const updateDropdownPosition = () => {
     if (!activeDropdown) return;
@@ -109,6 +119,17 @@ export default function ArchivedInternships() {
         </div>
       </div>
 
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 flex items-center gap-3">
+        <Search size={18} className="text-slate-400" />
+        <input
+          type="text"
+          placeholder="Search by title or location..."
+          className="w-full text-sm text-slate-700 placeholder:text-slate-400 outline-none"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
       {error ? (
         <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-center gap-3">
           <AlertTriangle size={18} />
@@ -122,7 +143,7 @@ export default function ArchivedInternships() {
             <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-          ) : internships.length === 0 ? (
+          ) : filteredInternships.length === 0 ? (
             <div className="text-center py-12 px-6">
               <div className="h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
                 <History size={32} />
@@ -143,7 +164,7 @@ export default function ArchivedInternships() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <AnimatePresence mode="popLayout">
-                  {internships.map((job: any) => (
+                  {filteredInternships.map((job: any) => (
                     <motion.tr
                       key={job.id}
                       layout

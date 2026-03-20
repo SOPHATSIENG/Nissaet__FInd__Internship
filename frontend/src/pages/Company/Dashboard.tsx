@@ -228,7 +228,7 @@ export default function Dashboard() {
         ]);
       }
       
-      const normalizedRecent = Array.isArray(mergedStats?.recentApplicants)
+      let normalizedRecent = Array.isArray(mergedStats?.recentApplicants)
         ? mergedStats.recentApplicants.map((app: any) => ({
             id: app.id,
             student_id: app.student_id,
@@ -238,6 +238,27 @@ export default function Dashboard() {
             student_image: app.student_image || app.profile_image || null
           }))
         : [];
+
+      if (normalizedRecent.length === 0) {
+        try {
+          const recentResponse = await api.getCompanyApplications({ page: 1, limit: 5 });
+          const items = Array.isArray(recentResponse?.applications)
+            ? recentResponse.applications
+            : Array.isArray(recentResponse)
+              ? recentResponse
+              : [];
+          normalizedRecent = items.map((app: any) => ({
+            id: app.id,
+            student_id: app.student_id,
+            student_name: app.student_name || app.name || app.full_name || 'Unknown',
+            internship_title: app.internship_title || app.role || 'Internship',
+            created_at: app.created_at || app.time || app.submitted_at,
+            student_image: app.student_image || app.profile_image || null
+          }));
+        } catch (recentError) {
+          console.warn('Recent applicants fallback failed:', recentError);
+        }
+      }
 
       setRecentApplications(normalizedRecent);
       setTrends(trendsResponse?.trends || []);

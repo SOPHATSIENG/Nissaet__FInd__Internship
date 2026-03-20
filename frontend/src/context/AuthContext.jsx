@@ -182,13 +182,48 @@ export const AuthProvider = ({ children }) => {
       });
     };
 
+    const handleAccountSuspended = (event) => {
+      const status = event?.detail?.status || 'suspended';
+      updateUser({ status });
+    };
+
     window.addEventListener('profile-settings-updated', handleProfileUpdated);
+    window.addEventListener('app:account-suspended', handleAccountSuspended);
     return () => {
       window.removeEventListener('profile-settings-updated', handleProfileUpdated);
+      window.removeEventListener('app:account-suspended', handleAccountSuspended);
     };
   }, []);
 
   const isAuthenticated = !!user && !!(authStorage.getToken() || localStorage.getItem('token'));
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const refresh = () => syncUserFromApi();
+    const intervalId = window.setInterval(refresh, 1000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+
+    const handleRouteChange = () => {
+      refresh();
+    };
+
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('app:route-change', handleRouteChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('app:route-change', handleRouteChange);
+    };
+  }, [isAuthenticated]);
 
   const value = useMemo(
     () => ({

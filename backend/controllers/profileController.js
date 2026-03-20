@@ -946,5 +946,6 @@ module.exports = {
     updateNotificationSettings,
     updateTwoFactorSettings,
     updatePassword,
-    getPublicStudentProfile
+    getPublicStudentProfile,
+    getProfileSettingsByUserId
 };

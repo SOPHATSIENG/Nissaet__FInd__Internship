@@ -23,22 +23,20 @@ import { useProfile } from '@/context/ProfileContext';
 import { cn } from '@/lib/utils';
 import api from '../../api/axios';
 
-const skillData = [
-  { name: 'Marketing', value: 85 },
-  { name: 'Design', value: 65 },
-  { name: 'Coding', value: 75 },
-  { name: 'Sales', value: 50 },
-  { name: 'HR', value: 40 },
-];
-
-const growthData = [
-  { name: 'Jan', value: 30 },
-  { name: 'Feb', value: 45 },
-  { name: 'Mar', value: 35 },
-  { name: 'Apr', value: 55 },
-  { name: 'May', value: 48 },
-  { name: 'Jun', value: 70 },
-];
+const timeAgo = (value?: string | null) => {
+  if (!value) return 'Just now';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 export const Dashboard = () => {
   const { settings } = useProfile();
@@ -53,6 +51,11 @@ export const Dashboard = () => {
   const [pendingCompanies, setPendingCompanies] = useState<any[]>([]);
   const [isPendingLoading, setIsPendingLoading] = useState(true);
   const [pendingError, setPendingError] = useState('');
+  const [skillData, setSkillData] = useState<{ name: string; value: number }[]>([]);
+  const [growthData, setGrowthData] = useState<{ name: string; value: number }[]>([]);
+  const [activity, setActivity] = useState<{ title: string; desc: string; time: string; type: string }[]>([]);
+  const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState('');
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -91,6 +94,25 @@ export const Dashboard = () => {
       }
     };
     fetchPending();
+  }, []);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      try {
+        setIsOverviewLoading(true);
+        setOverviewError('');
+        const data = await api.adminGetDashboardOverview();
+        setSkillData(Array.isArray(data?.skills) ? data.skills : []);
+        setGrowthData(Array.isArray(data?.growth) ? data.growth : []);
+        setActivity(Array.isArray(data?.activity) ? data.activity : []);
+      } catch (error) {
+        console.error('Failed to fetch dashboard overview:', error);
+        setOverviewError('Failed to load dashboard analytics.');
+      } finally {
+        setIsOverviewLoading(false);
+      }
+    };
+    fetchOverview();
   }, []);
 
   const colorMap: Record<string, string> = {
@@ -165,13 +187,27 @@ export const Dashboard = () => {
             <div className="px-2 py-1 bg-background rounded text-xs font-medium text-text-secondary">Real-time</div>
           </div>
           <div className="h-[220px] w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={skillData}>
-                <Bar dataKey="value" fill={accentHex} radius={[4, 4, 0, 0]} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
-                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }} />
-              </BarChart>
-            </ResponsiveContainer>
+            {isOverviewLoading ? (
+              <div className="h-full w-full flex items-center justify-center text-sm text-text-secondary">
+                Loading skill data...
+              </div>
+            ) : overviewError ? (
+              <div className="h-full w-full flex items-center justify-center text-sm text-rose-600">
+                {overviewError}
+              </div>
+            ) : skillData.length === 0 ? (
+              <div className="h-full w-full flex items-center justify-center text-sm text-text-secondary">
+                No skill data available.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={skillData}>
+                  <Bar dataKey="value" fill={accentHex} radius={[4, 4, 0, 0]} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
+                  <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -184,19 +220,33 @@ export const Dashboard = () => {
             <div className="px-2 py-1 bg-background rounded text-xs font-medium text-text-secondary">Yearly</div>
           </div>
           <div className="h-[220px] w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={growthData}>
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={accentHex} stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor={accentHex} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <Area type="monotone" dataKey="value" stroke={accentHex} strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
-                <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isOverviewLoading ? (
+              <div className="h-full w-full flex items-center justify-center text-sm text-text-secondary">
+                Loading growth data...
+              </div>
+            ) : overviewError ? (
+              <div className="h-full w-full flex items-center justify-center text-sm text-rose-600">
+                {overviewError}
+              </div>
+            ) : growthData.length === 0 ? (
+              <div className="h-full w-full flex items-center justify-center text-sm text-text-secondary">
+                No growth data available.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={growthData}>
+                  <defs>
+                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={accentHex} stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor={accentHex} stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="value" stroke={accentHex} strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
@@ -255,24 +305,38 @@ export const Dashboard = () => {
           <div className="flex items-center justify-between p-6 border-b border-border">
             <h3 className="text-text-primary text-lg font-bold">Recent Activity</h3>
           </div>
-          <div className="flex flex-col p-4 gap-6">
-            {[
-              { title: 'New Student Registration', desc: 'Dara Sok joined the platform', time: '2 mins ago', color: 'bg-primary' },
-              { title: 'Internship Posted', desc: 'Smart Axiata posted "Jr. Dev"', time: '15 mins ago', color: 'bg-blue-500' },
-              { title: 'Verification Approved', desc: 'Chip Mong Group verified', time: '1 hour ago', color: 'bg-emerald-500' },
-            ].map((activity, idx, arr) => (
-              <div key={idx} className="flex gap-3">
-                <div className="flex flex-col items-center gap-2">
-                  <div className={cn("size-2 rounded-full mt-2", activity.color)}></div>
-                  {idx !== arr.length - 1 && <div className="w-px h-full bg-border"></div>}
-                </div>
-                <div className="flex flex-col pb-2">
-                  <p className="text-sm text-text-primary font-medium">{activity.title}</p>
-                  <p className="text-xs text-text-secondary">{activity.desc}</p>
-                  <span className="text-[10px] text-text-secondary mt-1 uppercase">{activity.time}</span>
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-col p-4 gap-6 max-h-[420px] overflow-y-auto custom-scrollbar">
+            {isOverviewLoading ? (
+              <div className="text-sm text-text-secondary">Loading activity...</div>
+            ) : overviewError ? (
+              <div className="text-sm text-rose-600">{overviewError}</div>
+            ) : activity.length === 0 ? (
+              <div className="text-sm text-text-secondary">No recent activity.</div>
+            ) : (
+              activity.map((item, idx, arr) => {
+                const color =
+                  item.type === 'success'
+                    ? 'bg-emerald-500'
+                    : item.type === 'warning'
+                      ? 'bg-amber-500'
+                      : item.type === 'error'
+                        ? 'bg-red-500'
+                        : 'bg-blue-500';
+                return (
+                  <div key={`${item.title}-${idx}`} className="flex gap-3">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className={cn("size-2 rounded-full mt-2", color)}></div>
+                      {idx !== arr.length - 1 && <div className="w-px h-full bg-border"></div>}
+                    </div>
+                    <div className="flex flex-col pb-2">
+                      <p className="text-sm text-text-primary font-medium">{item.title}</p>
+                      <p className="text-xs text-text-secondary">{item.desc}</p>
+                      <span className="text-[10px] text-text-secondary mt-1 uppercase">{timeAgo(item.time)}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

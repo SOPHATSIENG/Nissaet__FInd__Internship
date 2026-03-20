@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Shield, 
   Bell, 
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import api from '../../api/axios';
 
 const settingsSections = [
   { id: 'general', label: 'General Settings', icon: Globe, desc: 'Platform language, timezone, and regional defaults.' },
@@ -28,16 +29,51 @@ const settingsSections = [
   { id: 'database', label: 'Data Management', icon: Database, desc: 'Backup schedules, data retention, and export tools.' },
 ];
 
+const defaultSettings = {
+  platformName: 'Internship Cambodia',
+  supportEmail: 'support@internship.kh',
+  seoDescription: 'The leading platform for finding internships and early career opportunities in Cambodia.',
+  maintenanceMode: false,
+  defaultLanguage: 'English (US)',
+  timezone: '(GMT+07:00) Phnom Penh',
+  brandLogo: null as string | null,
+  brandFavicon: null as string | null,
+  authMethods: {
+    'Email & Password': true,
+    'Google OAuth': true,
+    'Microsoft Azure AD': false,
+  },
+  bruteForceProtection: true,
+  ipWhitelist: ['192.168.1.1', '10.0.0.45'] as string[],
+  passwordMinLength: 8,
+  sessionTimeoutMinutes: 60,
+  emailTriggers: {
+    'New User Registration': true,
+    'Company Verification Request': true,
+    'System Error Alerts': true,
+    'Weekly Analytics Summary': false,
+  },
+  slackWebhookUrl: '',
+  pushNotifications: true,
+  storage: {
+    totalGb: 100,
+    usedGb: 42.8,
+    databaseGb: 12.4,
+    mediaGb: 28.2,
+    logsGb: 2.2,
+  },
+  lastBackupAt: null as string | null,
+  backupSchedule: 'Daily at 04:00 AM',
+  dataRetentionDays: 90,
+};
+
 export const SettingsPage = () => {
   const [activeSection, setActiveSection] = useState('general');
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-
-  // Brand Identity State
-  const [brandImages, setBrandImages] = useState({
-    logo: null as string | null,
-    favicon: null as string | null
-  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [settings, setSettings] = useState(defaultSettings);
 
   const logoInputRef = React.useRef<HTMLInputElement>(null);
   const faviconInputRef = React.useRef<HTMLInputElement>(null);
@@ -47,43 +83,48 @@ export const SettingsPage = () => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setBrandImages(prev => ({
+        setSettings(prev => ({
           ...prev,
-          [type]: reader.result as string
+          brandLogo: type === 'logo' ? (reader.result as string) : prev.brandLogo,
+          brandFavicon: type === 'favicon' ? (reader.result as string) : prev.brandFavicon,
         }));
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const [toggles, setToggles] = useState({
-    maintenanceMode: false,
-    authMethods: {
-      'Email & Password': true,
-      'Google OAuth': true,
-      'Microsoft Azure AD': false,
-    },
-    bruteForceProtection: true,
-    emailTriggers: {
-      'New User Registration': true,
-      'Company Verification Request': true,
-      'System Error Alerts': true,
-      'Weekly Analytics Summary': false,
-    },
-    pushNotifications: true,
-  });
+  const handleToggle = (category: 'maintenanceMode' | 'bruteForceProtection' | 'pushNotifications') => {
+    setSettings(prev => ({ ...prev, [category]: !prev[category] }));
+  };
 
-  const handleToggle = (category: string, key?: string) => {
-    setToggles(prev => {
-      if (category === 'authMethods' && key) {
-        return { ...prev, authMethods: { ...prev.authMethods, [key]: !prev.authMethods[key as keyof typeof prev.authMethods] } };
-      }
-      if (category === 'emailTriggers' && key) {
-        return { ...prev, emailTriggers: { ...prev.emailTriggers, [key]: !prev.emailTriggers[key as keyof typeof prev.emailTriggers] } };
-      }
-      // @ts-ignore
-      return { ...prev, [category]: !prev[category as keyof typeof prev] };
-    });
+  const handleAuthMethodToggle = (key: string) => {
+    setSettings(prev => ({
+      ...prev,
+      authMethods: { ...prev.authMethods, [key]: !prev.authMethods[key as keyof typeof prev.authMethods] },
+    }));
+  };
+
+  const handleEmailTriggerToggle = (key: string) => {
+    setSettings(prev => ({
+      ...prev,
+      emailTriggers: { ...prev.emailTriggers, [key]: !prev.emailTriggers[key as keyof typeof prev.emailTriggers] },
+    }));
+  };
+
+  const handleAddIp = () => {
+    const nextIp = window.prompt('Enter IP address');
+    if (!nextIp) return;
+    setSettings(prev => ({
+      ...prev,
+      ipWhitelist: prev.ipWhitelist.includes(nextIp) ? prev.ipWhitelist : [...prev.ipWhitelist, nextIp],
+    }));
+  };
+
+  const handleRemoveIp = (ip: string) => {
+    setSettings(prev => ({
+      ...prev,
+      ipWhitelist: prev.ipWhitelist.filter(item => item !== ip),
+    }));
   };
 
   // New states for Export and Purge
@@ -93,38 +134,125 @@ export const SettingsPage = () => {
   const [showPurgeModal, setShowPurgeModal] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<{ type: 'export' | 'purge', message: string } | null>(null);
 
-  const handleSave = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchSettings = async () => {
+      try {
+        setIsLoading(true);
+        setLoadError('');
+        const response = await api.adminGetSettings();
+        const payload = response?.settings || response || {};
+        if (!isMounted) return;
+        setSettings({
+          ...defaultSettings,
+          ...payload,
+          authMethods: { ...defaultSettings.authMethods, ...(payload.authMethods || {}) },
+          emailTriggers: { ...defaultSettings.emailTriggers, ...(payload.emailTriggers || {}) },
+          storage: { ...defaultSettings.storage, ...(payload.storage || {}) },
+          ipWhitelist: Array.isArray(payload.ipWhitelist) ? payload.ipWhitelist : defaultSettings.ipWhitelist,
+        });
+      } catch (error) {
+        console.error(error);
+        if (isMounted) {
+          setLoadError('Failed to load admin settings.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      setShowSuccess(false);
+      await api.adminUpdateSettings(settings);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 800);
+    } catch (error) {
+      console.error(error);
+      setLoadError('Failed to save settings.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleExport = () => {
-    setIsExporting(true);
-    setShowExportModal(false);
-    // Simulate export process
-    setTimeout(() => {
-      setIsExporting(false);
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      setShowExportModal(false);
+      const response = await api.adminExportData();
+      setSettings(prev => ({
+        ...prev,
+        lastBackupAt: response?.lastBackupAt || new Date().toISOString(),
+      }));
       setActionSuccess({ type: 'export', message: 'System data exported successfully!' });
       setTimeout(() => setActionSuccess(null), 4000);
-    }, 2500);
+    } catch (error) {
+      console.error(error);
+      setActionSuccess({ type: 'export', message: 'Failed to export system data.' });
+      setTimeout(() => setActionSuccess(null), 4000);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
-  const handlePurge = () => {
-    setIsPurging(true);
-    setShowPurgeModal(false);
-    // Simulate purge process
-    setTimeout(() => {
-      setIsPurging(false);
+  const handlePurge = async () => {
+    try {
+      setIsPurging(true);
+      setShowPurgeModal(false);
+      const response = await api.adminPurgeLogs();
+      setSettings(prev => ({
+        ...prev,
+        storage: {
+          ...prev.storage,
+          logsGb: response?.storageLogsGb ?? 0,
+          usedGb: response?.storageUsedGb ?? prev.storage.usedGb,
+        }
+      }));
       setActionSuccess({ type: 'purge', message: 'System logs have been purged.' });
       setTimeout(() => setActionSuccess(null), 4000);
-    }, 2000);
+    } catch (error) {
+      console.error(error);
+      setActionSuccess({ type: 'purge', message: 'Failed to purge system logs.' });
+      setTimeout(() => setActionSuccess(null), 4000);
+    } finally {
+      setIsPurging(false);
+    }
   };
 
+  const storageUsedGb = settings.storage.usedGb || (settings.storage.databaseGb + settings.storage.mediaGb + settings.storage.logsGb);
+  const storageTotalGb = settings.storage.totalGb || 0;
+  const storagePercent = storageTotalGb > 0 ? Math.min(100, (storageUsedGb / storageTotalGb) * 100) : 0;
+  const lastBackupLabel = settings.lastBackupAt
+    ? new Date(settings.lastBackupAt).toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'Never';
+
   const renderSectionContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-16 text-sm font-bold text-text-secondary-light">
+          Loading settings...
+        </div>
+      );
+    }
+
+    if (loadError) {
+      return (
+        <div className="flex items-center justify-center py-16 text-sm font-bold text-rose-600">
+          {loadError}
+        </div>
+      );
+    }
+
     switch (activeSection) {
       case 'general':
         return (
@@ -149,9 +277,9 @@ export const SettingsPage = () => {
                     onClick={() => logoInputRef.current?.click()}
                     className="size-16 rounded-lg border-2 border-dashed border-border-light flex flex-col items-center justify-center text-text-secondary-light hover:border-primary/50 cursor-pointer transition-all overflow-hidden relative group"
                   >
-                    {brandImages.logo ? (
+                    {settings.brandLogo ? (
                       <>
-                        <img src={brandImages.logo} alt="Logo" className="w-full h-full object-contain p-1" />
+                        <img src={settings.brandLogo} alt="Logo" className="w-full h-full object-contain p-1" />
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <Save className="size-5 text-white" />
                         </div>
@@ -170,7 +298,7 @@ export const SettingsPage = () => {
                       onClick={() => logoInputRef.current?.click()}
                       className="text-xs font-bold text-primary mt-1 text-left hover:underline"
                     >
-                      {brandImages.logo ? 'Change Logo' : 'Upload New'}
+                      {settings.brandLogo ? 'Change Logo' : 'Upload New'}
                     </button>
                   </div>
                 </div>
@@ -188,9 +316,9 @@ export const SettingsPage = () => {
                     onClick={() => faviconInputRef.current?.click()}
                     className="size-16 rounded-lg border-2 border-dashed border-border-light flex flex-col items-center justify-center text-text-secondary-light hover:border-primary/50 cursor-pointer transition-all overflow-hidden relative group"
                   >
-                    {brandImages.favicon ? (
+                    {settings.brandFavicon ? (
                       <>
-                        <img src={brandImages.favicon} alt="Favicon" className="w-full h-full object-contain p-2" />
+                        <img src={settings.brandFavicon} alt="Favicon" className="w-full h-full object-contain p-2" />
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <Eye className="size-5 text-white" />
                         </div>
@@ -209,7 +337,7 @@ export const SettingsPage = () => {
                       onClick={() => faviconInputRef.current?.click()}
                       className="text-xs font-bold text-primary mt-1 text-left hover:underline"
                     >
-                      {brandImages.favicon ? 'Change Icon' : 'Upload New'}
+                      {settings.brandFavicon ? 'Change Icon' : 'Upload New'}
                     </button>
                   </div>
                 </div>
@@ -221,7 +349,8 @@ export const SettingsPage = () => {
                 <label className="text-sm font-semibold text-text-primary-light">Platform Name</label>
                 <input 
                   className="w-full rounded-lg border border-border-light bg-background-light px-4 py-2.5 text-sm text-text-primary-light focus:border-primary outline-none transition-all" 
-                  defaultValue="Internship Cambodia"
+                  value={settings.platformName}
+                  onChange={(e) => setSettings(prev => ({ ...prev, platformName: e.target.value }))}
                   type="text"
                 />
               </div>
@@ -229,7 +358,8 @@ export const SettingsPage = () => {
                 <label className="text-sm font-semibold text-text-primary-light">Support Email</label>
                 <input 
                   className="w-full rounded-lg border border-border-light bg-background-light px-4 py-2.5 text-sm text-text-primary-light focus:border-primary outline-none transition-all" 
-                  defaultValue="support@internship.kh"
+                  value={settings.supportEmail}
+                  onChange={(e) => setSettings(prev => ({ ...prev, supportEmail: e.target.value }))}
                   type="email"
                 />
               </div>
@@ -239,9 +369,10 @@ export const SettingsPage = () => {
               <label className="text-sm font-semibold text-text-primary-light">SEO Meta Description</label>
               <textarea 
                 className="w-full rounded-lg border border-border-light bg-background-light px-4 py-2.5 text-sm text-text-primary-light focus:border-primary outline-none transition-all min-h-[100px] resize-none"
-                defaultValue="The leading platform for finding internships and early career opportunities in Cambodia."
+                value={settings.seoDescription}
+                onChange={(e) => setSettings(prev => ({ ...prev, seoDescription: e.target.value }))}
               />
-              <span className="text-[10px] text-text-secondary-light text-right">112 / 160 characters</span>
+              <span className="text-[10px] text-text-secondary-light text-right">{settings.seoDescription.length} / 160 characters</span>
             </div>
 
             <div className="flex flex-col gap-4">
@@ -255,12 +386,12 @@ export const SettingsPage = () => {
                   onClick={() => handleToggle('maintenanceMode')}
                   className={cn(
                     "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
-                    toggles.maintenanceMode ? "bg-primary" : "bg-border-light"
+                    settings.maintenanceMode ? "bg-primary" : "bg-border-light"
                   )}
                 >
                   <span className={cn(
                     "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                    toggles.maintenanceMode ? "translate-x-6" : "translate-x-1"
+                    settings.maintenanceMode ? "translate-x-6" : "translate-x-1"
                   )} />
                 </button>
               </div>
@@ -271,16 +402,24 @@ export const SettingsPage = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
                   <span className="text-xs font-medium text-text-secondary-light">Default Language</span>
-                  <select className="w-full rounded-lg border border-border-light bg-background-light px-3 py-2 text-sm text-text-primary-light outline-none focus:border-primary transition-all">
-                    <option>English (US)</option>
-                    <option>Khmer (Cambodia)</option>
+                  <select
+                    className="w-full rounded-lg border border-border-light bg-background-light px-3 py-2 text-sm text-text-primary-light outline-none focus:border-primary transition-all"
+                    value={settings.defaultLanguage}
+                    onChange={(e) => setSettings(prev => ({ ...prev, defaultLanguage: e.target.value }))}
+                  >
+                    <option value="English (US)">English (US)</option>
+                    <option value="Khmer (Cambodia)">Khmer (Cambodia)</option>
                   </select>
                 </div>
                 <div className="flex flex-col gap-2">
                   <span className="text-xs font-medium text-text-secondary-light">Timezone</span>
-                  <select className="w-full rounded-lg border border-border-light bg-background-light px-3 py-2 text-sm text-text-primary-light outline-none focus:border-primary transition-all">
-                    <option>(GMT+07:00) Phnom Penh</option>
-                    <option>(GMT+00:00) UTC</option>
+                  <select
+                    className="w-full rounded-lg border border-border-light bg-background-light px-3 py-2 text-sm text-text-primary-light outline-none focus:border-primary transition-all"
+                    value={settings.timezone}
+                    onChange={(e) => setSettings(prev => ({ ...prev, timezone: e.target.value }))}
+                  >
+                    <option value="(GMT+07:00) Phnom Penh">(GMT+07:00) Phnom Penh</option>
+                    <option value="(GMT+00:00) UTC">(GMT+00:00) UTC</option>
                   </select>
                 </div>
               </div>
@@ -310,15 +449,15 @@ export const SettingsPage = () => {
                       <span className="text-sm font-bold text-text-primary-light">{method.label}</span>
                     </div>
                     <button 
-                      onClick={() => handleToggle('authMethods', method.label)}
+                      onClick={() => handleAuthMethodToggle(method.label)}
                       className={cn(
                         "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
-                        toggles.authMethods[method.label as keyof typeof toggles.authMethods] ? "bg-primary" : "bg-border-light"
+                        settings.authMethods[method.label as keyof typeof settings.authMethods] ? "bg-primary" : "bg-border-light"
                       )}
                     >
                       <span className={cn(
                         "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                        toggles.authMethods[method.label as keyof typeof toggles.authMethods] ? "translate-x-6" : "translate-x-1"
+                        settings.authMethods[method.label as keyof typeof settings.authMethods] ? "translate-x-6" : "translate-x-1"
                       )} />
                     </button>
                   </div>
@@ -338,12 +477,12 @@ export const SettingsPage = () => {
                     onClick={() => handleToggle('bruteForceProtection')}
                     className={cn(
                       "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
-                      toggles.bruteForceProtection ? "bg-primary" : "bg-border-light"
+                      settings.bruteForceProtection ? "bg-primary" : "bg-border-light"
                     )}
                   >
                     <span className={cn(
                       "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                      toggles.bruteForceProtection ? "translate-x-6" : "translate-x-1"
+                      settings.bruteForceProtection ? "translate-x-6" : "translate-x-1"
                     )} />
                   </button>
                 </div>
@@ -353,11 +492,21 @@ export const SettingsPage = () => {
                       <span className="text-sm font-bold text-text-primary-light">IP Whitelisting</span>
                       <span className="text-xs text-text-secondary-light">Only allow admin access from specific IP addresses.</span>
                     </div>
-                    <button className="text-xs font-bold text-primary">Add IP</button>
+                    <button className="text-xs font-bold text-primary" onClick={handleAddIp}>Add IP</button>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <span className="px-2 py-1 rounded bg-surface-light border border-border-light text-[10px] font-mono text-text-secondary-light">192.168.1.1</span>
-                    <span className="px-2 py-1 rounded bg-surface-light border border-border-light text-[10px] font-mono text-text-secondary-light">10.0.0.45</span>
+                    {settings.ipWhitelist.map((ip) => (
+                      <span key={ip} className="px-2 py-1 rounded bg-surface-light border border-border-light text-[10px] font-mono text-text-secondary-light flex items-center gap-2">
+                        {ip}
+                        <button
+                          onClick={() => handleRemoveIp(ip)}
+                          className="text-[10px] font-bold text-red-500 hover:text-red-700"
+                          aria-label={`Remove ${ip}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -368,11 +517,21 @@ export const SettingsPage = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
                   <span className="text-xs font-medium text-text-secondary-light">Minimum Length</span>
-                  <input type="number" defaultValue={8} className="w-full rounded-lg border border-border-light bg-background-light px-3 py-2 text-sm text-text-primary-light outline-none focus:border-primary" />
+                  <input
+                    type="number"
+                    value={settings.passwordMinLength}
+                    onChange={(e) => setSettings(prev => ({ ...prev, passwordMinLength: Number(e.target.value || 0) }))}
+                    className="w-full rounded-lg border border-border-light bg-background-light px-3 py-2 text-sm text-text-primary-light outline-none focus:border-primary"
+                  />
                 </div>
                 <div className="flex flex-col gap-2">
                   <span className="text-xs font-medium text-text-secondary-light">Session Timeout (Minutes)</span>
-                  <input type="number" defaultValue={60} className="w-full rounded-lg border border-border-light bg-background-light px-3 py-2 text-sm text-text-primary-light outline-none focus:border-primary" />
+                  <input
+                    type="number"
+                    value={settings.sessionTimeoutMinutes}
+                    onChange={(e) => setSettings(prev => ({ ...prev, sessionTimeoutMinutes: Number(e.target.value || 0) }))}
+                    className="w-full rounded-lg border border-border-light bg-background-light px-3 py-2 text-sm text-text-primary-light outline-none focus:border-primary"
+                  />
                 </div>
               </div>
             </div>
@@ -407,15 +566,15 @@ export const SettingsPage = () => {
                   <div key={trigger} className="flex items-center justify-between p-3 rounded-lg hover:bg-background-light transition-colors">
                     <span className="text-sm text-text-secondary-light">{trigger}</span>
                     <button 
-                      onClick={() => handleToggle('emailTriggers', trigger)}
+                      onClick={() => handleEmailTriggerToggle(trigger)}
                       className={cn(
                         "relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none",
-                        toggles.emailTriggers[trigger as keyof typeof toggles.emailTriggers] ? "bg-primary" : "bg-border-light"
+                        settings.emailTriggers[trigger as keyof typeof settings.emailTriggers] ? "bg-primary" : "bg-border-light"
                       )}
                     >
                       <span className={cn(
                         "inline-block h-3 w-3 transform rounded-full bg-white transition-transform",
-                        toggles.emailTriggers[trigger as keyof typeof toggles.emailTriggers] ? "translate-x-5" : "translate-x-1"
+                        settings.emailTriggers[trigger as keyof typeof settings.emailTriggers] ? "translate-x-5" : "translate-x-1"
                       )} />
                     </button>
                   </div>
@@ -442,7 +601,8 @@ export const SettingsPage = () => {
                   <span className="text-[10px] font-bold text-text-secondary-light uppercase tracking-wider">Webhook URL</span>
                   <input 
                     type="password" 
-                    defaultValue="" 
+                    value={settings.slackWebhookUrl}
+                    onChange={(e) => setSettings(prev => ({ ...prev, slackWebhookUrl: e.target.value }))}
                     className="w-full rounded-lg border border-border-light bg-surface-light px-3 py-2 text-xs font-mono text-text-secondary-light outline-none" 
                   />
                 </div>
@@ -463,12 +623,12 @@ export const SettingsPage = () => {
                   onClick={() => handleToggle('pushNotifications')}
                   className={cn(
                     "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
-                    toggles.pushNotifications ? "bg-primary" : "bg-border-light"
+                    settings.pushNotifications ? "bg-primary" : "bg-border-light"
                   )}
                 >
                   <span className={cn(
                     "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                    toggles.pushNotifications ? "translate-x-6" : "translate-x-1"
+                    settings.pushNotifications ? "translate-x-6" : "translate-x-1"
                   )} />
                 </button>
               </div>
@@ -488,14 +648,14 @@ export const SettingsPage = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-sm font-bold text-text-primary-light">Total Storage</span>
-                    <span className="text-xs text-text-secondary-light">42.8 GB of 100 GB used</span>
+                    <span className="text-xs text-text-secondary-light">{storageUsedGb.toFixed(1)} GB of {storageTotalGb.toFixed(1)} GB used</span>
                   </div>
-                  <span className="text-sm font-black text-primary">42.8%</span>
+                  <span className="text-sm font-black text-primary">{storagePercent.toFixed(1)}%</span>
                 </div>
                 <div className="h-2 w-full bg-surface-light rounded-full overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: '42.8%' }}
+                    animate={{ width: `${storagePercent}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
                     className="h-full bg-primary"
                   />
@@ -503,15 +663,15 @@ export const SettingsPage = () => {
                 <div className="grid grid-cols-3 gap-4 pt-2">
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] font-bold text-text-secondary-light uppercase">Database</span>
-                    <span className="text-xs font-bold text-text-primary-light">12.4 GB</span>
+                    <span className="text-xs font-bold text-text-primary-light">{settings.storage.databaseGb.toFixed(1)} GB</span>
                   </div>
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] font-bold text-text-secondary-light uppercase">Media</span>
-                    <span className="text-xs font-bold text-text-primary-light">28.2 GB</span>
+                    <span className="text-xs font-bold text-text-primary-light">{settings.storage.mediaGb.toFixed(1)} GB</span>
                   </div>
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] font-bold text-text-secondary-light uppercase">Logs</span>
-                    <span className="text-xs font-bold text-text-primary-light">2.2 GB</span>
+                    <span className="text-xs font-bold text-text-primary-light">{settings.storage.logsGb.toFixed(1)} GB</span>
                   </div>
                 </div>
               </div>
@@ -523,11 +683,15 @@ export const SettingsPage = () => {
                   <RefreshCw className="size-4" />
                   <span className="text-sm font-bold">Auto Backups</span>
                 </div>
-                <p className="text-xs text-text-secondary-light">Last backup: Today at 04:00 AM</p>
-                <select className="mt-2 w-full rounded-lg border border-border-light bg-surface-light px-3 py-2 text-sm outline-none">
-                  <option>Daily at 04:00 AM</option>
-                  <option>Weekly on Sundays</option>
-                  <option>Manual Only</option>
+                <p className="text-xs text-text-secondary-light">Last backup: {lastBackupLabel}</p>
+                <select
+                  className="mt-2 w-full rounded-lg border border-border-light bg-surface-light px-3 py-2 text-sm outline-none"
+                  value={settings.backupSchedule}
+                  onChange={(e) => setSettings(prev => ({ ...prev, backupSchedule: e.target.value }))}
+                >
+                  <option value="Daily at 04:00 AM">Daily at 04:00 AM</option>
+                  <option value="Weekly on Sundays">Weekly on Sundays</option>
+                  <option value="Manual Only">Manual Only</option>
                 </select>
               </div>
               <div className="p-4 rounded-xl border border-border-light bg-background-light flex flex-col gap-3">
@@ -536,11 +700,18 @@ export const SettingsPage = () => {
                   <span className="text-sm font-bold">Data Retention</span>
                 </div>
                 <p className="text-xs text-text-secondary-light">Logs and activity history storage.</p>
-                <select className="mt-2 w-full rounded-lg border border-border-light bg-surface-light px-3 py-2 text-sm outline-none">
-                  <option>90 Days</option>
-                  <option>180 Days</option>
-                  <option>1 Year</option>
-                  <option>Forever</option>
+                <select
+                  className="mt-2 w-full rounded-lg border border-border-light bg-surface-light px-3 py-2 text-sm outline-none"
+                  value={settings.dataRetentionDays === 0 ? 'Forever' : String(settings.dataRetentionDays)}
+                  onChange={(e) => {
+                    const value = e.target.value === 'Forever' ? 0 : Number(e.target.value);
+                    setSettings(prev => ({ ...prev, dataRetentionDays: value }));
+                  }}
+                >
+                  <option value="90">90 Days</option>
+                  <option value="180">180 Days</option>
+                  <option value="365">1 Year</option>
+                  <option value="Forever">Forever</option>
                 </select>
               </div>
             </div>
@@ -650,7 +821,7 @@ export const SettingsPage = () => {
             </div>
             <button 
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || isLoading}
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm min-w-[140px] justify-center",
                 showSuccess

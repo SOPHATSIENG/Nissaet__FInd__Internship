@@ -2,6 +2,17 @@ const db = require('../config/db');
 
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
 
+const normalizeDocuments = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+};
+
 const getCompanyProfile = async (userId) => {
   try {
     const rows = await db.query(
@@ -121,14 +132,59 @@ const getCompanyVerificationRequests = async (req, res) => {
       [userId]
     );
 
-    return res.json(rows);
+    const normalized = rows.map((row) => ({
+      ...row,
+      documents: normalizeDocuments(row.documents)
+    }));
+    return res.json(normalized);
   } catch (error) {
     console.error('Get company verification requests error:', error);
     return res.status(500).json({ message: 'Server error' });
   }
 };
 
+const updateCompanyVerificationDocuments = async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    const verificationId = Number(req.params.id);
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    if (!verificationId) {
+      return res.status(400).json({ message: 'Verification id is required' });
+    }
+
+    const documents = Array.isArray(req.body?.documents)
+      ? req.body.documents.map((doc) => String(doc).trim()).filter(Boolean)
+      : [];
+
+    const rows = await db.query(
+      `SELECT id, status
+       FROM company_verifications
+       WHERE id = ? AND user_id = ?
+       LIMIT 1`,
+      [verificationId, userId]
+    );
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ message: 'Verification request not found' });
+    }
+
+    await db.queryRaw(
+      `UPDATE company_verifications
+       SET documents = ?
+       WHERE id = ? AND user_id = ?`,
+      [JSON.stringify(documents), verificationId, userId]
+    );
+
+    return res.json({ success: true, documents });
+  } catch (error) {
+    console.error('Update company verification documents error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   createCompanyVerificationRequest,
-  getCompanyVerificationRequests
+  getCompanyVerificationRequests,
+  updateCompanyVerificationDocuments
 };

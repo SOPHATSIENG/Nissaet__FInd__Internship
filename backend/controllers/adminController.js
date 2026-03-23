@@ -59,7 +59,14 @@ const getAllUsers = async (req, res) => {
             COALESCE(status, 'active') as status,
             DATE_FORMAT(created_at, '%b %d, %Y') as date,
             LEFT(full_name, 1) as initial,
-            'bg-blue-100' as color
+            'bg-blue-100' as color,
+            last_login_at,
+            last_active_at,
+            CASE
+                WHEN last_active_at IS NOT NULL
+                 AND last_active_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                THEN 1 ELSE 0
+            END as is_active_session
             FROM users
             ORDER BY created_at DESC
         `);
@@ -71,7 +78,10 @@ const getAllUsers = async (req, res) => {
                 'active' as status,
                 DATE_FORMAT(created_at, '%b %d, %Y') as date,
                 LEFT(full_name, 1) as initial,
-                'bg-blue-100' as color
+                'bg-blue-100' as color,
+                NULL as last_login_at,
+                NULL as last_active_at,
+                0 as is_active_session
                 FROM users
                 ORDER BY created_at DESC
             `);
@@ -1498,7 +1508,14 @@ const updateAdminUser = async (req, res) => {
             `SELECT id, full_name as name, email, role, COALESCE(status, 'active') as status,
              DATE_FORMAT(created_at, '%b %d, %Y') as date,
              LEFT(full_name, 1) as initial,
-             'bg-blue-100' as color
+             'bg-blue-100' as color,
+             last_login_at,
+             last_active_at,
+             CASE
+                 WHEN last_active_at IS NOT NULL
+                  AND last_active_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                 THEN 1 ELSE 0
+             END as is_active_session
              FROM users WHERE id = ? LIMIT 1`,
             [userId]
         );

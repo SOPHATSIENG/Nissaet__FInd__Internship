@@ -575,6 +575,10 @@ export const api = {
     return request('/verification/company/mine', { auth: true });
   },
 
+  companyUpdateVerificationDocuments(id, payload) {
+    return request(`/verification/company/${id}/documents`, { method: 'PUT', auth: true, body: payload });
+  },
+
   // Notification endpoints
   getNotifications(params = {}) {
     const query = new URLSearchParams(

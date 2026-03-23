@@ -13,12 +13,16 @@ import {
   CreditCard,
   User,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  FileText,
+  UploadCloud,
+  X
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
+import { uploadFileToS3, getFileLabel } from '../../utils/upload';
 
 export default function Settings() {
   const location = useLocation();
@@ -35,6 +39,10 @@ export default function Settings() {
     location: '',
     logo: ''
   });
+  const [verificationId, setVerificationId] = useState<number | null>(null);
+  const [verificationDocs, setVerificationDocs] = useState<string[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docsError, setDocsError] = useState('');
 
   useEffect(() => {
     const companyProfile = (user && user.company_profile) || null;
@@ -49,6 +57,28 @@ export default function Settings() {
       logo: companyProfile?.logo || ''
     });
   }, [user]);
+
+  useEffect(() => {
+    const loadVerificationDocs = async () => {
+      try {
+        setDocsLoading(true);
+        setDocsError('');
+        const data = await api.companyGetVerificationRequests();
+        const latest = Array.isArray(data) && data.length > 0 ? data[0] : null;
+        setVerificationId(latest?.id ?? null);
+        const docs = Array.isArray(latest?.documents) ? latest.documents : [];
+        setVerificationDocs(docs);
+      } catch (err) {
+        setDocsError('Unable to load verification documents.');
+      } finally {
+        setDocsLoading(false);
+      }
+    };
+
+    if (user?.role === 'company') {
+      loadVerificationDocs();
+    }
+  }, [user?.role]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -119,6 +149,51 @@ export default function Settings() {
       alert(error instanceof Error ? error.message : 'Failed to update profile.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDocsUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    if (!verificationId) {
+      setDocsError('No verification request found. Submit verification first.');
+      return;
+    }
+    setDocsError('');
+    setDocsLoading(true);
+    try {
+      const uploads = [];
+      for (const file of Array.from(files)) {
+        if (file.size > 15 * 1024 * 1024) {
+          setDocsError('Each document must be less than 15MB.');
+          continue;
+        }
+        const fileUrl = await uploadFileToS3({ file, purpose: 'verification', auth: true });
+        uploads.push(fileUrl);
+      }
+      if (uploads.length > 0) {
+        const nextDocs = [...verificationDocs, ...uploads];
+        await api.companyUpdateVerificationDocuments(verificationId, { documents: nextDocs });
+        setVerificationDocs(nextDocs);
+      }
+    } catch (err) {
+      setDocsError(err instanceof Error ? err.message : 'Failed to upload documents.');
+    } finally {
+      setDocsLoading(false);
+    }
+  };
+
+  const handleRemoveDoc = async (doc: string) => {
+    if (!verificationId) return;
+    setDocsLoading(true);
+    setDocsError('');
+    try {
+      const nextDocs = verificationDocs.filter((item) => item !== doc);
+      await api.companyUpdateVerificationDocuments(verificationId, { documents: nextDocs });
+      setVerificationDocs(nextDocs);
+    } catch (err) {
+      setDocsError('Failed to update documents.');
+    } finally {
+      setDocsLoading(false);
     }
   };
 
@@ -344,6 +419,68 @@ export default function Settings() {
                   )}
                   Save Changes
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h2 className="text-xl font-bold text-slate-900">Verification Documents</h2>
+              <p className="text-sm text-slate-500 mt-1">Upload or update documents for company verification.</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {docsError ? (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+                  {docsError}
+                </p>
+              ) : null}
+
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDocsUpload(e.dataTransfer.files);
+                }}
+                className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-6 text-center"
+              >
+                <UploadCloud className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-2 text-sm text-slate-600">
+                  Drag and drop verification files here, or click to upload.
+                </p>
+                <label className="mt-2 inline-block text-xs font-semibold text-blue-600 cursor-pointer">
+                  Upload documents
+                  <input
+                    type="file"
+                    multiple
+                    className="sr-only"
+                    onChange={(e) => handleDocsUpload(e.target.files)}
+                  />
+                </label>
+                <p className="mt-1 text-xs text-slate-500">PDF, PNG, JPG up to 15MB each</p>
+              </div>
+
+              {docsLoading && <p className="text-xs text-slate-500">Updating documents...</p>}
+
+              <div className="flex flex-col gap-2">
+                {verificationDocs.length > 0 ? (
+                  verificationDocs.map((doc) => (
+                    <div key={doc} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="h-4 w-4 text-slate-400" />
+                        <span className="text-xs font-medium text-slate-700 truncate">{getFileLabel(doc)}</span>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveDoc(doc)}
+                        disabled={docsLoading}
+                        className="text-slate-400 hover:text-rose-500 disabled:opacity-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-500 italic">No verification documents uploaded yet.</p>
+                )}
               </div>
             </div>
           </div>

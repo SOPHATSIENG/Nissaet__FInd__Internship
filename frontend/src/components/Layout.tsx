@@ -171,6 +171,15 @@ export default function Layout() {
       const next = !previous;
       if (next) {
         loadNotificationCard();
+        // Mark as read when the dropdown is opened so unread count updates.
+        if (unreadCount > 0) {
+          api.markNotificationsRead({ all: true })
+            .then(() => {
+              setUnreadCount(0);
+              setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
+            })
+            .catch(() => undefined);
+        }
       }
       return next;
     });
@@ -219,7 +228,7 @@ export default function Layout() {
                       <button
                         type="button"
                         onClick={handleNotificationClick}
-                        className="relative p-2 text-slate-400 hover:text-slate-600"
+                        className={`relative p-2 hover:text-slate-600 ${unreadCount > 0 ? 'text-red-500' : 'text-slate-400'}`}
                         aria-label="Open notifications"
                       >
                         <Bell size={20} />

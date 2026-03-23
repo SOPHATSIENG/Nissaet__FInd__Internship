@@ -190,6 +190,10 @@ export const api = {
     return request('/profile/notifications/card', { auth: true });
   },
 
+  getCompanyBilling() {
+    return request('/profile/billing', { auth: true });
+  },
+
   markNotificationsRead(payload) {
     return request('/profile/notifications/read', { method: 'PUT', auth: true, body: payload });
   },

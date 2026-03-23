@@ -1,22 +1,62 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Building2, 
   Lock, 
   Bell, 
   CreditCard,
   Mail,
-  Smartphone,
   Check,
   Settings as SettingsIcon,
   Trash2
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import api from '../../api/axios';
 import { useNotifications } from '../../context/NotificationContext';
+import { type ProfileNotificationSettings } from '../../components/settings/types';
+
+type NotificationToggleKey = Exclude<keyof ProfileNotificationSettings, 'frequency'>;
+
+const DEFAULT_NOTIFICATION_SETTINGS: ProfileNotificationSettings = {
+  internship_matches_email: true,
+  internship_matches_in_app: true,
+  application_status_email: true,
+  application_status_in_app: true,
+  career_tips_email: false,
+  career_tips_in_app: false,
+  frequency: 'Daily',
+};
+
+const PREFERENCES = [
+  {
+    title: 'Application Alerts',
+    desc: 'Get notified when a student applies for your internship.',
+    emailKey: 'application_status_email',
+    inAppKey: 'application_status_in_app',
+  },
+  {
+    title: 'Status Updates',
+    desc: 'Notifications about your internship post status (active, expired, etc).',
+    emailKey: 'internship_matches_email',
+    inAppKey: 'internship_matches_in_app',
+  },
+  {
+    title: 'Platform News',
+    desc: 'Updates about new features and platform improvements.',
+    emailKey: 'career_tips_email',
+    inAppKey: 'career_tips_in_app',
+  }
+] as const;
 
 export default function Notifications() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'activity' | 'settings'>('activity');
   const { notifications, loading, markAsRead, deleteNotification, markAllAsRead } = useNotifications();
+
+  const [notificationSettings, setNotificationSettings] = useState<ProfileNotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
+  const [settingsStatus, setSettingsStatus] = useState('');
 
   const navItems = [
     { name: 'Company Profile', icon: Building2, path: '/company/settings' },
@@ -34,35 +74,63 @@ export default function Notifications() {
     }));
   }, [notifications]);
 
-  const preferences = [
-    {
-      title: 'Application Alerts',
-      desc: 'Get notified when a student applies for your internship.',
-      options: [
-        { name: 'Email Notifications', enabled: true },
-        { name: 'Push Notifications', enabled: true },
-        { name: 'In-app Notifications', enabled: true },
-      ]
-    },
-    {
-      title: 'Status Updates',
-      desc: 'Notifications about your internship post status (active, expired, etc).',
-      options: [
-        { name: 'Email Notifications', enabled: true },
-        { name: 'Push Notifications', enabled: false },
-        { name: 'In-app Notifications', enabled: true },
-      ]
-    },
-    {
-      title: 'Platform News',
-      desc: 'Updates about new features and platform improvements.',
-      options: [
-        { name: 'Email Notifications', enabled: false },
-        { name: 'Push Notifications', enabled: false },
-        { name: 'In-app Notifications', enabled: true },
-      ]
+  useEffect(() => {
+    if (activeTab !== 'settings') return undefined;
+    let isCurrent = true;
+
+    const loadSettings = async () => {
+      setSettingsLoading(true);
+      setSettingsError('');
+      setSettingsStatus('');
+      try {
+        const response = await api.getProfileSettings();
+        if (!isCurrent) return;
+        const incoming = response?.settings?.notifications;
+        setNotificationSettings({
+          ...DEFAULT_NOTIFICATION_SETTINGS,
+          ...(incoming || {}),
+        });
+      } catch (error) {
+        if (!isCurrent) return;
+        setSettingsError(error instanceof Error ? error.message : 'Failed to load notification settings.');
+        setNotificationSettings(DEFAULT_NOTIFICATION_SETTINGS);
+      } finally {
+        if (!isCurrent) return;
+        setSettingsLoading(false);
+      }
+    };
+
+    loadSettings();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [activeTab]);
+
+  const handleToggle = (key: NotificationToggleKey) => {
+    setNotificationSettings((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSavePreferences = async () => {
+    setSettingsSaving(true);
+    setSettingsError('');
+    setSettingsStatus('');
+    try {
+      const response = await api.updateNotificationSettings(notificationSettings);
+      const nextSettings = response?.settings?.notifications;
+      if (nextSettings) {
+        setNotificationSettings({
+          ...DEFAULT_NOTIFICATION_SETTINGS,
+          ...nextSettings,
+        });
+      }
+      setSettingsStatus('Notification preferences saved.');
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : 'Failed to save notification preferences.');
+    } finally {
+      setSettingsSaving(false);
     }
-  ];
+  };
 
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-8">
@@ -205,47 +273,75 @@ export default function Notifications() {
             </div>
           ) : (
             <div className="space-y-6">
-              {preferences.map((group, i) => (
-                <div key={i} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-slate-100">
-                    <h2 className="text-xl font-bold text-slate-900">{group.title}</h2>
-                    <p className="text-sm text-slate-500 mt-1">{group.desc}</p>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    {group.options.map((option, j) => (
-                      <div key={j} className="flex items-center justify-between py-2">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${
-                            option.name.includes('Email') ? 'bg-blue-50 text-blue-600' :
-                            option.name.includes('Push') ? 'bg-purple-50 text-purple-600' :
-                            'bg-emerald-50 text-emerald-600'
-                          }`}>
-                            {option.name.includes('Email') ? <Mail size={20} /> :
-                             option.name.includes('Push') ? <Smartphone size={20} /> :
-                             <Bell size={20} />}
-                          </div>
-                          <span className="font-medium text-slate-700">{option.name}</span>
-                        </div>
-                        <button 
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                            option.enabled ? 'bg-primary' : 'bg-slate-200'
-                          }`}
-                        >
-                          <span 
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              option.enabled ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+              {settingsLoading ? (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-slate-500">
+                  Loading notification preferences...
                 </div>
-              ))}
+              ) : (
+                <>
+                  {PREFERENCES.map((group, i) => (
+                    <div key={i} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="p-6 border-b border-slate-100">
+                        <h2 className="text-xl font-bold text-slate-900">{group.title}</h2>
+                        <p className="text-sm text-slate-500 mt-1">{group.desc}</p>
+                      </div>
+                      <div className="p-6 space-y-4">
+                        {[
+                          {
+                            key: group.emailKey,
+                            label: 'Email Notifications',
+                            icon: Mail,
+                            color: 'bg-blue-50 text-blue-600',
+                          },
+                          {
+                            key: group.inAppKey,
+                            label: 'In-app Notifications',
+                            icon: Bell,
+                            color: 'bg-emerald-50 text-emerald-600',
+                          },
+                        ].map((option) => (
+                          <div key={option.key} className="flex items-center justify-between py-2">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-lg ${option.color}`}>
+                                <option.icon size={20} />
+                              </div>
+                              <span className="font-medium text-slate-700">{option.label}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleToggle(option.key as NotificationToggleKey)}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                                notificationSettings[option.key as NotificationToggleKey] ? 'bg-primary' : 'bg-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  notificationSettings[option.key as NotificationToggleKey] ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {(settingsStatus || settingsError) && (
+                <p className={`text-sm ${settingsError ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {settingsError || settingsStatus}
+                </p>
+              )}
 
               <div className="pt-4 flex justify-end">
-                <button className="inline-flex items-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all">
-                  Save Preferences
+                <button
+                  type="button"
+                  onClick={handleSavePreferences}
+                  disabled={settingsLoading || settingsSaving}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all disabled:opacity-60"
+                >
+                  {settingsSaving ? 'Saving...' : 'Save Preferences'}
                 </button>
               </div>
             </div>

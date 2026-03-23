@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ArrowLeft, Building2, Globe, MapPin, User, Phone, Image as ImageIcon } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Building2, Globe, MapPin, User, Phone, Image as ImageIcon, FileText, UploadCloud, X } from 'lucide-react';
 import { SplitLayout } from '../../components/SplitLayout';
 import { Input } from '../../components/Input';
 import { Select } from '../../components/Select';
 import { Button } from '../../components/Button';
 import { registrationStorage } from '../../utils/registrationStorage';
+import { uploadFileToS3, getFileLabel } from '../../utils/upload';
 
 export function CompanyStep2() {
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ export function CompanyStep2() {
   const [contactPhone, setContactPhone] = useState('');
   const [companyBio, setCompanyBio] = useState('');
   const [error, setError] = useState('');
+  const [verificationDocs, setVerificationDocs] = useState<string[]>([]);
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
 
   useEffect(() => {
     const step1 = registrationStorage.getStep1();
@@ -39,7 +42,32 @@ export function CompanyStep2() {
     setCompanyBio((step2?.company_bio || '').trim());
     setLogo((step2?.logo || '').trim());
     setLogoName((step2?.logo_name || '').trim());
+    setVerificationDocs(Array.isArray(step2?.documents) ? step2.documents : []);
   }, [navigate]);
+
+  const handleDocsUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setError('');
+    setIsUploadingDocs(true);
+    try {
+      const uploads = [];
+      for (const file of Array.from(files)) {
+        if (file.size > 15 * 1024 * 1024) {
+          setError('Each document must be less than 15MB.');
+          continue;
+        }
+        const fileUrl = await uploadFileToS3({ file, purpose: 'verification', auth: false });
+        uploads.push(fileUrl);
+      }
+      if (uploads.length > 0) {
+        setVerificationDocs((prev) => [...prev, ...uploads]);
+      }
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload documents.');
+    } finally {
+      setIsUploadingDocs(false);
+    }
+  };
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +89,7 @@ export function CompanyStep2() {
       company_bio: companyBio.trim() || null,
       logo: logo || null,
       logo_name: logoName || null,
+      documents: verificationDocs,
     });
 
     navigate('/register/company/step-3');
@@ -124,6 +153,65 @@ export function CompanyStep2() {
               <p className="text-xs leading-5 text-slate-500">PNG, JPG, GIF up to 5MB</p>
               {logoName ? <p className="mt-2 text-xs font-medium text-slate-600">{logoName}</p> : null}
             </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Verification Documents</label>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              handleDocsUpload(e.dataTransfer.files);
+            }}
+            className="mt-2 flex flex-col gap-4 rounded-lg border border-dashed border-slate-300 px-6 py-6 bg-white hover:bg-slate-50 transition-colors"
+          >
+            <div className="flex flex-col items-center text-center gap-2">
+              <UploadCloud className="h-8 w-8 text-slate-300" />
+              <p className="text-sm text-slate-600">
+                Upload business license, registration, or other verification docs.
+              </p>
+              <label
+                htmlFor="verification-docs"
+                className="text-xs font-semibold text-[#137fec] cursor-pointer hover:text-[#137fec]/80"
+              >
+                Click to upload or drag and drop
+                <input
+                  id="verification-docs"
+                  type="file"
+                  className="sr-only"
+                  multiple
+                  onChange={(event) => handleDocsUpload(event.target.files)}
+                />
+              </label>
+              <p className="text-xs text-slate-500">PDF, PNG, JPG up to 15MB each</p>
+            </div>
+
+            {verificationDocs.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {verificationDocs.map((doc) => (
+                  <div key={doc} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 text-slate-400" />
+                      <span className="text-xs font-medium text-slate-700 truncate">{getFileLabel(doc)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationDocs((prev) => prev.filter((item) => item !== doc))}
+                      className="text-slate-400 hover:text-rose-500"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isUploadingDocs && (
+              <p className="text-xs text-slate-500">Uploading documents...</p>
+            )}
           </div>
         </div>
 

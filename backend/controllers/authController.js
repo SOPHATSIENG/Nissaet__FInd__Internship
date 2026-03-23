@@ -28,6 +28,36 @@ const normalizeSkillLevel = (skillLevel) => {
 
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
 
+const touchUserActivity = async (userId) => {
+    if (!userId) return;
+    try {
+        await db.query(
+            `UPDATE users
+             SET last_active_at = NOW()
+             WHERE id = ?
+               AND (last_active_at IS NULL OR last_active_at < DATE_SUB(NOW(), INTERVAL 30 SECOND))`,
+            [userId]
+        );
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+    }
+};
+
+const recordUserLogin = async (userId) => {
+    if (!userId) return;
+    try {
+        await db.query(
+            `UPDATE users
+             SET last_login_at = NOW(),
+                 last_active_at = NOW()
+             WHERE id = ?`,
+            [userId]
+        );
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+    }
+};
+
 const normalizeUserRecord = (rawUser) => {
     if (!rawUser) return null;
     return {
@@ -769,6 +799,8 @@ const login = async (req, res) => {
             return res.status(403).json({ message: 'Account role is not properly configured.' });
         }
 
+        await recordUserLogin(user.id);
+
         const response = buildAuthResponse(user.id, user.email, user.full_name, user.role);
         return res.json({
             message: 'Login successful',
@@ -809,6 +841,8 @@ const socialLogin = async (req, res) => {
                 console.error('Social login role/profile validation error:', error);
                 return res.status(403).json({ message: 'Account role is not properly configured.' });
             }
+
+            await recordUserLogin(existingUser.id);
 
             const response = buildAuthResponse(
                 existingUser.id,
@@ -857,6 +891,8 @@ const socialLogin = async (req, res) => {
         }
 
         await conn.commit();
+
+        await recordUserLogin(userId);
 
         const response = buildAuthResponse(userId, email, normalizedName, normalizedRole);
         return res.status(201).json({
@@ -947,6 +983,8 @@ const getCurrentUser = async (req, res) => {
         if (!req.user || !req.user.userId) {
             return res.status(401).json({ message: 'Authentication required' });
         }
+
+        await touchUserActivity(req.user.userId);
 
         const users = await db.query('SELECT * FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
 

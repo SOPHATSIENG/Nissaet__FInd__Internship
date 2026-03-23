@@ -382,6 +382,7 @@ export const CategoryManagement = () => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className="group relative flex flex-col gap-4 p-5 rounded-2xl border border-border bg-surface shadow-sm hover:shadow-md hover:border-primary/30 transition-all"
+
             >
               <div className="flex items-start justify-between">
                 <div className={cn(
@@ -427,7 +428,15 @@ export const CategoryManagement = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1" 
+              onClick={() => {
+                    if (activeTab === 'Job Categories') {
+                      navigate(`/admin/categories/details_list?categoryId=${item.id}`);
+                      return;
+                    }
+                    setRelatedItems([]);
+                    setSelectedDetailItem(item);
+                  }}>
                 <h3 className="text-lg font-bold text-text-primary group-hover:text-primary transition-colors">{item.name}</h3>
                 {item.description && (
                   <p className="text-sm text-text-secondary line-clamp-2 leading-relaxed">{item.description}</p>

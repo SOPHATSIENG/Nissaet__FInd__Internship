@@ -527,14 +527,6 @@ const createEvent = async (req, res) => {
             status: toNull(status) || 'draft'
         };
 
-        const query = `
-            INSERT INTO events (
-                company_id, title, description, type, event_date, start_time, end_time,
-                location, is_virtual, meeting_url, registration_url, max_participants, registration_deadline,
-                requirements, tags, image_url, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-
         const bindParams = [
             companyId,
             sanitized.title,
@@ -554,8 +546,29 @@ const createEvent = async (req, res) => {
             sanitized.image_url,
             sanitized.status
         ].map((value) => (value === undefined ? null : value));
+        let result;
+        try {
+            const query = `
+                INSERT INTO events (
+                    company_id, title, description, type, event_date, start_time, end_time,
+                    location, is_virtual, meeting_url, registration_url, max_participants, registration_deadline,
+                    requirements, tags, image_url, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            result = await db.query(query, bindParams);
+        } catch (error) {
+            if (!isSchemaError(error)) throw error;
 
-        const result = await db.query(query, bindParams);
+            const fallbackQuery = `
+                INSERT INTO events (
+                    company_id, title, description, type, event_date, start_time, end_time,
+                    location, is_virtual, meeting_url, max_participants, registration_deadline,
+                    requirements, tags, image_url, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            const fallbackParams = bindParams.filter((_, index) => index !== 10);
+            result = await db.query(fallbackQuery, fallbackParams);
+        }
 
         res.status(201).json({ id: result.insertId, message: 'Event created successfully' });
     } catch (error) {
@@ -617,15 +630,6 @@ const updateEvent = async (req, res) => {
             return res.status(403).json({ error: 'Not authorized to update this event' });
         }
 
-        const query = `
-            UPDATE events SET
-                title = ?, description = ?, type = ?, event_date = ?, start_time = ?,
-                end_time = ?, location = ?, is_virtual = ?, meeting_url = ?, registration_url = ?,
-                max_participants = ?, registration_deadline = ?, requirements = ?,
-                tags = ?, image_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `;
-
         const updateParams = [
             title,
             description,
@@ -645,8 +649,30 @@ const updateEvent = async (req, res) => {
             toNull(status) || 'draft',
             id
         ].map((value) => (value === undefined ? null : value));
+        try {
+            const query = `
+                UPDATE events SET
+                    title = ?, description = ?, type = ?, event_date = ?, start_time = ?,
+                    end_time = ?, location = ?, is_virtual = ?, meeting_url = ?, registration_url = ?,
+                    max_participants = ?, registration_deadline = ?, requirements = ?,
+                    tags = ?, image_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `;
+            await db.query(query, updateParams);
+        } catch (error) {
+            if (!isSchemaError(error)) throw error;
 
-        await db.query(query, updateParams);
+            const fallbackQuery = `
+                UPDATE events SET
+                    title = ?, description = ?, type = ?, event_date = ?, start_time = ?,
+                    end_time = ?, location = ?, is_virtual = ?, meeting_url = ?,
+                    max_participants = ?, registration_deadline = ?, requirements = ?,
+                    tags = ?, image_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `;
+            const fallbackParams = updateParams.filter((_, index) => index !== 9);
+            await db.query(fallbackQuery, fallbackParams);
+        }
 
         res.json({ message: 'Event updated successfully' });
     } catch (error) {

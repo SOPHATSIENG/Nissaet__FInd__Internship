@@ -7,6 +7,60 @@ const isSchemaError = (error) =>
     error && (error.code === 'ER_BAD_FIELD_ERROR' || error.code === 'ER_NO_SUCH_TABLE');
 const isDuplicateEntry = (error) => error && error.code === 'ER_DUP_ENTRY';
 
+const eventSelectFields = (includeRegistrationUrl = true) => `
+    e.id,
+    e.company_id,
+    e.title,
+    e.description,
+    e.type,
+    e.event_date,
+    e.start_time,
+    e.end_time,
+    e.location,
+    e.is_virtual,
+    e.meeting_url,
+    ${includeRegistrationUrl ? 'e.registration_url' : 'NULL AS registration_url'},
+    e.max_participants,
+    e.current_participants,
+    e.registration_deadline,
+    e.requirements,
+    e.tags,
+    e.image_url,
+    e.status,
+    e.created_at
+`;
+
+const companyEventsSelect = (includeRegistrationUrl = true) => `
+    SELECT
+        e.id,
+        e.title,
+        e.description,
+        e.type,
+        e.event_date,
+        e.start_time,
+        e.end_time,
+        e.location,
+        e.is_virtual,
+        e.meeting_url,
+        ${includeRegistrationUrl ? 'e.registration_url' : 'NULL AS registration_url'},
+        e.max_participants,
+        e.current_participants,
+        e.registration_deadline,
+        e.requirements,
+        e.tags,
+        e.image_url,
+        e.status,
+        e.created_at,
+        (
+            SELECT COUNT(*)
+            FROM event_registrations er
+            WHERE er.event_id = e.id
+        ) AS total_registrations
+    FROM events e
+    WHERE e.company_id = ?
+    ORDER BY e.created_at DESC
+`;
+
 /**
  * Get all events with filtering and search
  */
@@ -29,6 +83,7 @@ const getAllEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -100,6 +155,7 @@ const getFeaturedEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -147,6 +203,7 @@ const getUpcomingEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -182,28 +239,9 @@ const getUpcomingEvents = async (req, res) => {
 const getEventById = async (req, res) => {
     try {
         const { id } = req.params;
-        
-        const query = `
+        const buildQuery = (includeRegistrationUrl = true) => `
             SELECT
-                e.id,
-                e.company_id,
-                e.title,
-                e.description,
-                e.type,
-                e.event_date,
-                e.start_time,
-                e.end_time,
-                e.location,
-                e.is_virtual,
-                e.meeting_url,
-                e.max_participants,
-                e.current_participants,
-                e.registration_deadline,
-                e.requirements,
-                e.tags,
-                e.image_url,
-                e.status,
-                e.created_at,
+                ${eventSelectFields(includeRegistrationUrl)},
                 COALESCE(c.name, u.company_name) AS company_name,
                 c.id AS company_profile_id,
                 c.logo AS company_logo,
@@ -216,7 +254,31 @@ const getEventById = async (req, res) => {
             WHERE e.id = ?
         `;
 
-        const events = await db.query(query, [id]);
+        const fallbackQuery = `
+            SELECT
+                ${eventSelectFields(false)},
+                COALESCE(u.company_name, '') AS company_name,
+                NULL AS company_logo,
+                COALESCE(u.industry, '') AS industry,
+                COALESCE(u.location, '') AS company_location,
+                COALESCE(u.website, '') AS website
+            FROM events e
+            JOIN users u ON e.company_id = u.id
+            WHERE e.id = ?
+        `;
+
+        let events;
+        try {
+            events = await db.query(buildQuery(true), [id]);
+        } catch (error) {
+            if (!isSchemaError(error)) throw error;
+            try {
+                events = await db.query(buildQuery(false), [id]);
+            } catch (fallbackError) {
+                if (!isSchemaError(fallbackError)) throw fallbackError;
+                events = await db.query(fallbackQuery, [id]);
+            }
+        }
         
         if (events.length === 0) {
             return res.status(404).json({ error: 'Event not found' });
@@ -248,36 +310,20 @@ const getEventById = async (req, res) => {
 const getCompanyEvents = async (req, res) => {
     try {
         const companyId = req.user?.userId || req.user?.id;
-        
-        const query = `
-            SELECT
-                e.id,
-                e.title,
-                e.description,
-                e.type,
-                e.event_date,
-                e.start_time,
-                e.end_time,
-                e.location,
-                e.is_virtual,
-                e.meeting_url,
-                e.max_participants,
-                e.current_participants,
-                e.registration_deadline,
-                e.requirements,
-                e.tags,
-                e.image_url,
-                e.status,
-                e.created_at,
-                COUNT(er.id) AS total_registrations
-            FROM events e
-            LEFT JOIN event_registrations er ON e.id = er.event_id
-            WHERE e.company_id = ?
-            GROUP BY e.id
-            ORDER BY e.created_at DESC
-        `;
+        let events;
 
-        const events = await db.query(query, [companyId]);
+        try {
+            events = await db.query(companyEventsSelect(true), [companyId]);
+        } catch (error) {
+            if (!isSchemaError(error)) {
+                throw error;
+            }
+
+            // Allow the company event list to keep working before the optional
+            // registration link migration has been applied.
+            events = await db.query(companyEventsSelect(false), [companyId]);
+        }
+
         res.json(events);
     } catch (error) {
         console.error('Error fetching company events:', error);
@@ -333,6 +379,7 @@ const getStudentRegisteredEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -397,6 +444,7 @@ const getRecommendedEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -446,6 +494,7 @@ const createEvent = async (req, res) => {
             location,
             is_virtual,
             meeting_url,
+            registration_url,
             max_participants,
             registration_deadline,
             requirements,
@@ -476,6 +525,7 @@ const createEvent = async (req, res) => {
             location: toNull(location),
             is_virtual: isVirtual,
             meeting_url: toNull(meeting_url),
+            registration_url: toNull(registration_url),
             max_participants: parsedMaxParticipants,
             registration_deadline: toNull(registration_deadline),
             requirements: toNull(requirements),
@@ -483,14 +533,6 @@ const createEvent = async (req, res) => {
             image_url: toNull(image_url),
             status: toNull(status) || 'draft'
         };
-
-        const query = `
-            INSERT INTO events (
-                company_id, title, description, type, event_date, start_time, end_time,
-                location, is_virtual, meeting_url, max_participants, registration_deadline,
-                requirements, tags, image_url, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
 
         const bindParams = [
             companyId,
@@ -503,6 +545,7 @@ const createEvent = async (req, res) => {
             sanitized.location,
             sanitized.is_virtual,
             sanitized.meeting_url,
+            sanitized.registration_url,
             sanitized.max_participants,
             sanitized.registration_deadline,
             sanitized.requirements,
@@ -510,8 +553,29 @@ const createEvent = async (req, res) => {
             sanitized.image_url,
             sanitized.status
         ].map((value) => (value === undefined ? null : value));
+        let result;
+        try {
+            const query = `
+                INSERT INTO events (
+                    company_id, title, description, type, event_date, start_time, end_time,
+                    location, is_virtual, meeting_url, registration_url, max_participants, registration_deadline,
+                    requirements, tags, image_url, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            result = await db.query(query, bindParams);
+        } catch (error) {
+            if (!isSchemaError(error)) throw error;
 
-        const result = await db.query(query, bindParams);
+            const fallbackQuery = `
+                INSERT INTO events (
+                    company_id, title, description, type, event_date, start_time, end_time,
+                    location, is_virtual, meeting_url, max_participants, registration_deadline,
+                    requirements, tags, image_url, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            const fallbackParams = bindParams.filter((_, index) => index !== 10);
+            result = await db.query(fallbackQuery, fallbackParams);
+        }
 
         res.status(201).json({ id: result.insertId, message: 'Event created successfully' });
     } catch (error) {
@@ -540,6 +604,7 @@ const updateEvent = async (req, res) => {
             location,
             is_virtual,
             meeting_url,
+            registration_url,
             max_participants,
             registration_deadline,
             requirements,
@@ -572,15 +637,6 @@ const updateEvent = async (req, res) => {
             return res.status(403).json({ error: 'Not authorized to update this event' });
         }
 
-        const query = `
-            UPDATE events SET
-                title = ?, description = ?, type = ?, event_date = ?, start_time = ?,
-                end_time = ?, location = ?, is_virtual = ?, meeting_url = ?,
-                max_participants = ?, registration_deadline = ?, requirements = ?,
-                tags = ?, image_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `;
-
         const updateParams = [
             title,
             description,
@@ -591,6 +647,7 @@ const updateEvent = async (req, res) => {
             toNull(location),
             isVirtual,
             toNull(meeting_url),
+            toNull(registration_url),
             parsedMaxParticipants,
             toNull(registration_deadline),
             toNull(requirements),
@@ -599,8 +656,30 @@ const updateEvent = async (req, res) => {
             toNull(status) || 'draft',
             id
         ].map((value) => (value === undefined ? null : value));
+        try {
+            const query = `
+                UPDATE events SET
+                    title = ?, description = ?, type = ?, event_date = ?, start_time = ?,
+                    end_time = ?, location = ?, is_virtual = ?, meeting_url = ?, registration_url = ?,
+                    max_participants = ?, registration_deadline = ?, requirements = ?,
+                    tags = ?, image_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `;
+            await db.query(query, updateParams);
+        } catch (error) {
+            if (!isSchemaError(error)) throw error;
 
-        await db.query(query, updateParams);
+            const fallbackQuery = `
+                UPDATE events SET
+                    title = ?, description = ?, type = ?, event_date = ?, start_time = ?,
+                    end_time = ?, location = ?, is_virtual = ?, meeting_url = ?,
+                    max_participants = ?, registration_deadline = ?, requirements = ?,
+                    tags = ?, image_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `;
+            const fallbackParams = updateParams.filter((_, index) => index !== 9);
+            await db.query(fallbackQuery, fallbackParams);
+        }
 
         res.json({ message: 'Event updated successfully' });
     } catch (error) {

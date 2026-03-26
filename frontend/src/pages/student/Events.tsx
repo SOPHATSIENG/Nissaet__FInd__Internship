@@ -36,6 +36,7 @@ interface Event {
   location: string;
   is_virtual: boolean;
   meeting_url: string;
+  registration_url: string;
   max_participants: number;
   current_participants: number;
   registration_deadline: string;
@@ -352,6 +353,18 @@ export default function Events() {
             View Details
             <ChevronRight className="w-4 h-4" />
           </button>
+
+          {event.registration_url && (
+            <a
+              href={event.registration_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors text-sm font-medium"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Registration Link
+            </a>
+          )}
 
           {user && user.role === 'student' && (
             <>

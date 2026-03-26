@@ -1613,6 +1613,13 @@ const getCompanyArchivedInternships = async (req, res) => {
         }
 
         await expireInternshipsByDeadline(companyId);
+        await db.query(
+            `DELETE FROM internships
+             WHERE company_id = ?
+             AND status = 'archived'
+             AND updated_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)`,
+            [companyId]
+        );
 
         const sql = `
             SELECT
@@ -1699,6 +1706,31 @@ const restoreInternship = async (req, res) => {
     }
 };
 
+/**
+ * Permanently delete an archived internship
+ */
+const permanentlyDeleteInternship = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (req.user && req.user.role === 'company') {
+            const companyId = await getCompanyIdByUserId(req.user.userId);
+            const existing = await db.query('SELECT company_id, status FROM internships WHERE id = ?', [id]);
+            if (existing.length === 0) return res.status(404).json({ message: 'Not found' });
+            if (existing[0].company_id !== companyId) return res.status(403).json({ message: 'Forbidden' });
+            if (existing[0].status !== 'archived') {
+                return res.status(400).json({ message: 'Only archived internships can be permanently deleted' });
+            }
+        }
+
+        await db.query('DELETE FROM internships WHERE id = ? AND status = ?', [id, 'archived']);
+        return res.json({ success: true, message: 'Archived internship deleted permanently' });
+    } catch (error) {
+        console.error('Permanent delete failed:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const getApplicationTrends = async (req, res) => {
     try {
         const userId = req.user?.userId || req.user?.id;
@@ -1754,6 +1786,7 @@ module.exports = {
     getCompanyInternships,
     getCompanyArchivedInternships,
     restoreInternship,
+    permanentlyDeleteInternship,
     deleteInternship,
     updateInternship,
     getDashboardStats,

@@ -31,6 +31,7 @@ interface EventFormData {
   location: string;
   is_virtual: boolean;
   meeting_url: string;
+  registration_url: string;
   max_participants: string;
   registration_deadline: string;
   requirements: string;
@@ -54,6 +55,7 @@ export default function PostEvent() {
     location: '',
     is_virtual: false,
     meeting_url: '',
+    registration_url: '',
     max_participants: '',
     registration_deadline: '',
     requirements: '',
@@ -100,6 +102,7 @@ export default function PostEvent() {
         location: event.location || '',
         is_virtual: event.is_virtual || false,
         meeting_url: event.meeting_url || '',
+        registration_url: event.registration_url || '',
         max_participants: event.max_participants?.toString() || '',
         registration_deadline: event.registration_deadline || '',
         requirements: event.requirements || '',
@@ -154,6 +157,7 @@ export default function PostEvent() {
         location: formData.is_virtual ? null : toNull(formData.location),
         is_virtual: Boolean(formData.is_virtual),
         meeting_url: formData.is_virtual ? toNull(formData.meeting_url) : null,
+        registration_url: toNull(formData.registration_url),
         max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
         registration_deadline: toNull(formData.registration_deadline),
         requirements: toNull(formData.requirements),
@@ -434,6 +438,24 @@ export default function PostEvent() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Globe className="inline w-4 h-4 mr-1" />
+              Registration Link
+            </label>
+            <input
+              type="url"
+              name="registration_url"
+              value={formData.registration_url}
+              onChange={handleInputChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
+              placeholder="https://example.com/register-form"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Optional external link students can use to register.
+            </p>
           </div>
 
           <div>

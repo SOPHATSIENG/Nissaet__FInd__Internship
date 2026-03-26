@@ -386,6 +386,10 @@ export const api = {
     return request(`/internships/${id}/restore`, { method: 'PUT', auth: true });
   },
 
+  permanentlyDeleteInternship(id) {
+    return request(`/internships/${id}/permanent`, { method: 'DELETE', auth: true });
+  },
+
   // Dashboard endpoints
   getDashboardStats() {
     return request('/internships/dashboard/stats', { auth: true });

@@ -6,6 +6,37 @@ const db = require('../config/db');
 const isSchemaError = (error) =>
     error && (error.code === 'ER_BAD_FIELD_ERROR' || error.code === 'ER_NO_SUCH_TABLE');
 
+const companyEventsSelect = (includeRegistrationUrl = true) => `
+    SELECT
+        e.id,
+        e.title,
+        e.description,
+        e.type,
+        e.event_date,
+        e.start_time,
+        e.end_time,
+        e.location,
+        e.is_virtual,
+        e.meeting_url,
+        ${includeRegistrationUrl ? 'e.registration_url' : 'NULL AS registration_url'},
+        e.max_participants,
+        e.current_participants,
+        e.registration_deadline,
+        e.requirements,
+        e.tags,
+        e.image_url,
+        e.status,
+        e.created_at,
+        (
+            SELECT COUNT(*)
+            FROM event_registrations er
+            WHERE er.event_id = e.id
+        ) AS total_registrations
+    FROM events e
+    WHERE e.company_id = ?
+    ORDER BY e.created_at DESC
+`;
+
 /**
  * Get all events with filtering and search
  */
@@ -247,37 +278,20 @@ const getEventById = async (req, res) => {
 const getCompanyEvents = async (req, res) => {
     try {
         const companyId = req.user?.userId || req.user?.id;
-        
-        const query = `
-            SELECT
-                e.id,
-                e.title,
-                e.description,
-                e.type,
-                e.event_date,
-                e.start_time,
-                e.end_time,
-                e.location,
-                e.is_virtual,
-                e.meeting_url,
-                e.registration_url,
-                e.max_participants,
-                e.current_participants,
-                e.registration_deadline,
-                e.requirements,
-                e.tags,
-                e.image_url,
-                e.status,
-                e.created_at,
-                COUNT(er.id) AS total_registrations
-            FROM events e
-            LEFT JOIN event_registrations er ON e.id = er.event_id
-            WHERE e.company_id = ?
-            GROUP BY e.id
-            ORDER BY e.created_at DESC
-        `;
+        let events;
 
-        const events = await db.query(query, [companyId]);
+        try {
+            events = await db.query(companyEventsSelect(true), [companyId]);
+        } catch (error) {
+            if (!isSchemaError(error)) {
+                throw error;
+            }
+
+            // Allow the company event list to keep working before the optional
+            // registration link migration has been applied.
+            events = await db.query(companyEventsSelect(false), [companyId]);
+        }
+
         res.json(events);
     } catch (error) {
         console.error('Error fetching company events:', error);

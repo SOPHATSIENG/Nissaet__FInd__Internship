@@ -36,6 +36,7 @@ router.delete('/:id/save', authenticate, authorize('student'), internshipControl
 router.post('/', authenticate, authorize('company', 'admin'), internshipController.createInternship);
 router.put('/:id', authenticate, authorize('company', 'admin'), internshipController.updateInternship);
 router.put('/:id/restore', authenticate, authorize('company', 'admin'), internshipController.restoreInternship);
+router.delete('/:id/permanent', authenticate, authorize('company', 'admin'), internshipController.permanentlyDeleteInternship);
 router.delete('/:id', authenticate, authorize('company', 'admin'), internshipController.deleteInternship);
 
 module.exports = router;

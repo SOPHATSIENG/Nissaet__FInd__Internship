@@ -93,10 +93,12 @@ export default function Events() {
   const fetchEvents = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await api.get('/events/company/mine');
       setEvents(response.data);
     } catch (error) {
       console.error('Error fetching events:', error);
+      setError('Unable to load your event list right now.');
     } finally {
       setLoading(false);
     }
@@ -124,6 +126,8 @@ export default function Events() {
       console.error('Error deleting event:', error);
     }
   };
+
+  const [error, setError] = useState('');
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -189,9 +193,13 @@ export default function Events() {
                          event.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = showDraftOnly
       ? event.status === 'draft'
-      : (statusFilter === 'all'
-          ? event.status !== 'draft'
-          : event.status === statusFilter);
+      : (
+          statusFilter === 'all'
+            ? event.status !== 'draft'
+            : statusFilter === 'draft'
+              ? false
+              : event.status === statusFilter
+        );
     const matchesType = typeFilter === 'all' || event.type === typeFilter;
     
     return matchesSearch && matchesStatus && matchesType;
@@ -264,6 +272,13 @@ export default function Events() {
               <Clock className="w-8 h-8 text-orange-600" />
             </div>
           </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          <AlertCircle className="w-5 h-5" />
+          {error}
         </div>
       )}
 

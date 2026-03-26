@@ -335,6 +335,8 @@ CREATE TABLE `users` (
   `contact_phone` varchar(20) DEFAULT NULL,
   `admin_code` varchar(100) DEFAULT NULL,
   `department` varchar(100) DEFAULT NULL,
+  `last_login_at` datetime DEFAULT NULL,
+  `last_active_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

@@ -191,6 +191,10 @@ export const api = {
     return request('/profile/notifications/card', { auth: true });
   },
 
+  getCompanyBilling() {
+    return request('/profile/billing', { auth: true });
+  },
+
   markNotificationsRead(payload) {
     return request('/profile/notifications/read', { method: 'PUT', auth: true, body: payload });
   },
@@ -577,6 +581,10 @@ export const api = {
 
   companyGetVerificationRequests() {
     return request('/verification/company/mine', { auth: true });
+  },
+
+  companyUpdateVerificationDocuments(id, payload) {
+    return request(`/verification/company/${id}/documents`, { method: 'PUT', auth: true, body: payload });
   },
 
   // Notification endpoints

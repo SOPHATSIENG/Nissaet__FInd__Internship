@@ -707,7 +707,7 @@ export default function Dashboard() {
               {recentApplications.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-4">No recent applicants.</p>
               ) : (
-                recentApplications.map((app, i) => (
+                recentApplications.slice(0, 5).map((app, i) => (
                   <div key={app.id} className="flex items-start gap-3">
                     <img 
                       className="h-10 w-10 rounded-full object-cover" 
@@ -723,7 +723,9 @@ export default function Dashboard() {
                       </Link>
                       <p className="text-xs text-slate-500 truncate">Applied for {app.internship_title}</p>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        {new Date(app.created_at).toLocaleDateString()}
+                        {Number.isNaN(new Date(app.created_at).getTime())
+                          ? ''
+                          : new Date(app.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>

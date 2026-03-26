@@ -97,13 +97,26 @@ const deleteNotification = async (req, res) => {
  */
 const createNotification = async (userId, title, message, type, relatedEntityType = null, relatedEntityId = null, actionUrl = null) => {
     try {
-        const result = await db.query(
-            `INSERT INTO notifications 
-            (user_id, title, message, type, related_entity_type, related_entity_id, action_url) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [userId, title, message, type, relatedEntityType, relatedEntityId, actionUrl]
-        );
-        return result.insertId;
+        try {
+            const result = await db.query(
+                `INSERT INTO notifications 
+                (user_id, title, message, type, related_entity_type, related_entity_id, action_url, is_read) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId, title, message, type, relatedEntityType, relatedEntityId, actionUrl, 0]
+            );
+            return result.insertId;
+        } catch (innerError) {
+            if (innerError && innerError.code === 'ER_BAD_FIELD_ERROR') {
+                const result = await db.query(
+                    `INSERT INTO notifications 
+                    (user_id, title, message, type, related_entity_type, related_entity_id, action_url) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [userId, title, message, type, relatedEntityType, relatedEntityId, actionUrl]
+                );
+                return result.insertId;
+            }
+            throw innerError;
+        }
     } catch (error) {
         console.error('Error creating notification:', error);
         return null;

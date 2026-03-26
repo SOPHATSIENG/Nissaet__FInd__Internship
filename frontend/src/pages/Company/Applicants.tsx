@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Download, 
@@ -72,7 +72,7 @@ export default function Applicants() {
     if (value === 'accepted') return 'Shortlisted';
     if (value === 'reviewing') return 'Pending Review';
     if (value === 'pending') return 'Pending Review';
-    if (value === 'rejected') return 'Rejected';
+    if (value === 'rejected') return 'Unshortlisted';
     if (value === 'withdrawn') return 'Withdrawn';
     return status;
   };
@@ -80,6 +80,7 @@ export default function Applicants() {
   const toApiStatus = (status: string) => {
     if (status === 'Shortlisted') return 'shortlisted';
     if (status === 'Pending Review') return 'pending';
+    if (status === 'Unshortlisted') return 'rejected';
     if (status === 'Rejected') return 'rejected';
     return status.toLowerCase();
   };
@@ -130,7 +131,7 @@ export default function Applicants() {
           const degreeParts = [app.major, app.current_education_level].filter(Boolean);
           education.push({
             school: app.university || '',
-            degree: degreeParts.join(' · '),
+            degree: degreeParts.join(' � '),
             period: ''
           });
         }
@@ -365,9 +366,9 @@ export default function Applicants() {
     const stats = applicants.reduce((acc, app) => {
       if (app.status === 'Pending Review') acc.pending++;
       else if (app.status === 'Shortlisted') acc.shortlisted++;
-      else if (app.status === 'Rejected') acc.rejected++;
+      else if (app.status === 'Unshortlisted') acc.unshortlisted++;
       return acc;
-    }, { pending: 0, shortlisted: 0, rejected: 0 });
+    }, { pending: 0, shortlisted: 0, unshortlisted: 0 });
     
     console.log('[STATS] Dynamic Dashboard Stats:', stats);
     
@@ -377,7 +378,7 @@ export default function Applicants() {
     return stats;
   };
 
-  const openConfirmation = (id: number, name: string, action: 'approve' | 'reject' | 'reconsider') => {
+  const openConfirmation = (id: number, name: string, action: 'approve' | 'Unshortlist' | 'reconsider') => {
     if (action === 'approve') {
       setModalConfig({
         isOpen: true,
@@ -387,14 +388,14 @@ export default function Applicants() {
         confirmText: 'Approve',
         onConfirm: () => handleUpdateStatus(id, 'Shortlisted'),
       });
-    } else if (action === 'reject') {
+    } else if (action === 'Unshortlist') {
       setModalConfig({
         isOpen: true,
         type: 'danger',
-        title: 'Reject Applicant',
-        message: `Are you sure you want to reject ${name}? This action will move them to the rejected list.`,
-        confirmText: 'Reject',
-        onConfirm: () => handleUpdateStatus(id, 'Rejected'),
+        title: 'Unshortlist Applicant',
+        message: `Are you sure you want to Unshortlist ${name}? This action will move them to the Unshortlisted list.`,
+        confirmText: 'Unshortlist',
+        onConfirm: () => handleUpdateStatus(id, 'Unshortlisted'),
       });
     } else if (action === 'reconsider') {
       setModalConfig({
@@ -408,7 +409,7 @@ export default function Applicants() {
     }
   };
 
-  const handleBulkAction = (action: 'approve' | 'reject' | 'download' | 'reconsider' | 'delete') => {
+  const handleBulkAction = (action: 'approve' | 'Unshortlist' | 'download' | 'reconsider' | 'delete') => {
     const selectedCount = selectedApplicants.length;
     if (selectedCount === 0) return;
 
@@ -427,16 +428,16 @@ export default function Applicants() {
           setModalConfig(prev => ({ ...prev, isOpen: false }));
         },
       });
-    } else if (action === 'reject') {
+    } else if (action === 'Unshortlist') {
       setModalConfig({
         isOpen: true,
         type: 'danger',
-        title: 'Bulk Reject',
-        message: `Are you sure you want to reject ${selectedCount} selected applicants?`,
-        confirmText: 'Reject All',
+        title: 'Bulk Unshortlist',
+        message: `Are you sure you want to Unshortlist ${selectedCount} selected applicants?`,
+        confirmText: 'Unshortlist All',
         onConfirm: () => {
           setApplicants(prev => prev.map(app => 
-            selectedApplicants.includes(app.id) ? { ...app, status: 'Rejected' } : app
+            selectedApplicants.includes(app.id) ? { ...app, status: 'Unshortlisted' } : app
           ));
           setSelectedApplicants([]);
           setModalConfig(prev => ({ ...prev, isOpen: false }));
@@ -537,7 +538,7 @@ export default function Applicants() {
     { label: 'Total Applicants', value: applicants.length.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+12 Today' },
     { label: 'Pending Review', value: applicants.filter(a => a.status === 'Pending Review' || a.status === 'pending').length.toString(), icon: Hourglass, color: 'text-yellow-600', bg: 'bg-yellow-50' },
     { label: 'Shortlisted', value: applicants.filter(a => a.status === 'Shortlisted').length.toString(), icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Rejected', value: applicants.filter(a => a.status === 'Rejected').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
+    { label: 'Unshortlisted', value: applicants.filter(a => a.status === 'Unshortlisted').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
   ];
 
   return (
@@ -556,7 +557,7 @@ export default function Applicants() {
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${
                   statusFilter === 'Shortlisted' ? 'bg-emerald-500' :
-                  statusFilter === 'Rejected' ? 'bg-red-500' :
+                  statusFilter === 'Unshortlisted' ? 'bg-red-500' :
                   statusFilter === 'Pending Review' ? 'bg-yellow-500' :
                   'bg-slate-300'
                 }`} />
@@ -583,7 +584,7 @@ export default function Applicants() {
                         { label: 'All Statuses', value: '', color: 'bg-slate-300' },
                         { label: 'Pending Review', value: 'Pending Review', color: 'bg-yellow-500' },
                         { label: 'Shortlisted', value: 'Shortlisted', color: 'bg-emerald-500' },
-                        { label: 'Rejected', value: 'Rejected', color: 'bg-red-500' },
+                        { label: 'Unshortlisted', value: 'Unshortlisted', color: 'bg-red-500' },
                       ].map((option) => (
                         <button
                           key={option.label}
@@ -750,12 +751,12 @@ export default function Applicants() {
                   Approve
                 </button>
                 <button 
-                  onClick={() => handleBulkAction('reject')}
+                  onClick={() => handleBulkAction('Unshortlist')}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors"
-                  title="Reject selected"
+                  title="Unshortlist selected"
                 >
                   <XCircle size={16} />
-                  Reject
+                  Unshortlist
                 </button>
                 <button 
                   onClick={() => handleBulkAction('reconsider')}
@@ -862,7 +863,7 @@ export default function Applicants() {
                     <td className="py-4 px-6">
                       <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
                         app.status === 'Shortlisted' ? 'bg-green-50 text-green-700 ring-green-600/20' :
-                        app.status === 'Rejected' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                        app.status === 'Unshortlisted' ? 'bg-red-50 text-red-700 ring-red-600/20' :
                         'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
                       }`}>
                         {app.status}
@@ -885,7 +886,7 @@ export default function Applicants() {
                           <Eye size={20} />
                         </button>
                         <div className="h-4 w-px bg-slate-200 mx-1"></div>
-                        {app.status === 'Rejected' ? (
+                        {app.status === 'Unshortlisted' ? (
                           <button 
                             onClick={() => openConfirmation(app.id, app.name, 'reconsider')}
                             className="p-1.5 text-slate-400 hover:text-green-600 transition-colors" 
@@ -913,9 +914,9 @@ export default function Applicants() {
                               </button>
                             )}
                             <button 
-                              onClick={() => openConfirmation(app.id, app.name, 'reject')}
+                              onClick={() => openConfirmation(app.id, app.name, 'Unshortlist')}
                               className="p-1.5 text-slate-400 hover:text-red-600 transition-colors" 
-                              title="Reject"
+                              title="Unshortlist"
                             >
                               <XCircle size={20} />
                             </button>
@@ -1043,7 +1044,7 @@ export default function Applicants() {
                     <div className="flex flex-wrap gap-2 mt-3">
                       <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
                         viewingApplicant.status === 'Shortlisted' ? 'bg-green-50 text-green-700 ring-green-600/20' :
-                        viewingApplicant.status === 'Rejected' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                        viewingApplicant.status === 'Unshortlisted' ? 'bg-red-50 text-red-700 ring-red-600/20' :
                         'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
                       }`}>
                         {viewingApplicant.status}
@@ -1169,6 +1170,7 @@ export default function Applicants() {
     </div>
   );
 }
+
 
 
 

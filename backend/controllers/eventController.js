@@ -6,6 +6,29 @@ const db = require('../config/db');
 const isSchemaError = (error) =>
     error && (error.code === 'ER_BAD_FIELD_ERROR' || error.code === 'ER_NO_SUCH_TABLE');
 
+const eventSelectFields = (includeRegistrationUrl = true) => `
+    e.id,
+    e.company_id,
+    e.title,
+    e.description,
+    e.type,
+    e.event_date,
+    e.start_time,
+    e.end_time,
+    e.location,
+    e.is_virtual,
+    e.meeting_url,
+    ${includeRegistrationUrl ? 'e.registration_url' : 'NULL AS registration_url'},
+    e.max_participants,
+    e.current_participants,
+    e.registration_deadline,
+    e.requirements,
+    e.tags,
+    e.image_url,
+    e.status,
+    e.created_at
+`;
+
 const companyEventsSelect = (includeRegistrationUrl = true) => `
     SELECT
         e.id,
@@ -212,29 +235,9 @@ const getUpcomingEvents = async (req, res) => {
 const getEventById = async (req, res) => {
     try {
         const { id } = req.params;
-        
-        const query = `
+        const buildQuery = (includeRegistrationUrl = true) => `
             SELECT
-                e.id,
-                e.company_id,
-                e.title,
-                e.description,
-                e.type,
-                e.event_date,
-                e.start_time,
-                e.end_time,
-                e.location,
-                e.is_virtual,
-                e.meeting_url,
-                e.registration_url,
-                e.max_participants,
-                e.current_participants,
-                e.registration_deadline,
-                e.requirements,
-                e.tags,
-                e.image_url,
-                e.status,
-                e.created_at,
+                ${eventSelectFields(includeRegistrationUrl)},
                 COALESCE(c.name, u.company_name) AS company_name,
                 c.logo AS company_logo,
                 COALESCE(c.industry, u.industry) AS industry,
@@ -246,7 +249,31 @@ const getEventById = async (req, res) => {
             WHERE e.id = ?
         `;
 
-        const events = await db.query(query, [id]);
+        const fallbackQuery = `
+            SELECT
+                ${eventSelectFields(false)},
+                COALESCE(u.company_name, '') AS company_name,
+                NULL AS company_logo,
+                COALESCE(u.industry, '') AS industry,
+                COALESCE(u.location, '') AS company_location,
+                COALESCE(u.website, '') AS website
+            FROM events e
+            JOIN users u ON e.company_id = u.id
+            WHERE e.id = ?
+        `;
+
+        let events;
+        try {
+            events = await db.query(buildQuery(true), [id]);
+        } catch (error) {
+            if (!isSchemaError(error)) throw error;
+            try {
+                events = await db.query(buildQuery(false), [id]);
+            } catch (fallbackError) {
+                if (!isSchemaError(fallbackError)) throw fallbackError;
+                events = await db.query(fallbackQuery, [id]);
+            }
+        }
         
         if (events.length === 0) {
             return res.status(404).json({ error: 'Event not found' });

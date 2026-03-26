@@ -347,6 +347,9 @@ const buildStatusNotification = (status, internshipTitle, companyName) => {
             status === 'accepted'
                 ? `Great news! Your application for "${internshipTitle}" at ${companyName} has been accepted.`
                 : `Congratulations! You have been shortlisted for "${internshipTitle}" at ${companyName}.`;
+    } else if (status === 'unshortlisted') {
+        title = 'Application Unshortlisted';
+        message = `Your application for "${internshipTitle}" at ${companyName} was unshortlisted.`;
     } else if (status === 'rejected') {
         title = 'Application Status';
         message = `We regret to inform you that your application for "${internshipTitle}" at ${companyName} was not selected at this time.`;
@@ -359,7 +362,7 @@ const updateApplicationStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        const validStatuses = new Set(['pending', 'reviewing', 'accepted', 'shortlisted', 'rejected', 'withdrawn']);
+        const validStatuses = new Set(['pending', 'reviewing', 'accepted', 'shortlisted', 'unshortlisted', 'rejected', 'withdrawn']);
 
         if (!validStatuses.has(status)) {
             return res.status(400).json({ message: 'Invalid status' });
@@ -681,7 +684,7 @@ const bulkUpdateApplicationStatus = async (req, res) => {
             return res.status(400).json({ message: 'Application IDs are required' });
         }
 
-        const validStatuses = new Set(['pending', 'reviewing', 'accepted', 'shortlisted', 'rejected', 'withdrawn']);
+        const validStatuses = new Set(['pending', 'reviewing', 'accepted', 'shortlisted', 'unshortlisted', 'rejected', 'withdrawn']);
         if (!validStatuses.has(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }

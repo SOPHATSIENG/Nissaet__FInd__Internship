@@ -33,7 +33,7 @@ CREATE TABLE `applications` (
   `student_id` int(11) NOT NULL,
   `cover_letter` text DEFAULT NULL,
   `resume_url` varchar(255) DEFAULT NULL,
-  `status` enum('pending','reviewing','accepted','rejected','withdrawn') DEFAULT 'pending',
+  `status` enum('pending','reviewing','accepted','shortlisted','unshortlisted','rejected','withdrawn') DEFAULT 'pending',
   `applied_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `notes` text DEFAULT NULL

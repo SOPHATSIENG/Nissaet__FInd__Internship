@@ -1461,7 +1461,7 @@ const getDashboardStats = async (req, res) => {
             const status = row.status.toLowerCase();
             if (status === 'pending' || status === 'reviewing') statusDistribution.pending += row.count;
             else if (status === 'shortlisted' || status === 'accepted') statusDistribution.shortlisted += row.count;
-            else if (status === 'rejected') statusDistribution.rejected += row.count;
+            else if (status === 'rejected' || status === 'unshortlisted') statusDistribution.rejected += row.count;
         });
 
         // Get recent applicants (safe fallback)

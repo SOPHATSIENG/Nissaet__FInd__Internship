@@ -201,7 +201,7 @@ export const AuthProvider = ({ children }) => {
     if (!isAuthenticated) return;
 
     const refresh = () => syncUserFromApi();
-    const intervalId = window.setInterval(refresh, 1000);
+    const intervalId = window.setInterval(refresh, 30000);
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {

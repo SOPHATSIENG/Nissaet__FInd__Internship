@@ -10,10 +10,11 @@ import {
   ChevronRight,
   Briefcase,
   Users,
-  Building,
   Filter,
+  Check,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 
@@ -63,12 +64,13 @@ export default function Internships() {
   const [selectedLocations, setSelectedLocations] = useState<string[]>(
     searchParams.get("location")?.split(',').filter(Boolean) || []
   );
+  const [locationQueryFilter, setLocationQueryFilter] = useState("");
+  const [isLocationOpen, setIsLocationOpen] = useState(false);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>(
     searchParams.get("industry")?.split(',').filter(Boolean) || []
   );
-  const [selectedCompanySizes, setSelectedCompanySizes] = useState<string[]>(
-    searchParams.get("companySize")?.split(',').filter(Boolean) || []
-  );
+  const [industryQuery, setIndustryQuery] = useState("");
+  const [isIndustryOpen, setIsIndustryOpen] = useState(false);
   const [selectedCompensation, setSelectedCompensation] = useState(searchParams.get("compensation") || "All");
 
   // Data state
@@ -77,6 +79,8 @@ export default function Internships() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const industryDropdownRef = useRef<HTMLDivElement | null>(null);
+  const locationDropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Debounced search term
   const [debouncedQuery, setDebouncedQuery] = useState(query);
@@ -94,11 +98,10 @@ export default function Internships() {
     if (debouncedQuery) params.search = debouncedQuery;
     if (selectedLocations.length > 0) params.location = selectedLocations.join(',');
     if (selectedIndustries.length > 0) params.industry = selectedIndustries.join(',');
-    if (selectedCompanySizes.length > 0) params.companySize = selectedCompanySizes.join(',');
     if (selectedCompensation !== "All") params.compensation = selectedCompensation;
     
     setSearchParams(params, { replace: true });
-  }, [debouncedQuery, selectedLocations, selectedIndustries, selectedCompanySizes, selectedCompensation]);
+  }, [debouncedQuery, selectedLocations, selectedIndustries, selectedCompensation]);
 
   // Utility to format salary text
   const salaryText = (item: InternshipApiItem) => {
@@ -118,7 +121,6 @@ export default function Internships() {
         search: debouncedQuery,
         location: selectedLocations.length > 0 ? selectedLocations.join(',') : undefined,
         industry: selectedIndustries.length > 0 ? selectedIndustries.join(',') : undefined,
-        companySize: selectedCompanySizes.length > 0 ? selectedCompanySizes.join(',') : undefined,
         salary_type: selectedCompensation !== "All" ? selectedCompensation.toLowerCase() : undefined,
       };
 
@@ -130,7 +132,7 @@ export default function Internships() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedQuery, selectedLocations, selectedIndustries, selectedCompanySizes, selectedCompensation]);
+  }, [debouncedQuery, selectedLocations, selectedIndustries, selectedCompensation]);
 
   useEffect(() => {
     loadInternships();
@@ -200,6 +202,103 @@ export default function Internships() {
     setCurrentPage(1);
   };
 
+  const industries = [
+    "Technology",
+    "Healthcare",
+    "Finance",
+    "E-commerce",
+    "Telecommunications",
+    "Logistics",
+    "Hospitality",
+    "Media & Entertainment",
+    "Government",
+    "Non-Profit",
+    "Marketing",
+    "Design",
+    "Banking",
+    "Retail",
+    "Education",
+    "Construction",
+    "Manufacturing",
+  ];
+  const cambodiaProvinces = [
+    "Phnom Penh",
+    "Banteay Meanchey",
+    "Battambang",
+    "Kampong Cham",
+    "Kampong Chhnang",
+    "Kampong Speu",
+    "Kampong Thom",
+    "Kampot",
+    "Kandal",
+    "Kep",
+    "Koh Kong",
+    "Kratie",
+    "Mondulkiri",
+    "Oddar Meanchey",
+    "Pailin",
+    "Preah Vihear",
+    "Prey Veng",
+    "Pursat",
+    "Ratanakiri",
+    "Siem Reap",
+    "Preah Sihanouk",
+    "Stung Treng",
+    "Svay Rieng",
+    "Takeo",
+    "Tbong Khmum",
+    "Remote",
+  ];
+
+  const filteredIndustries = useMemo(() => {
+    const queryValue = industryQuery.trim().toLowerCase();
+    if (!queryValue) return industries;
+    return industries.filter((industry) => industry.toLowerCase().includes(queryValue));
+  }, [industryQuery, industries]);
+  const filteredLocations = useMemo(() => {
+    const queryValue = locationQueryFilter.trim().toLowerCase();
+    if (!queryValue) return cambodiaProvinces;
+    return cambodiaProvinces.filter((province) => province.toLowerCase().includes(queryValue));
+  }, [locationQueryFilter, cambodiaProvinces]);
+
+  useEffect(() => {
+    if (!isIndustryOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!industryDropdownRef.current) return;
+      if (!industryDropdownRef.current.contains(event.target as Node)) {
+        setIsIndustryOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsIndustryOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isIndustryOpen]);
+
+  useEffect(() => {
+    if (!isLocationOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!locationDropdownRef.current) return;
+      if (!locationDropdownRef.current.contains(event.target as Node)) {
+        setIsLocationOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsLocationOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isLocationOpen]);
+
   return (
     <div className="flex flex-col min-h-screen bg-[#f6f8f7]">
       {/* Search Header */}
@@ -241,18 +340,110 @@ export default function Internships() {
                 <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                   <Building2 size={16} /> Industry
                 </h4>
-                <div className="space-y-2">
-                  {["Technology", "Finance", "Marketing", "Design", "Banking", "Retail"].map(industry => (
-                    <label key={industry} className="flex items-center gap-3 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={selectedIndustries.includes(industry)}
-                        onChange={() => toggleFilter(selectedIndustries, setSelectedIndustries, industry)}
-                        className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                      />
-                      <span className="text-sm text-gray-600 group-hover:text-gray-900">{industry}</span>
-                    </label>
-                  ))}
+                <div ref={industryDropdownRef} className="relative">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsIndustryOpen((open) => !open)}
+                      className="flex-1 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 shadow-sm hover:border-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-gray-400" />
+                        {selectedIndustries.length === 0
+                          ? "All Industries"
+                          : selectedIndustries.length === 1
+                            ? selectedIndustries[0]
+                            : `${selectedIndustries.length} industries`}
+                      </span>
+                      <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform ${isIndustryOpen ? "rotate-90" : ""}`} />
+                    </button>
+                    {selectedIndustries.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedIndustries([]);
+                          setCurrentPage(1);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-[#2563eb] hover:bg-blue-100"
+                      >
+                        <X className="h-3 w-3" />
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {isIndustryOpen && (
+                    <div className="absolute z-20 mt-2 w-full rounded-2xl border border-gray-200 bg-white shadow-xl">
+                      <div className="p-3 border-b border-gray-100">
+                        <input
+                          type="text"
+                          value={industryQuery}
+                          onChange={(e) => setIndustryQuery(e.target.value)}
+                          placeholder="Select Industry"
+                          className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+                        />
+                        <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                          <span>{selectedIndustries.length > 0 ? `${selectedIndustries.length} selected` : "All Industries"}</span>
+                          {selectedIndustries.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedIndustries([]);
+                                setCurrentPage(1);
+                              }}
+                              className="font-semibold text-[#3b82f6] hover:underline"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="max-h-64 overflow-y-auto py-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedIndustries([]);
+                            setCurrentPage(1);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                        >
+                          All Industries
+                        </button>
+                        {filteredIndustries.length === 0 && (
+                          <div className="px-4 py-3 text-sm text-gray-500">
+                            No industries found.
+                          </div>
+                        )}
+                        {filteredIndustries.map((industry) => {
+                          const isSelected = selectedIndustries.includes(industry);
+                          return (
+                            <button
+                              key={industry}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedIndustries(selectedIndustries.filter((item) => item !== industry));
+                                } else {
+                                  setSelectedIndustries([...selectedIndustries, industry]);
+                                }
+                                setCurrentPage(1);
+                              }}
+                              className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
+                                isSelected ? "text-[#2563eb] font-semibold" : "text-gray-700"
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className={`h-2 w-2 rounded-full ${isSelected ? "bg-[#2563eb]" : "bg-gray-300"}`} />
+                                {industry}
+                              </span>
+                              {isSelected && <Check className="h-4 w-4" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -261,46 +452,113 @@ export default function Internships() {
                 <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                   <MapPin size={16} /> Location
                 </h4>
-                <div className="space-y-2">
-                  {["Phnom Penh", "Siem Reap", "Kampot", "Takeo", "Battambang", "Kampong Thom", "Remote"].map(loc => (
-                    <label key={loc} className="flex items-center gap-3 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={selectedLocations.includes(loc)}
-                        onChange={() => toggleFilter(selectedLocations, setSelectedLocations, loc)}
-                        className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                      />
-                      <span className="text-sm text-gray-600 group-hover:text-gray-900">{loc}</span>
-                    </label>
-                  ))}
+                <div ref={locationDropdownRef} className="relative">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsLocationOpen((open) => !open)}
+                      className="flex-1 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-left text-sm font-semibold text-gray-700 shadow-sm hover:border-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]"
+                    >
+                      <span className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        {selectedLocations.length === 0
+                          ? "All Locations"
+                          : selectedLocations.length === 1
+                            ? selectedLocations[0]
+                            : `${selectedLocations.length} locations`}
+                      </span>
+                      <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform ${isLocationOpen ? "rotate-90" : ""}`} />
+                    </button>
+                    {selectedLocations.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLocations([]);
+                          setCurrentPage(1);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-[#2563eb] hover:bg-blue-100"
+                      >
+                        <X className="h-3 w-3" />
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {isLocationOpen && (
+                    <div className="absolute z-20 mt-2 w-full rounded-2xl border border-gray-200 bg-white shadow-xl">
+                      <div className="p-3 border-b border-gray-100">
+                        <input
+                          type="text"
+                          value={locationQueryFilter}
+                          onChange={(e) => setLocationQueryFilter(e.target.value)}
+                          placeholder="Select Location"
+                          className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+                        />
+                        <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                          <span>{selectedLocations.length > 0 ? `${selectedLocations.length} selected` : "All Locations"}</span>
+                          {selectedLocations.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedLocations([]);
+                                setCurrentPage(1);
+                              }}
+                              className="font-semibold text-[#3b82f6] hover:underline"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="max-h-64 overflow-y-auto py-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLocations([]);
+                            setCurrentPage(1);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                        >
+                          All Locations
+                        </button>
+                        {filteredLocations.length === 0 && (
+                          <div className="px-4 py-3 text-sm text-gray-500">
+                            No locations found.
+                          </div>
+                        )}
+                        {filteredLocations.map((province) => {
+                          const isSelected = selectedLocations.includes(province);
+                          return (
+                            <button
+                              key={province}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedLocations(selectedLocations.filter((item) => item !== province));
+                                } else {
+                                  setSelectedLocations([...selectedLocations, province]);
+                                }
+                                setCurrentPage(1);
+                              }}
+                              className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
+                                isSelected ? "text-[#2563eb] font-semibold" : "text-gray-700"
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className={`h-2 w-2 rounded-full ${isSelected ? "bg-[#2563eb]" : "bg-gray-300"}`} />
+                                {province}
+                              </span>
+                              {isSelected && <Check className="h-4 w-4" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Company Size Filter */}
-              <div className="mb-6">
-                <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                  <Building size={16} /> Company Size
-                </h4>
-                <div className="space-y-2">
-                  {[
-                    { label: "Start-up (1-10)", value: "1-10" },
-                    { label: "Small (11-50)", value: "11-50" },
-                    { label: "Medium (51-200)", value: "51-200" },
-                    { label: "Large (201-500)", value: "201-500" },
-                    { label: "Enterprise (501+)", value: "501-1000" }
-                  ].map(size => (
-                    <label key={size.value} className="flex items-center gap-3 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={selectedCompanySizes.includes(size.value)}
-                        onChange={() => toggleFilter(selectedCompanySizes, setSelectedCompanySizes, size.value)}
-                        className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                      />
-                      <span className="text-sm text-gray-600 group-hover:text-gray-900">{size.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
 
               {/* Compensation */}
               <div>
@@ -329,7 +587,6 @@ export default function Internships() {
                   setQuery("");
                   setSelectedLocations([]);
                   setSelectedIndustries([]);
-                  setSelectedCompanySizes([]);
                   setSelectedCompensation("All");
                 }}
                 className="w-full mt-6 py-2 text-sm font-bold text-gray-400 hover:text-[#3b82f6] transition-colors"

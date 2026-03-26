@@ -124,7 +124,7 @@ export default function StudentProfile() {
                   <h1 className="text-3xl font-bold text-slate-900">{profile.full_name}</h1>
                   {profile.is_available ? (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                      Available for Internship
+                      Open to work
                     </span>
                   ) : (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">

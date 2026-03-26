@@ -54,6 +54,21 @@ interface EventStats {
   upcoming_events: number;
 }
 
+interface Registration {
+  id: number;
+  registration_date: string;
+  status: string;
+  notes?: string | null;
+  student_id: number;
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  university?: string | null;
+  education?: string | null;
+  graduation_year?: number | null;
+  cv_url?: string | null;
+}
+
 export default function Events() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
@@ -66,6 +81,10 @@ export default function Events() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [detailEvent, setDetailEvent] = useState<Event | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [registrationsEvent, setRegistrationsEvent] = useState<Event | null>(null);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [registrationsLoading, setRegistrationsLoading] = useState(false);
+  const [registrationsError, setRegistrationsError] = useState('');
 
   const eventTypes = [
     { value: 'workshop', label: 'Workshop' },
@@ -173,6 +192,33 @@ export default function Events() {
       minute: '2-digit',
       hour12: true
     });
+  };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return dateString;
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+
+  const fetchRegistrations = async (eventItem: Event) => {
+    try {
+      setRegistrationsLoading(true);
+      setRegistrationsError('');
+      setRegistrationsEvent(eventItem);
+      const response = await api.get(`/events/${eventItem.id}/registrations`);
+      setRegistrations(Array.isArray(response.data) ? response.data : []);
+    } catch (error: any) {
+      setRegistrations([]);
+      setRegistrationsError(error?.message || 'Failed to load registrations');
+    } finally {
+      setRegistrationsLoading(false);
+    }
   };
 
   const filteredEvents = events.filter(event => {
@@ -544,6 +590,16 @@ export default function Events() {
                 </button>
                 <button
                   onClick={() => {
+                    if (!detailEvent) return;
+                    setDetailEvent(null);
+                    fetchRegistrations(detailEvent);
+                  }}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  View Registrations
+                </button>
+                <button
+                  onClick={() => {
                     setDetailEvent(null);
                     navigate(`/company/events/post/${detailEvent.id}`);
                   }}
@@ -552,6 +608,89 @@ export default function Events() {
                   Edit Event
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {registrationsEvent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Registrations</h3>
+                <p className="text-sm text-slate-500">{registrationsEvent.title}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setRegistrationsEvent(null);
+                  setRegistrations([]);
+                  setRegistrationsError('');
+                }}
+                className="inline-flex items-center justify-center rounded-full bg-slate-100 p-2 text-slate-600 hover:bg-slate-200"
+                aria-label="Close registrations"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {registrationsError && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  {registrationsError}
+                </div>
+              )}
+
+              {registrationsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#137fec]"></div>
+                </div>
+              ) : registrations.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+                  No registrations yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="text-left text-slate-500">
+                      <tr>
+                        <th className="py-2 pr-4 font-semibold">Student</th>
+                        <th className="py-2 pr-4 font-semibold">Email</th>
+                        <th className="py-2 pr-4 font-semibold">University</th>
+                        <th className="py-2 pr-4 font-semibold">Graduation</th>
+                        <th className="py-2 pr-4 font-semibold">Registered</th>
+                        <th className="py-2 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-700">
+                      {registrations.map((registration) => (
+                        <tr key={registration.id} className="border-t border-slate-100">
+                          <td className="py-3 pr-4">
+                            <div className="font-semibold text-slate-900">{registration.full_name}</div>
+                            {registration.phone && (
+                              <div className="text-xs text-slate-500">{registration.phone}</div>
+                            )}
+                          </td>
+                          <td className="py-3 pr-4">{registration.email}</td>
+                          <td className="py-3 pr-4">{registration.university || '—'}</td>
+                          <td className="py-3 pr-4">{registration.graduation_year || '—'}</td>
+                          <td className="py-3 pr-4">{formatDateTime(registration.registration_date)}</td>
+                          <td className="py-3">
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
+                              {registration.status || 'registered'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

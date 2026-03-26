@@ -1,5 +1,5 @@
-import { Search, MapPin, Building2, Map, Users, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { Search, MapPin, Building2, Map, Loader2, AlertCircle, ChevronLeft, ChevronRight, Check, X } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 
@@ -28,13 +28,13 @@ export default function Companies() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
   const [locationQuery, setLocationQuery] = useState(searchParams.get("location") || "");
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [industryQuery, setIndustryQuery] = useState("");
+  const [isIndustryOpen, setIsIndustryOpen] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("All Locations");
-  const [selectedCompanySizes, setSelectedCompanySizes] = useState<string[]>([]);
+  const [locationQueryFilter, setLocationQueryFilter] = useState("");
+  const [isLocationOpen, setIsLocationOpen] = useState(false);
   
   const page = parseInt(searchParams.get("page") || "1");
-  const industry = searchParams.get("industry") || "all";
-  const query = searchParams.get("search") || "";
-  const location = searchParams.get("location") || "";
   const totalFound = companies.length;
   const featuredCompanies: Company[] = []; // Placeholder
 
@@ -89,14 +89,112 @@ export default function Companies() {
     setCurrentPage(1);
   };
 
+  const featuredCompaniesForDisplay = useMemo(() => {
+    if (featuredCompanies.length > 0) return featuredCompanies;
+    return companies.slice(0, 2); // Show first 2 as featured if no explicit featured ones
+  }, [featuredCompanies, companies]);
+
   const industries = [
     "Technology",
+    "Healthcare",
+    "Finance",
+    "E-commerce",
+    "Telecommunications",
+    "Logistics",
+    "Hospitality",
+    "Media & Entertainment",
+    "Government",
+    "Non-Profit",
     "Banking",
     "Marketing",
     "Education",
     "Construction",
     "Manufacturing",
   ];
+
+  const industryDropdownRef = useRef<HTMLDivElement | null>(null);
+  const locationDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const hasIndustryFilter = selectedIndustries.length > 0;
+  const hasSearchFilter = Boolean(searchQuery.trim());
+  const hasLocationFilter = Boolean(locationQuery.trim()) || selectedLocation !== "All Locations";
+  const hasAnyFilter = hasIndustryFilter || hasSearchFilter || hasLocationFilter;
+  const cambodiaProvinces = [
+    "Phnom Penh",
+    "Banteay Meanchey",
+    "Battambang",
+    "Kampong Cham",
+    "Kampong Chhnang",
+    "Kampong Speu",
+    "Kampong Thom",
+    "Kampot",
+    "Kandal",
+    "Kep",
+    "Koh Kong",
+    "Kratie",
+    "Mondulkiri",
+    "Oddar Meanchey",
+    "Pailin",
+    "Preah Vihear",
+    "Prey Veng",
+    "Pursat",
+    "Ratanakiri",
+    "Siem Reap",
+    "Preah Sihanouk",
+    "Stung Treng",
+    "Svay Rieng",
+    "Takeo",
+    "Tbong Khmum",
+    "Remote",
+  ];
+  const filteredIndustries = useMemo(() => {
+    const query = industryQuery.trim().toLowerCase();
+    if (!query) return industries;
+    return industries.filter((industry) => industry.toLowerCase().includes(query));
+  }, [industryQuery, industries]);
+  const filteredLocations = useMemo(() => {
+    const query = locationQueryFilter.trim().toLowerCase();
+    if (!query) return cambodiaProvinces;
+    return cambodiaProvinces.filter((province) => province.toLowerCase().includes(query));
+  }, [locationQueryFilter, cambodiaProvinces]);
+
+  useEffect(() => {
+    if (!isIndustryOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!industryDropdownRef.current) return;
+      if (!industryDropdownRef.current.contains(event.target as Node)) {
+        setIsIndustryOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsIndustryOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isIndustryOpen]);
+
+  useEffect(() => {
+    if (!isLocationOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!locationDropdownRef.current) return;
+      if (!locationDropdownRef.current.contains(event.target as Node)) {
+        setIsLocationOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsLocationOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isLocationOpen]);
 
   return (
     <div className="flex flex-col">
@@ -142,21 +240,33 @@ export default function Companies() {
             <span className="text-gray-500 font-medium uppercase text-xs tracking-wider">
               Top Industries:
             </span>
-            {industries.slice(0, 4).map((ind) => (
-              <span
-                key={ind}
-                onClick={() => {
-                  setSearchQuery(ind);
-                  setSelectedIndustries([]);
-                  setCurrentPage(1);
-                }}
-                className="px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
-              >
-                {ind}
-              </span>
-            ))}
-            {industry !== 'all' && (
-               <button onClick={() => updateFilters({ industry: 'all' })} className="text-[#3b82f6] text-xs font-bold ml-2 underline">Clear Filter</button>
+            {industries.slice(0, 4).map((ind) => {
+              const isActive = selectedIndustries.includes(ind);
+              return (
+                <button
+                  key={ind}
+                  type="button"
+                  onClick={() => {
+                    if (isActive && selectedIndustries.length === 1) {
+                      setSelectedIndustries([]);
+                    } else {
+                      setSelectedIndustries([ind]);
+                    }
+                    setCurrentPage(1);
+                  }}
+                  className={`px-4 py-1.5 border rounded-full text-gray-600 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6] ${
+                    isActive
+                      ? "bg-[#3b82f6] border-[#3b82f6] text-white shadow-sm"
+                      : "bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300"
+                  }`}
+                  aria-pressed={isActive}
+                >
+                  {ind}
+                </button>
+              );
+            })}
+            {hasIndustryFilter && (
+               <button onClick={() => { setSelectedIndustries([]); setCurrentPage(1); }} className="text-[#3b82f6] text-xs font-bold ml-2 underline">Clear Filter</button>
             )}
           </div>
         </div>
@@ -169,39 +279,110 @@ export default function Companies() {
               <h3 className="font-bold flex items-center gap-2 mb-4">
                 <Building2 className="w-5 h-5 text-[#3b82f6]" /> Industry
               </h3>
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input
-                    type="radio"
-                    name="industry-filter"
-                    checked={industry === 'all'}
-                    onChange={() => updateFilters({ industry: 'all' })}
-                    className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                  />
-                  <span className="text-gray-600 group-hover:text-gray-900">All Industries</span>
-                </label>
-                {industries.map((ind) => (
-                  <label
-                    key={ind}
-                    className="flex items-center gap-3 cursor-pointer group"
+              <div ref={industryDropdownRef} className="relative">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsIndustryOpen((open) => !open)}
+                    className="flex-1 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-semibold text-gray-700 shadow-sm hover:border-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]"
                   >
-                    <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-gray-400" />
+                      {selectedIndustries.length === 0
+                        ? "All Industries"
+                        : selectedIndustries.length === 1
+                          ? selectedIndustries[0]
+                          : `${selectedIndustries.length} industries`}
+                    </span>
+                    <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform ${isIndustryOpen ? "rotate-90" : ""}`} />
+                  </button>
+                  {selectedIndustries.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedIndustries([]);
+                        setCurrentPage(1);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-[#2563eb] hover:bg-blue-100"
+                    >
+                      <X className="h-3 w-3" />
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {isIndustryOpen && (
+                  <div className="absolute z-20 mt-2 w-full rounded-2xl border border-gray-200 bg-white shadow-xl">
+                    <div className="p-3 border-b border-gray-100">
                       <input
-                        type="checkbox"
-                        checked={selectedIndustries.includes(ind)}
-                        onChange={(e) => {
-                          if (e.target.checked) setSelectedIndustries([...selectedIndustries, ind]);
-                          else setSelectedIndustries(selectedIndustries.filter(i => i !== ind));
+                        type="text"
+                        value={industryQuery}
+                        onChange={(e) => setIndustryQuery(e.target.value)}
+                        placeholder="Select Industry"
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+                      />
+                      <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                        <span>{selectedIndustries.length > 0 ? `${selectedIndustries.length} selected` : "All Industries"}</span>
+                        {selectedIndustries.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedIndustries([]);
+                              setCurrentPage(1);
+                            }}
+                            className="font-semibold text-[#3b82f6] hover:underline"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto py-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedIndustries([]);
                           setCurrentPage(1);
                         }}
-                        className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                      />
-                      <span className="text-gray-600 group-hover:text-gray-900">
-                        {ind}
-                      </span>
+                        className="w-full px-4 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                      >
+                        All Industries
+                      </button>
+                      {filteredIndustries.length === 0 && (
+                        <div className="px-4 py-3 text-sm text-gray-500">
+                          No industries found.
+                        </div>
+                      )}
+                      {filteredIndustries.map((industry) => {
+                        const isSelected = selectedIndustries.includes(industry);
+                        return (
+                          <button
+                            key={industry}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedIndustries(selectedIndustries.filter((item) => item !== industry));
+                              } else {
+                                setSelectedIndustries([...selectedIndustries, industry]);
+                              }
+                              setCurrentPage(1);
+                            }}
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
+                              isSelected ? "text-[#2563eb] font-semibold" : "text-gray-700"
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className={`h-2 w-2 rounded-full ${isSelected ? "bg-[#2563eb]" : "bg-gray-300"}`} />
+                              {industry}
+                            </span>
+                            {isSelected && <Check className="h-4 w-4" />}
+                          </button>
+                        );
+                      })}
                     </div>
-                  </label>
-                ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -209,81 +390,122 @@ export default function Companies() {
               <h3 className="font-bold flex items-center gap-2 mb-4">
                 <Map className="w-5 h-5 text-[#3b82f6]" /> Location
               </h3>
-              <div className="space-y-3">
-                {[
-                  { name: "All Locations" },
-                  { name: "Phnom Penh" },
-                  { name: "Siem Reap" },
-                  { name: "Battambang" },
-                  { name: "Kompot" },
-                  { name: "Remote" },
-                ].map((item) => (
-                  <label
-                    key={item.name}
-                    className="flex items-center gap-3 cursor-pointer group"
+              <div ref={locationDropdownRef} className="relative">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsLocationOpen((open) => !open)}
+                    className="flex-1 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-semibold text-gray-700 shadow-sm hover:border-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]"
                   >
-                    <input
-                      type="radio"
-                      name="location"
-                      checked={selectedLocation === item.name}
-                      onChange={() => { 
-                          setSelectedLocation(item.name); 
-                          setLocationQuery(item.name === "All Locations" ? "" : item.name); // Also update input field
-                          setCurrentPage(1); 
-                        }}
-                      className="w-4 h-4 text-[#3b82f6] focus:ring-[#3b82f6]"
-                    />
-                    <span className="text-gray-600 group-hover:text-gray-900">
-                      {item.name}
+                    <span className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-gray-400" />
+                      {selectedLocation === "All Locations" ? "All Locations" : selectedLocation}
                     </span>
-                  </label>
-                ))}
+                    <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform ${isLocationOpen ? "rotate-90" : ""}`} />
+                  </button>
+                  {selectedLocation !== "All Locations" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLocation("All Locations");
+                        setLocationQuery("");
+                        setCurrentPage(1);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-[#2563eb] hover:bg-blue-100"
+                    >
+                      <X className="h-3 w-3" />
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {isLocationOpen && (
+                  <div className="absolute z-20 mt-2 w-full rounded-2xl border border-gray-200 bg-white shadow-xl">
+                    <div className="p-3 border-b border-gray-100">
+                      <input
+                        type="text"
+                        value={locationQueryFilter}
+                        onChange={(e) => setLocationQueryFilter(e.target.value)}
+                        placeholder="Select Location"
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20"
+                      />
+                      <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                        <span>{selectedLocation === "All Locations" ? "All Locations" : selectedLocation}</span>
+                        {selectedLocation !== "All Locations" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedLocation("All Locations");
+                              setLocationQuery("");
+                              setCurrentPage(1);
+                            }}
+                            className="font-semibold text-[#3b82f6] hover:underline"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto py-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLocation("All Locations");
+                          setLocationQuery("");
+                          setCurrentPage(1);
+                          setIsLocationOpen(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                      >
+                        All Locations
+                      </button>
+                      {filteredLocations.length === 0 && (
+                        <div className="px-4 py-3 text-sm text-gray-500">
+                          No locations found.
+                        </div>
+                      )}
+                      {filteredLocations.map((province) => {
+                        const isSelected = selectedLocation === province;
+                        return (
+                          <button
+                            key={province}
+                            type="button"
+                            onClick={() => {
+                              setSelectedLocation(province);
+                              setLocationQuery(province);
+                              setCurrentPage(1);
+                              setIsLocationOpen(false);
+                            }}
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
+                              isSelected ? "text-[#2563eb] font-semibold" : "text-gray-700"
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className={`h-2 w-2 rounded-full ${isSelected ? "bg-[#2563eb]" : "bg-gray-300"}`} />
+                              {province}
+                            </span>
+                            {isSelected && <Check className="h-4 w-4" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <h3 className="font-bold flex items-center gap-2 mb-4">
-                <Users className="w-5 h-5 text-[#3b82f6]" /> Company Size
-              </h3>
-              <div className="space-y-3">
-                {[
-                  "Start-up (1-10)",
-                  "Small (11-50)",
-                  "Medium (51-200)",
-                  "Large (200+)",
-                ].map((item) => (
-                  <label
-                    key={item}
-                    className="flex items-center gap-3 cursor-pointer group"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCompanySizes.includes(item)}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedCompanySizes([...selectedCompanySizes, item]);
-                        else setSelectedCompanySizes(selectedCompanySizes.filter(s => s !== item));
-                        setCurrentPage(1);
-                      }}
-                      className="w-4 h-4 rounded border-gray-300 text-[#3b82f6] focus:ring-[#3b82f6]"
-                    />
-                    <span className="text-gray-600 group-hover:text-gray-900">
-                      {item}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
           </aside>
 
           <div className="flex-1">
             {/* Featured Employers */}
-            {featuredCompanies.length > 0 && !query && !location && industry === 'all' && page === 1 && (
+            {featuredCompaniesForDisplay.length > 0 && !hasAnyFilter && page === 1 && (
               <div className="mb-12">
                 <div className="flex justify-between items-end mb-6">
                   <h2 className="text-2xl font-bold">Featured Employers</h2>
                 </div>
                 <div className="grid md:grid-cols-2 gap-6">
-                  {featuredCompanies.map((company) => (
+                  {featuredCompaniesForDisplay.map((company) => (
                     <div
                       key={company.id}
                       className="bg-white p-6 rounded-2xl border border-[#3b82f6]/30 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
@@ -373,16 +595,27 @@ export default function Companies() {
                         <p className="text-gray-600 text-sm mb-4 line-clamp-2 flex-grow">
                           {company.description || "Leading company in Cambodia offering internship opportunities."}
                         </p>
-                        
-                        {company.open_positions > 0 ? (
-                          <Link to={`/internships?search=${encodeURIComponent(company.company_name)}`} className="w-full text-center bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#2563eb] font-bold py-2.5 rounded-xl text-sm transition-colors">
-                            View {company.open_positions} Openings
+
+                        <div className="mt-2 flex flex-col gap-2">
+                          <Link
+                            to={`/companies/${company.id}`}
+                            className="w-full text-center border border-gray-200 hover:border-[#3b82f6] text-gray-700 hover:text-[#3b82f6] font-bold py-2.5 rounded-xl text-sm transition-colors"
+                          >
+                            View Company Profile
                           </Link>
-                        ) : (
-                          <button className="w-full bg-gray-50 text-gray-400 font-bold py-2.5 rounded-xl text-sm cursor-not-allowed">
-                            No Current Openings
-                          </button>
-                        )}
+                          {company.open_positions > 0 ? (
+                            <Link
+                              to={`/internships?search=${encodeURIComponent(company.company_name)}`}
+                              className="w-full text-center bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#2563eb] font-bold py-2.5 rounded-xl text-sm transition-colors"
+                            >
+                              View {company.open_positions} Openings
+                            </Link>
+                          ) : (
+                            <button className="w-full bg-gray-50 text-gray-400 font-bold py-2.5 rounded-xl text-sm cursor-not-allowed">
+                              No Current Openings
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

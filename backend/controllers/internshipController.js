@@ -9,6 +9,11 @@ const getInternshipColumns = async () => {
     return new Set(rows.map((row) => row.Field));
 };
 
+const getTableColumns = async (tableName) => {
+    const rows = await db.query(`SHOW COLUMNS FROM ${tableName}`);
+    return new Set(rows.map((row) => row.Field));
+};
+
 /**
  * Helper to get company ID by user ID
  */
@@ -898,6 +903,7 @@ const getAllCompanies = async (req, res) => {
         const sql = `
             SELECT
                 c.id,
+                c.user_id,
                 c.name AS company_name,
                 c.description,
                 c.logo,
@@ -909,7 +915,7 @@ const getAllCompanies = async (req, res) => {
             FROM companies c
             LEFT JOIN internships i ON i.company_id = c.id AND i.status = 'active' AND i.is_flagged = 0
             ${whereClause}
-            GROUP BY c.id, c.name, c.description, c.logo, c.industry, c.headquarters, c.is_verified, c.company_size
+            GROUP BY c.id, c.user_id, c.name, c.description, c.logo, c.industry, c.headquarters, c.is_verified, c.company_size
             ORDER BY c.is_verified DESC, c.name ASC 
             LIMIT ? OFFSET ?
         `;
@@ -926,6 +932,179 @@ const getAllCompanies = async (req, res) => {
     } catch (error) {
         console.error('Error fetching companies:', error);
         return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * Get public company profile by ID (student-facing)
+ */
+const getCompanyProfileById = async (req, res) => {
+    try {
+        const companyId = Number.parseInt(req.params.id, 10);
+        if (Number.isNaN(companyId)) {
+            return res.status(400).json({ message: 'Invalid company ID' });
+        }
+        const by = String(req.query?.by || '').toLowerCase();
+        const preferUserId = by === 'user';
+
+        const primaryQuery = `
+            SELECT
+                c.id,
+                c.user_id,
+                c.name AS company_name,
+                c.description,
+                c.logo,
+                c.industry,
+                c.website,
+                c.company_size,
+                c.founded_year,
+                c.headquarters AS location,
+                c.is_verified,
+                COUNT(i.id) AS open_positions
+             FROM companies c
+             LEFT JOIN internships i
+               ON i.company_id = c.id
+              AND i.status = 'active'
+              AND i.is_flagged = 0
+             WHERE ${preferUserId ? 'c.user_id' : 'c.id'} = ?
+             GROUP BY c.id, c.user_id, c.name, c.description, c.logo, c.industry, c.website, c.company_size, c.founded_year, c.headquarters, c.is_verified`;
+
+        const fallbackQuery = `
+            SELECT
+                c.id,
+                c.user_id,
+                c.name AS company_name,
+                c.description,
+                c.logo,
+                c.industry,
+                c.website,
+                c.company_size,
+                c.founded_year,
+                c.headquarters AS location,
+                c.is_verified,
+                COUNT(i.id) AS open_positions
+             FROM companies c
+             LEFT JOIN internships i
+               ON i.company_id = c.id
+              AND i.status = 'active'
+             WHERE ${preferUserId ? 'c.user_id' : 'c.id'} = ?
+             GROUP BY c.id, c.user_id, c.name, c.description, c.logo, c.industry, c.website, c.company_size, c.founded_year, c.headquarters, c.is_verified`;
+
+        let companyRows;
+        try {
+            companyRows = await db.query(primaryQuery, [companyId]);
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            companyRows = await db.query(fallbackQuery, [companyId]);
+        }
+
+        if (!companyRows || companyRows.length === 0) {
+            // fallback: if we were looking by ID, try looking by User ID (and vice-versa)
+            try {
+                const altQuery = !preferUserId ? primaryQuery.replace('c.id = ?', 'c.user_id = ?') : primaryQuery.replace('c.user_id = ?', 'c.id = ?');
+                const altFallbackQuery = !preferUserId ? fallbackQuery.replace('c.id = ?', 'c.user_id = ?') : fallbackQuery.replace('c.user_id = ?', 'c.id = ?');
+                
+                companyRows = await db.query(altQuery, [companyId]);
+                if (!companyRows || companyRows.length === 0) {
+                    companyRows = await db.query(altFallbackQuery, [companyId]);
+                }
+            } catch (error) {
+                if (!isBadFieldError(error)) throw error;
+            }
+        }
+
+        if (!companyRows || companyRows.length === 0) {
+            // Last resort fallback: read directly from users table for basic info
+            try {
+                const userColumns = await getTableColumns('users');
+                const columnsToSelect = ['id'];
+                const potentialFields = ['full_name', 'name', 'company_name', 'profile_image', 'profile', 'website', 'location', 'industry', 'bio'];
+                potentialFields.forEach((col) => {
+                    if (userColumns.has(col)) columnsToSelect.push(col);
+                });
+
+                const userRows = await db.query(
+                    `SELECT ${columnsToSelect.join(', ')} FROM users WHERE id = ? LIMIT 1`,
+                    [companyId]
+                );
+
+                if (userRows.length > 0) {
+                    const userRow = userRows[0];
+                    const companyName = userRow.company_name || userRow.full_name || userRow.name || 'Company';
+                    const logo = userRow.profile_image || userRow.profile || null;
+                    return res.json({
+                        company: {
+                            id: companyId,
+                            user_id: companyId,
+                            company_name: companyName,
+                            description: userRow.bio || '',
+                            logo,
+                            industry: userRow.industry || '',
+                            website: userRow.website || '',
+                            company_size: null,
+                            founded_year: null,
+                            location: userRow.location || '',
+                            is_verified: false,
+                            open_positions: 0
+                        },
+                        internships: []
+                    });
+                }
+            } catch (error) {
+                console.warn('User table fallback failed:', error.message);
+            }
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        let internships = [];
+        const resolvedCompanyId = companyRows[0].id;
+        try {
+            internships = await db.query(
+                `SELECT
+                    i.id,
+                    i.title,
+                    i.location,
+                    i.type AS work_mode,
+                    i.stipend,
+                    i.stipend_currency,
+                    i.application_deadline,
+                    i.created_at
+                 FROM internships i
+                 WHERE i.company_id = ?
+                   AND i.status = 'active'
+                   AND i.is_flagged = 0
+                 ORDER BY i.created_at DESC
+                 LIMIT 6`,
+                [resolvedCompanyId]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            internships = await db.query(
+                `SELECT
+                    i.id,
+                    i.title,
+                    i.location,
+                    i.type AS work_mode,
+                    i.stipend,
+                    i.stipend_currency,
+                    i.application_deadline,
+                    i.created_at
+                 FROM internships i
+                 WHERE i.company_id = ?
+                   AND i.status = 'active'
+                 ORDER BY i.created_at DESC
+                 LIMIT 6`,
+                [resolvedCompanyId]
+            );
+        }
+
+        return res.json({
+            company: companyRows[0],
+            internships
+        });
+    } catch (error) {
+        console.error('Error fetching company profile:', error);
+        return res.status(500).json({ message: 'Server error' });
     }
 };
 
@@ -1568,6 +1747,7 @@ module.exports = {
     getAllInternships,
     getFeaturedCompanies,
     getAllCompanies,
+    getCompanyProfileById,
     getInternshipById,
     getCompanyInternshipById,
     createInternship,

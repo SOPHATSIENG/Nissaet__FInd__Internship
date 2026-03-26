@@ -593,13 +593,7 @@ const getNotificationCard = async (req, res) => {
             return res.status(401).json({ message: 'Authentication required' });
         }
 
-        try {
-            await db.query('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND (is_read = 0 OR is_read IS NULL)', [userId]);
-        } catch (error) {
-            if (error && error.code !== 'ER_BAD_FIELD_ERROR') {
-                throw error;
-            }
-        }
+        // Do not auto-mark notifications as read on fetch.
 
         let rows = [];
         try {
@@ -609,7 +603,7 @@ const getNotificationCard = async (req, res) => {
                     title,
                     message,
                     type,
-                    is_read,
+                    COALESCE(is_read, 0) AS is_read,
                     action_url,
                     created_at
                  FROM notifications
@@ -625,7 +619,7 @@ const getNotificationCard = async (req, res) => {
                     id,
                     title,
                     message,
-                    is_read,
+                    COALESCE(is_read, 0) AS is_read,
                     created_at
                  FROM notifications
                  WHERE user_id = ?
@@ -646,7 +640,7 @@ const getNotificationCard = async (req, res) => {
             unreadCount = Number(countRows?.[0]?.total || 0);
         } catch (error) {
             if (error && error.code === 'ER_BAD_FIELD_ERROR') {
-                unreadCount = rows.length;
+                unreadCount = rows.filter((row) => !toBoolean(row.is_read, false)).length;
             } else {
                 throw error;
             }

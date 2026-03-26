@@ -58,6 +58,10 @@ export default function InternshipDetails() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [coverLetter, setCoverLetter] = useState('');
   const [editCoverLetter, setEditCoverLetter] = useState('');
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const [resumeError, setResumeError] = useState('');
+  const [applyError, setApplyError] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [applicationInfo, setApplicationInfo] = useState<ApplicationInfo | null>(null);
@@ -188,24 +192,40 @@ export default function InternshipDetails() {
     }
 
     setIsApplying(true);
+    setResumeError('');
+    setApplyError('');
     try {
-      const applyResponse = await api.applyForInternship(id, coverLetter);
+      let resumeUrl = null;
+      if (resumeFile) {
+        setResumeUploading(true);
+        const uploadResponse = await api.uploadResume(resumeFile);
+        resumeUrl = uploadResponse?.url || null;
+      }
+
+      const applyResponse = resumeUrl
+        ? await api.applyForInternshipWithResume(id, coverLetter, resumeUrl)
+        : await api.applyForInternship(id, coverLetter);
       alert('Application submitted successfully!');
       setApplicationInfo({
         id: applyResponse?.applicationId || Date.now(),
         status: 'pending',
         cover_letter: coverLetter,
+        resume_url: resumeUrl,
         created_at: new Date().toISOString(),
       });
       setShowApplyModal(false);
       setCoverLetter('');
+      setResumeFile(null);
       if (id) {
         navigate(`/internships/${id}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error applying:', error);
-      alert('Failed to submit application. Please try again.');
+      const message = error?.message || 'Failed to submit application. Please try again.';
+      setApplyError(message);
+      alert(message);
     } finally {
+      setResumeUploading(false);
       setIsApplying(false);
     }
   };
@@ -607,6 +627,39 @@ export default function InternshipDetails() {
                   Write a compelling cover letter that highlights your relevant skills and experience.
                 </p>
               </div>
+
+              {applyError && (
+                <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {applyError}
+                </div>
+              )}
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload CV (PDF)
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    if (file && file.type !== 'application/pdf') {
+                      setResumeError('Only PDF files are allowed.');
+                      setResumeFile(null);
+                      return;
+                    }
+                    setResumeError('');
+                    setResumeFile(file);
+                  }}
+                  className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                />
+                {resumeFile && (
+                  <p className="mt-2 text-sm text-gray-500">Selected: {resumeFile.name}</p>
+                )}
+                {resumeError && (
+                  <p className="mt-2 text-sm text-red-600">{resumeError}</p>
+                )}
+              </div>
               
               <div className="flex gap-3 justify-end">
                 <button
@@ -617,10 +670,10 @@ export default function InternshipDetails() {
                 </button>
                 <button
                   onClick={handleApply}
-                  disabled={isApplying || !coverLetter.trim()}
+                  disabled={isApplying || resumeUploading || !coverLetter.trim()}
                   className="px-6 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {isApplying ? 'Submitting...' : 'Submit Application'}
+                  {resumeUploading ? 'Uploading CV...' : isApplying ? 'Submitting...' : 'Submit Application'}
                 </button>
               </div>
             </div>

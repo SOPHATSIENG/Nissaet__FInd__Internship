@@ -66,6 +66,7 @@ export default function Events() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [detailEvent, setDetailEvent] = useState<Event | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [showDraftOnly, setShowDraftOnly] = useState(false);
 
   const eventTypes = [
     { value: 'workshop', label: 'Workshop' },
@@ -186,11 +187,16 @@ export default function Events() {
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          event.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
+    const matchesStatus = showDraftOnly
+      ? event.status === 'draft'
+      : (statusFilter === 'all'
+          ? event.status !== 'draft'
+          : event.status === statusFilter);
     const matchesType = typeFilter === 'all' || event.type === typeFilter;
     
     return matchesSearch && matchesStatus && matchesType;
   });
+  const draftEventsCount = events.filter(event => event.status === 'draft').length;
 
   if (loading) {
     return (
@@ -277,10 +283,33 @@ export default function Events() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDraftOnly((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setStatusFilter('all');
+                  }
+                  return next;
+                });
+              }}
+              className={`px-4 py-2 rounded-lg border transition-colors ${
+                showDraftOnly
+                  ? 'border-[#137fec] bg-[#137fec] text-white'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Draft ({draftEventsCount})
+            </button>
+
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setShowDraftOnly(false);
+              }}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
             >
               {statusOptions.map(option => (
@@ -313,11 +342,11 @@ export default function Events() {
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
+              {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' || showDraftOnly
                 ? 'Try adjusting your filters or search terms'
                 : 'Get started by creating your first event'}
             </p>
-            {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && (
+            {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && !showDraftOnly && (
               <button
                 onClick={() => navigate('/company/events/post')}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-[#137fec] text-white rounded-lg hover:bg-[#0e6bb8] transition-colors"

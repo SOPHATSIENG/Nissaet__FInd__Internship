@@ -56,6 +56,15 @@ export default function Navbar() {
     });
   };
 
+  const getNewCountSinceSuppress = () => {
+    if (!notificationCard?.items?.length) return 0;
+    if (!suppressUnreadAt) return notificationCard.items.length;
+    return notificationCard.items.filter((item: any) => {
+      const t = new Date(item.created_at || item.createdAt || item.timestamp || 0).getTime();
+      return t > suppressUnreadAt;
+    }).length;
+  };
+
   const companyInitials = companyName
     .split(' ')
     .filter(Boolean)
@@ -81,8 +90,12 @@ export default function Navbar() {
         return;
       }
       const data = await api.getNotificationCard();
-      const unreadCount = Number(data?.unread_count ?? data?.unreadCount ?? 0) || 0;
       const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.notifications) ? data.notifications : [];
+      const rawUnread = Number(data?.unread_count ?? data?.unreadCount ?? 0) || 0;
+      const computedUnread = Array.isArray(items)
+        ? items.filter((item: any) => !(item?.is_read ?? item?.read)).length
+        : 0;
+      const unreadCount = rawUnread || computedUnread;
       setNotificationCard({ unreadCount, items });
     } catch (error) {
       setNotificationCard(null);
@@ -176,9 +189,9 @@ export default function Navbar() {
               className="relative p-2 text-slate-400 hover:text-slate-600"
             >
               <Bell size={24} />
-              {(notificationCard?.unreadCount || 0) > 0 && hasNewSinceSuppress() ? (
+              {getNewCountSinceSuppress() > 0 ? (
                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  {notificationCard.unreadCount > 99 ? '99+' : notificationCard.unreadCount}
+                  {getNewCountSinceSuppress() > 99 ? '99+' : getNewCountSinceSuppress()}
                 </span>
               ) : null}
             </button>

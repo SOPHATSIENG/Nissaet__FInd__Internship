@@ -6,6 +6,7 @@ const { authenticate } = require('../middleware/auth');
 router.get('/settings', authenticate, profileController.getSettings);
 router.get('/student/:id', profileController.getPublicStudentProfile);
 router.get('/notifications/card', authenticate, profileController.getNotificationCard);
+router.get('/billing', authenticate, profileController.getCompanyBilling);
 router.put('/notifications/read', authenticate, profileController.markNotificationsRead);
 router.delete('/notifications/:id', authenticate, profileController.deleteNotification);
 router.delete('/notifications', authenticate, profileController.clearNotifications);

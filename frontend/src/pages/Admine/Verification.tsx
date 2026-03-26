@@ -53,6 +53,30 @@ const formatTime = (value?: string) => {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 };
 
+const isUrl = (value?: string) => {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const getDocLabel = (value: string) => {
+  if (!value) return '';
+  if (isUrl(value)) {
+    try {
+      const url = new URL(value);
+      const parts = url.pathname.split('/');
+      return decodeURIComponent(parts[parts.length - 1] || value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+};
+
 export const Verification = () => {
   const { user } = useAuth();
   const { settings } = useProfile();
@@ -749,17 +773,26 @@ export const Verification = () => {
                     <h3 className="text-xs font-black text-text-secondary uppercase tracking-widest">Submitted Documents</h3>
                     <div className="flex flex-col gap-2">
                       {selectedItem.docs.length > 0 ? selectedItem.docs.map(doc => (
-                        <div key={doc} className="flex items-center justify-between p-3 rounded-xl border border-border hover:border-primary/30 transition-all group cursor-pointer">
+                        <a
+                          key={doc}
+                          href={isUrl(doc) ? doc : '#'}
+                          target={isUrl(doc) ? '_blank' : undefined}
+                          rel={isUrl(doc) ? 'noreferrer' : undefined}
+                          onClick={(event) => {
+                            if (!isUrl(doc)) event.preventDefault();
+                          }}
+                          className="flex items-center justify-between p-3 rounded-xl border border-border hover:border-primary/30 transition-all group"
+                        >
                           <div className="flex items-center gap-3">
                             <FileText className="size-4 text-primary" />
-                            <span className="text-sm font-bold text-text-primary">{doc}</span>
+                            <span className="text-sm font-bold text-text-primary">{getDocLabel(doc)}</span>
                           </div>
                           <ExternalLink className="size-4 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
+                        </a>
                       )) : (
                         <div className="p-4 rounded-xl border border-dashed border-rose-200 bg-rose-50 flex flex-col items-center gap-2 text-center">
                           <AlertCircle className="size-6 text-rose-500" />
-                          <p className="text-xs font-bold text-rose-600">No verification documents have been uploaded yet.</p>
+                          <p className="text-xs font-bold text-rose-600">Please upload verification documents.</p>
                         </div>
                       )}
                     </div>

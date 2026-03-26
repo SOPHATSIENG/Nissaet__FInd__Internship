@@ -144,6 +144,15 @@ const getTableColumns = async (tableName, conn = null) => {
     return new Set(rows.map((row) => row.Field));
 };
 
+const tableExists = async (tableName) => {
+    try {
+        const rows = await db.query('SHOW TABLES LIKE ?', [tableName]);
+        return Array.isArray(rows) && rows.length > 0;
+    } catch (error) {
+        return false;
+    }
+};
+
 const buildUpdateStatement = (tableName, updates, whereColumn, whereValue) => {
     const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
     if (entries.length === 0) return null;
@@ -586,13 +595,94 @@ const updateNotificationSettings = async (req, res) => {
     }
 };
 
+const getCompanyBilling = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+        const users = await db.query('SELECT id, role FROM users WHERE id = ? LIMIT 1', [userId]);
+        if (!users.length) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        if (users[0].role !== 'company') {
+            return res.status(403).json({ message: 'Company access required' });
+        }
+
+        const companies = await db.query('SELECT * FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+        const company = companies[0] || null;
+        const companyColumns = await getTableColumns('companies');
+
+        const pickValue = (obj, keys) => {
+            for (const key of keys) {
+                if (obj && Object.prototype.hasOwnProperty.call(obj, key)) {
+                    const value = obj[key];
+                    if (value !== undefined && value !== null && String(value).trim() !== '') {
+                        return value;
+                    }
+                }
+            }
+            return null;
+        };
+
+        const plan = {
+            name: pickValue(company, ['plan_name', 'subscription_plan', 'plan']),
+            status: pickValue(company, ['plan_status', 'subscription_status']),
+            billing_cycle: pickValue(company, ['billing_cycle', 'plan_cycle']),
+            next_payment_date: pickValue(company, ['next_payment_date', 'next_billing_date']),
+            amount: pickValue(company, ['billing_amount', 'plan_amount']),
+            currency: pickValue(company, ['billing_currency', 'currency'])
+        };
+
+        const paymentMethod = {
+            brand: pickValue(company, ['payment_brand', 'card_brand']),
+            last4: pickValue(company, ['payment_last4', 'card_last4']),
+            exp_month: pickValue(company, ['payment_exp_month', 'card_exp_month']),
+            exp_year: pickValue(company, ['payment_exp_year', 'card_exp_year'])
+        };
+
+        const history = [];
+        if (await tableExists('billing_history')) {
+            const historyColumns = await getTableColumns('billing_history');
+            const companyKey = historyColumns.has('company_id') ? 'company_id' : historyColumns.has('user_id') ? 'user_id' : null;
+            if (companyKey) {
+                const rows = await db.query(
+                    `SELECT * FROM billing_history WHERE ${companyKey} = ? ORDER BY created_at DESC LIMIT 20`,
+                    [company && company.id ? company.id : userId]
+                );
+                for (const row of rows) {
+                    history.push({
+                        date: row.paid_at || row.created_at || row.date || null,
+                        description: row.description || row.title || row.plan_name || 'Billing',
+                        amount: row.amount || row.total || null,
+                        status: row.status || 'Paid',
+                        invoice_url: row.invoice_url || row.invoice || null
+                    });
+                }
+            }
+        }
+
+        return res.json({
+            company: {
+                name: pickValue(company, ['company_name', 'name']) || null,
+                is_verified: companyColumns.has('is_verified') ? toBoolean(company?.is_verified, false) : false
+            },
+            plan,
+            payment_method: paymentMethod,
+            history
+        });
+    } catch (error) {
+        console.error('Get company billing error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const getNotificationCard = async (req, res) => {
     try {
         const userId = getAuthenticatedUserId(req);
         if (!userId) {
             return res.status(401).json({ message: 'Authentication required' });
         }
-
         // Do not auto-mark notifications as read on fetch.
 
         let rows = [];
@@ -938,6 +1028,7 @@ module.exports = {
     deleteNotification,
     clearNotifications,
     updateNotificationSettings,
+    getCompanyBilling,
     updateTwoFactorSettings,
     updatePassword,
     getPublicStudentProfile,

@@ -221,6 +221,14 @@ export default function Events() {
     }
   };
 
+  const isPastDeadline = (deadline?: string | null) => {
+    if (!deadline) return false;
+    const deadlineDate = new Date(deadline);
+    if (Number.isNaN(deadlineDate.getTime())) return false;
+    deadlineDate.setHours(23, 59, 59, 999);
+    return Date.now() > deadlineDate.getTime();
+  };
+
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          event.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -376,6 +384,11 @@ export default function Events() {
                       {getStatusIcon(event.status)}
                       {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
                     </span>
+                    {isPastDeadline(event.registration_deadline) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Expired
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
                       {getTypeLabel(event.type)}
                     </span>
@@ -515,6 +528,11 @@ export default function Events() {
                   {getStatusIcon(detailEvent.status)}
                   {detailEvent.status.charAt(0).toUpperCase() + detailEvent.status.slice(1)}
                 </span>
+                {isPastDeadline(detailEvent.registration_deadline) && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
+                    Expired
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
                   {getTypeLabel(detailEvent.type)}
                 </span>

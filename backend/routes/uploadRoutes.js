@@ -3,9 +3,16 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const db = require('../config/db');
+const uploadController = require('../controllers/uploadController');
 const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Public presign (used during company registration)
+router.post('/presign', uploadController.createPresignedUploadPublic);
+
+// Authenticated presign (company settings / verification)
+router.post('/presign/company', authenticate, authorize('company'), uploadController.createPresignedUploadCompany);
 
 const uploadRoot = path.join(__dirname, '..', 'uploads', 'resumes');
 fs.mkdirSync(uploadRoot, { recursive: true });

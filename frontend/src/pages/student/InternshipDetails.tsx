@@ -62,6 +62,7 @@ export default function InternshipDetails() {
   const [resumeUploading, setResumeUploading] = useState(false);
   const [resumeError, setResumeError] = useState('');
   const [applyError, setApplyError] = useState('');
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [applicationInfo, setApplicationInfo] = useState<ApplicationInfo | null>(null);
@@ -205,7 +206,6 @@ export default function InternshipDetails() {
       const applyResponse = resumeUrl
         ? await api.applyForInternshipWithResume(id, coverLetter, resumeUrl)
         : await api.applyForInternship(id, coverLetter);
-      alert('Application submitted successfully!');
       setApplicationInfo({
         id: applyResponse?.applicationId || Date.now(),
         status: 'pending',
@@ -595,7 +595,7 @@ export default function InternshipDetails() {
       
       {/* Apply Modal */}
       {showApplyModal && internship && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -669,7 +669,7 @@ export default function InternshipDetails() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleApply}
+                  onClick={() => setShowApplyConfirm(true)}
                   disabled={isApplying || resumeUploading || !coverLetter.trim()}
                   className="px-6 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
@@ -683,7 +683,7 @@ export default function InternshipDetails() {
 
       {/* Edit Application Modal */}
       {showEditModal && internship && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -735,7 +735,7 @@ export default function InternshipDetails() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold text-gray-900">Delete Application</h2>
@@ -758,6 +758,40 @@ export default function InternshipDetails() {
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
                 {isDeletingApplication ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Apply Confirmation Card */}
+      {showApplyConfirm && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden border border-slate-200 shadow-xl">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Submit Application</h2>
+              <p className="text-sm text-gray-600 mt-2">
+                Are you sure you want to submit this application?
+              </p>
+            </div>
+            <div className="p-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowApplyConfirm(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowApplyConfirm(false);
+                  await handleApply();
+                }}
+                disabled={isApplying || resumeUploading || !coverLetter.trim()}
+                className="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                Apply
               </button>
             </div>
           </div>

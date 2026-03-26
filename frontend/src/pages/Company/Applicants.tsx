@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Download, 
@@ -78,7 +78,7 @@ export default function Applicants() {
   };
 
   const toApiStatus = (status: string) => {
-    if (status === 'Shortlisted') return 'shortlisted';
+    if (status === 'Shortlisted') return 'accepted';
     if (status === 'Pending Review') return 'pending';
     if (status === 'Unshortlisted') return 'rejected';
     if (status === 'Rejected') return 'rejected';
@@ -131,7 +131,7 @@ export default function Applicants() {
           const degreeParts = [app.major, app.current_education_level].filter(Boolean);
           education.push({
             school: app.university || '',
-            degree: degreeParts.join(' � '),
+            degree: degreeParts.join(' · '),
             period: ''
           });
         }

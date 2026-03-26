@@ -35,6 +35,7 @@ interface Event {
   location: string;
   is_virtual: boolean;
   meeting_url: string;
+  registration_url: string;
   max_participants: number;
   current_participants: number;
   registration_deadline: string;
@@ -381,6 +382,26 @@ export default function EventDetails() {
                   </div>
                 </div>
               )}
+
+              {event.registration_url && (
+                <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-indigo-900">Registration Link</p>
+                      <p className="text-sm text-indigo-700">Open the company registration form for this event.</p>
+                    </div>
+                    <a
+                      href={event.registration_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Open Link
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -422,6 +443,17 @@ export default function EventDetails() {
               </div>
             ) : (
               <div className="space-y-4">
+                {event.registration_url && (
+                  <a
+                    href={event.registration_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open Registration Link
+                  </a>
+                )}
                 {user && user.role === 'student' ? (
                   <button
                     onClick={handleRegister}

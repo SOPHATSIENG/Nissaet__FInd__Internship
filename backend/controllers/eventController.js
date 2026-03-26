@@ -28,6 +28,7 @@ const getAllEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -98,6 +99,7 @@ const getFeaturedEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -144,6 +146,7 @@ const getUpcomingEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -192,6 +195,7 @@ const getEventById = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -256,6 +260,7 @@ const getCompanyEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -328,6 +333,7 @@ const getStudentRegisteredEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -391,6 +397,7 @@ const getRecommendedEvents = async (req, res) => {
                 e.location,
                 e.is_virtual,
                 e.meeting_url,
+                e.registration_url,
                 e.max_participants,
                 e.current_participants,
                 e.registration_deadline,
@@ -439,6 +446,7 @@ const createEvent = async (req, res) => {
             location,
             is_virtual,
             meeting_url,
+            registration_url,
             max_participants,
             registration_deadline,
             requirements,
@@ -469,6 +477,7 @@ const createEvent = async (req, res) => {
             location: toNull(location),
             is_virtual: isVirtual,
             meeting_url: toNull(meeting_url),
+            registration_url: toNull(registration_url),
             max_participants: parsedMaxParticipants,
             registration_deadline: toNull(registration_deadline),
             requirements: toNull(requirements),
@@ -480,9 +489,9 @@ const createEvent = async (req, res) => {
         const query = `
             INSERT INTO events (
                 company_id, title, description, type, event_date, start_time, end_time,
-                location, is_virtual, meeting_url, max_participants, registration_deadline,
+                location, is_virtual, meeting_url, registration_url, max_participants, registration_deadline,
                 requirements, tags, image_url, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const bindParams = [
@@ -496,6 +505,7 @@ const createEvent = async (req, res) => {
             sanitized.location,
             sanitized.is_virtual,
             sanitized.meeting_url,
+            sanitized.registration_url,
             sanitized.max_participants,
             sanitized.registration_deadline,
             sanitized.requirements,
@@ -533,6 +543,7 @@ const updateEvent = async (req, res) => {
             location,
             is_virtual,
             meeting_url,
+            registration_url,
             max_participants,
             registration_deadline,
             requirements,
@@ -568,7 +579,7 @@ const updateEvent = async (req, res) => {
         const query = `
             UPDATE events SET
                 title = ?, description = ?, type = ?, event_date = ?, start_time = ?,
-                end_time = ?, location = ?, is_virtual = ?, meeting_url = ?,
+                end_time = ?, location = ?, is_virtual = ?, meeting_url = ?, registration_url = ?,
                 max_participants = ?, registration_deadline = ?, requirements = ?,
                 tags = ?, image_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
@@ -584,6 +595,7 @@ const updateEvent = async (req, res) => {
             toNull(location),
             isVirtual,
             toNull(meeting_url),
+            toNull(registration_url),
             parsedMaxParticipants,
             toNull(registration_deadline),
             toNull(requirements),

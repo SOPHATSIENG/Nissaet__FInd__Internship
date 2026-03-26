@@ -1464,6 +1464,51 @@ const normalizeUserStatus = (value) => {
     return 'active';
 };
 
+const ensureCompanyProfileVerified = async (userId, payload = {}) => {
+    if (!userId) return;
+    const companyNameRaw = payload.name || payload.full_name || 'Company';
+    const companyName = String(companyNameRaw || '').trim().replace(/\s+/g, ' ') || 'Company';
+
+    let existing = [];
+    try {
+        existing = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+        existing = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+    }
+
+    if (existing.length > 0) {
+        try {
+            await db.query('UPDATE companies SET is_verified = 1 WHERE id = ?', [existing[0].id]);
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+        }
+        return;
+    }
+
+    try {
+        await db.query(
+            `INSERT INTO companies
+             (user_id, name, description, industry, website, logo, company_size, founded_year, headquarters, is_verified)
+             VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1)`,
+            [userId, companyName]
+        );
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+        await db.query(
+            `INSERT INTO companies
+             (user_id, company_name, logo, description, industry, location, website, contact_person, contact_phone)
+             VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL)`,
+            [userId, companyName, payload.name || payload.full_name || null]
+        );
+        try {
+            await db.query('UPDATE companies SET is_verified = 1 WHERE user_id = ?', [userId]);
+        } catch (fallbackError) {
+            if (!isBadFieldError(fallbackError)) throw fallbackError;
+        }
+    }
+};
+
 const updateAdminUser = async (req, res) => {
     const userId = Number(req.params.id);
     if (!userId) {
@@ -1473,6 +1518,19 @@ const updateAdminUser = async (req, res) => {
     const { name, email, role, status } = req.body || {};
     const updates = [];
     const params = [];
+    let previousUser = null;
+
+    try {
+        const rows = await db.query('SELECT role, full_name, email FROM users WHERE id = ? LIMIT 1', [userId]);
+        previousUser = rows?.[0] || null;
+    } catch (error) {
+        console.error('Error fetching user for update:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+
+    if (!previousUser) {
+        return res.status(404).json({ message: 'User not found' });
+    }
 
     if (name !== undefined) {
         updates.push('full_name = ?');
@@ -1524,7 +1582,17 @@ const updateAdminUser = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        return res.json({ user: rows[0] });
+        const updatedUser = rows[0];
+        const normalizedRole = String(role || '').trim().toLowerCase();
+        const previousRole = String(previousUser.role || '').trim().toLowerCase();
+        if (normalizedRole === 'company' && previousRole !== 'company') {
+            await ensureCompanyProfileVerified(userId, {
+                name: updatedUser.name || previousUser.full_name,
+                full_name: updatedUser.name || previousUser.full_name
+            });
+        }
+
+        return res.json({ user: updatedUser });
     } catch (error) {
         if (isBadFieldError(error)) {
             return res.status(400).json({ message: 'User status column missing. Run migrations.' });

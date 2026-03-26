@@ -5,6 +5,7 @@ const db = require('../config/db');
  */
 const isSchemaError = (error) =>
     error && (error.code === 'ER_BAD_FIELD_ERROR' || error.code === 'ER_NO_SUCH_TABLE');
+const isDuplicateEntry = (error) => error && error.code === 'ER_DUP_ENTRY';
 
 const eventSelectFields = (includeRegistrationUrl = true) => `
     e.id,
@@ -92,6 +93,7 @@ const getAllEvents = async (req, res) => {
                 e.status,
                 e.created_at,
                 COALESCE(c.name, u.company_name) AS company_name,
+                c.id AS company_profile_id,
                 c.logo AS company_logo,
                 COALESCE(c.industry, u.industry) AS industry
             FROM events e
@@ -163,6 +165,7 @@ const getFeaturedEvents = async (req, res) => {
                 e.status,
                 e.created_at,
                 COALESCE(c.name, u.company_name) AS company_name,
+                c.id AS company_profile_id,
                 c.logo AS company_logo,
                 COALESCE(c.industry, u.industry) AS industry
             FROM events e
@@ -210,6 +213,7 @@ const getUpcomingEvents = async (req, res) => {
                 e.status,
                 e.created_at,
                 COALESCE(c.name, u.company_name) AS company_name,
+                c.id AS company_profile_id,
                 c.logo AS company_logo,
                 COALESCE(c.industry, u.industry) AS industry
             FROM events e
@@ -239,6 +243,7 @@ const getEventById = async (req, res) => {
             SELECT
                 ${eventSelectFields(includeRegistrationUrl)},
                 COALESCE(c.name, u.company_name) AS company_name,
+                c.id AS company_profile_id,
                 c.logo AS company_logo,
                 COALESCE(c.industry, u.industry) AS industry,
                 COALESCE(c.headquarters, u.location) AS company_location,
@@ -386,6 +391,7 @@ const getStudentRegisteredEvents = async (req, res) => {
                 er.registration_date,
                 er.status as registration_status,
                 COALESCE(c.name, u.company_name) AS company_name,
+                c.id AS company_profile_id,
                 c.logo AS company_logo,
                 COALESCE(c.industry, u.industry) AS industry
             FROM events e
@@ -448,6 +454,7 @@ const getRecommendedEvents = async (req, res) => {
                 e.status,
                 e.created_at,
                 COALESCE(c.name, u.company_name) AS company_name,
+                c.id AS company_profile_id,
                 c.logo AS company_logo,
                 COALESCE(c.industry, u.industry) AS industry
             FROM events e
@@ -720,30 +727,39 @@ const registerForEvent = async (req, res) => {
             return res.status(400).json({ error: 'Already registered for this event' });
         }
 
-        // Register for event
-        await db.query('BEGIN');
-        
+        // Register for event using a single connection to ensure transaction safety
+        const conn = await db.pool.getConnection();
         try {
-            await db.query(
+            await conn.beginTransaction();
+
+            await conn.execute(
                 'INSERT INTO event_registrations (event_id, student_id) VALUES (?, ?)',
                 [id, studentId]
             );
 
             // Update current participants count
-            await db.query(
+            await conn.execute(
                 'UPDATE events SET current_participants = current_participants + 1 WHERE id = ?',
                 [id]
             );
 
-            await db.query('COMMIT');
+            await conn.commit();
             res.status(201).json({ message: 'Successfully registered for event' });
         } catch (error) {
-            await db.query('ROLLBACK');
+            await conn.rollback();
             throw error;
+        } finally {
+            conn.release();
         }
     } catch (error) {
         console.error('Error registering for event:', error);
-        res.status(500).json({ error: 'Failed to register for event' });
+        if (isSchemaError(error)) {
+            return res.status(500).json({ error: 'Database schema error. Please run migrations for events.' });
+        }
+        if (isDuplicateEntry(error)) {
+            return res.status(400).json({ error: 'Already registered for this event' });
+        }
+        res.status(500).json({ error: error.message || 'Failed to register for event' });
     }
 };
 
@@ -763,29 +779,35 @@ const unregisterFromEvent = async (req, res) => {
             return res.status(400).json({ error: 'Not registered for this event' });
         }
 
-        await db.query('BEGIN');
-        
+        const conn = await db.pool.getConnection();
         try {
-            await db.query(
+            await conn.beginTransaction();
+
+            await conn.execute(
                 'DELETE FROM event_registrations WHERE event_id = ? AND student_id = ?',
                 [id, studentId]
             );
 
             // Update current participants count
-            await db.query(
+            await conn.execute(
                 'UPDATE events SET current_participants = current_participants - 1 WHERE id = ? AND current_participants > 0',
                 [id]
             );
 
-            await db.query('COMMIT');
+            await conn.commit();
             res.json({ message: 'Successfully unregistered from event' });
         } catch (error) {
-            await db.query('ROLLBACK');
+            await conn.rollback();
             throw error;
+        } finally {
+            conn.release();
         }
     } catch (error) {
         console.error('Error unregistering from event:', error);
-        res.status(500).json({ error: 'Failed to unregister from event' });
+        if (isSchemaError(error)) {
+            return res.status(500).json({ error: 'Database schema error. Please run migrations for events.' });
+        }
+        res.status(500).json({ error: error.message || 'Failed to unregister from event' });
     }
 };
 
@@ -818,13 +840,14 @@ const getEventRegistrations = async (req, res) => {
                 u.id as student_id,
                 u.full_name,
                 u.email,
-                u.phone,
-                u.university,
-                u.education,
-                u.graduation_year,
-                u.cv_url
+                COALESCE(s.phone, u.phone) AS phone,
+                COALESCE(s.university, u.university) AS university,
+                COALESCE(s.current_education_level, s.education, u.education) AS education,
+                COALESCE(s.graduation_year, u.graduation_year) AS graduation_year,
+                COALESCE(s.resume_url, s.cv_url, u.cv_url) AS cv_url
             FROM event_registrations er
             JOIN users u ON er.student_id = u.id
+            LEFT JOIN students s ON s.user_id = u.id
             WHERE er.event_id = ?
             ORDER BY er.registration_date ASC
         `;

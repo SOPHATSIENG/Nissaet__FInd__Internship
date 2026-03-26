@@ -10,6 +10,7 @@ import {
   Video,
   UserPlus,
   UserCheck,
+  Bell,
   X,
   Tag,
   ExternalLink,
@@ -19,11 +20,13 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import api from '../../api/axios';
 
 interface Event {
   id: number;
   company_id: number;
+  company_profile_id?: number | null;
   title: string;
   description: string;
   type: string;
@@ -65,6 +68,8 @@ export default function Events() {
   const [registeringId, setRegisteringId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const { unreadCount } = useNotifications();
+  const notificationCount = Math.max(0, unreadCount || 0);
 
   const eventTypes = [
     { value: 'workshop', label: 'Workshop' },
@@ -83,7 +88,7 @@ export default function Events() {
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/events/upcoming');
+      const response = await api.get('/events/upcoming', { auth: false });
       setEvents(response.data);
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -94,7 +99,7 @@ export default function Events() {
 
   const fetchFeaturedEvents = async () => {
     try {
-      const response = await api.get('/events/featured');
+      const response = await api.get('/events/featured', { auth: false });
       setFeaturedEvents(response.data);
     } catch (error) {
       console.error('Error fetching featured events:', error);
@@ -112,12 +117,12 @@ export default function Events() {
       setError('');
       setSuccess('');
 
-      await api.post(`/events/${eventId}/register`);
+      await api.post(`/events/${eventId}/register`, {});
       
       setSuccess('Successfully registered for the event!');
       
       // Update the events list to reflect registration
-      setEvents(events.map(event => 
+      setEvents((previous) => previous.map(event => 
         event.id === eventId 
           ? { 
               ...event, 
@@ -131,7 +136,7 @@ export default function Events() {
           : event
       ));
       
-      setFeaturedEvents(featuredEvents.map(event => 
+      setFeaturedEvents((previous) => previous.map(event => 
         event.id === eventId 
           ? { 
               ...event, 
@@ -148,7 +153,12 @@ export default function Events() {
       setTimeout(() => setSuccess(''), 5000);
     } catch (error: any) {
       console.error('Error registering for event:', error);
-      setError(error?.message || 'Failed to register for event');
+      const message =
+        error?.message ||
+        error?.error ||
+        (typeof error === 'string' ? error : '') ||
+        'Failed to register for event';
+      setError(message);
       setTimeout(() => setError(''), 5000);
     } finally {
       setRegisteringId(null);
@@ -166,7 +176,7 @@ export default function Events() {
       setSuccess('Successfully unregistered from the event!');
       
       // Update the events list to reflect unregistration
-      setEvents(events.map(event => 
+      setEvents((previous) => previous.map(event => 
         event.id === eventId 
           ? { 
               ...event, 
@@ -176,7 +186,7 @@ export default function Events() {
           : event
       ));
       
-      setFeaturedEvents(featuredEvents.map(event => 
+      setFeaturedEvents((previous) => previous.map(event => 
         event.id === eventId 
           ? { 
               ...event, 
@@ -189,7 +199,12 @@ export default function Events() {
       setTimeout(() => setSuccess(''), 5000);
     } catch (error: any) {
       console.error('Error unregistering from event:', error);
-      setError(error?.message || 'Failed to unregister from event');
+      const message =
+        error?.message ||
+        error?.error ||
+        (typeof error === 'string' ? error : '') ||
+        'Failed to unregister from event';
+      setError(message);
       setTimeout(() => setError(''), 5000);
     } finally {
       setRegisteringId(null);
@@ -408,7 +423,19 @@ export default function Events() {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-8 relative">
+        <button
+          type="button"
+          className="absolute right-0 top-0 inline-flex items-center justify-center h-10 w-10 rounded-full border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 bg-white shadow-sm"
+          aria-label="Notifications"
+        >
+          <Bell className="w-5 h-5" />
+          {notificationCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] leading-[18px] text-center px-1">
+              {notificationCount > 99 ? '99+' : notificationCount}
+            </span>
+          )}
+        </button>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Events & Workshops</h1>
         <p className="text-gray-600 max-w-2xl mx-auto">
           Discover and register for workshops, seminars, and networking events hosted by top companies

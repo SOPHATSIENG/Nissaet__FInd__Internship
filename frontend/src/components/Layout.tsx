@@ -20,18 +20,27 @@ export default function Layout() {
   const notificationCardRef = useRef<HTMLDivElement | null>(null);
   const [headerProfileImage, setHeaderProfileImage] = useState('');
   const [headerFullName, setHeaderFullName] = useState('');
+  const [headerIsAvailable, setHeaderIsAvailable] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [loadingNotificationCard, setLoadingNotificationCard] = useState(false);
   const [notifications, setNotifications] = useState<HeaderNotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const derivedUnreadCount = Math.max(
+    unreadCount,
+    notifications.filter((item) => !item.is_read).length
+  );
 
-  const navLinks = [
+  const baseLinks = [
     { name: 'Home', path: '/' },
     { name: 'Internships', path: '/internships' },
     { name: 'Companies', path: '/companies' },
     { name: 'Blog & Events', path: '/blog' },
     { name: 'Career Advice', path: '/career-advice' },
   ];
+
+  const navLinks = isAuthenticated
+    ? [...baseLinks, { name: 'Dashboard', path: '/dashboard' }]
+    : baseLinks;
 
   const isActiveLink = (path: string) => {
     if (path === '/') {
@@ -84,6 +93,17 @@ export default function Layout() {
     }
   };
 
+  const markAllNotificationsRead = async () => {
+    if (!isAuthenticated || unreadCount === 0) return;
+    try {
+      await api.markNotificationsRead({ all: true });
+      setUnreadCount(0);
+      setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
+    } catch (error) {
+      console.error('Failed to mark notifications read:', error);
+    }
+  };
+
   useEffect(() => {
     let isCurrent = true;
 
@@ -100,11 +120,14 @@ export default function Layout() {
         const settingsResponse = await api.getProfileSettings();
         if (!isCurrent) return;
         const personal = settingsResponse?.settings?.personal;
+        const education = settingsResponse?.settings?.education;
         setHeaderProfileImage(personal?.profile_image || '');
         setHeaderFullName(personal?.full_name || '');
+        setHeaderIsAvailable(!!education?.is_available);
       } catch {
         if (!isCurrent) return;
         setHeaderProfileImage('');
+        setHeaderIsAvailable(false);
       }
 
       try {
@@ -127,17 +150,45 @@ export default function Layout() {
   }, [isAuthenticated, user?.id]);
 
   useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    let isActive = true;
+
+    const refreshNotifications = async () => {
+      try {
+        const notificationResponse = await api.getNotificationCard();
+        if (!isActive) return;
+        setNotifications(Array.isArray(notificationResponse?.notifications) ? notificationResponse.notifications : []);
+        setUnreadCount(Number(notificationResponse?.unread_count || 0));
+      } catch {
+        if (!isActive) return;
+      }
+    };
+
+    const intervalId = window.setInterval(refreshNotifications, 30000);
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     // FIX MARK: refresh top avatar immediately after profile image is updated in settings page.
     const handleProfileUpdated = (event: Event) => {
-      const customEvent = event as CustomEvent<{ personal?: { profile_image?: string; full_name?: string } }>;
+      const customEvent = event as CustomEvent<{
+        personal?: { profile_image?: string; full_name?: string };
+        education?: { is_available?: boolean };
+      }>;
       const personal = customEvent.detail?.personal;
-      if (!personal) return;
+      const education = customEvent.detail?.education;
 
-      if (typeof personal.profile_image === 'string') {
+      if (typeof personal?.profile_image === 'string') {
         setHeaderProfileImage(personal.profile_image);
       }
-      if (typeof personal.full_name === 'string') {
+      if (typeof personal?.full_name === 'string') {
         setHeaderFullName(personal.full_name);
+      }
+      if (typeof education?.is_available === 'boolean') {
+        setHeaderIsAvailable(education.is_available);
       }
     };
 
@@ -184,6 +235,19 @@ export default function Layout() {
       return next;
     });
   };
+
+  const markNotificationRead = async (id: number) => {
+    try {
+      await api.markNotificationsRead({ ids: [id] });
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, is_read: true } : item))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Failed to mark notification read:', error);
+    }
+  };
+
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-[#f6f8f7] text-[#111816]">
@@ -232,19 +296,30 @@ export default function Layout() {
                         aria-label="Open notifications"
                       >
                         <Bell size={20} />
-                        {unreadCount > 0 && (
+                        {derivedUnreadCount > 0 && (
                           <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] leading-[18px] text-center px-1">
-                            {unreadCount > 99 ? '99+' : unreadCount}
+                            {derivedUnreadCount > 99 ? '99+' : derivedUnreadCount}
                           </span>
                         )}
                       </button>
 
-                      {notificationOpen && (
-                        <div className="absolute right-0 mt-3 w-[360px] rounded-2xl border border-slate-200 bg-white shadow-xl z-50 overflow-hidden">
-                          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
-                            <span className="text-xs text-slate-500">{unreadCount} unread</span>
-                          </div>
+      {notificationOpen && (
+        <div className="absolute right-0 mt-3 w-[360px] rounded-2xl border border-slate-200 bg-white shadow-xl z-50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
+            <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">{derivedUnreadCount} unread</span>
+              {derivedUnreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllNotificationsRead}
+                  className="text-xs font-semibold text-[#3b82f6] hover:underline"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+          </div>
 
                           <div className="max-h-[360px] overflow-y-auto">
                             {loadingNotificationCard ? (
@@ -273,7 +348,10 @@ export default function Layout() {
                                     <Link
                                       to={item.action_url}
                                       className="inline-block mt-2 text-xs font-semibold text-[#3b82f6] hover:underline"
-                                      onClick={() => setNotificationOpen(false)}
+                                      onClick={() => {
+                                        markNotificationRead(item.id);
+                                        setNotificationOpen(false);
+                                      }}
                                     >
                                       Open
                                     </Link>
@@ -295,7 +373,7 @@ export default function Layout() {
                     {/* FIX MARK: clicking profile avatar now opens account settings page. */}
                     <Link to="/account-settings" aria-label="Open account settings">
                       {/* FIX MARK: top profile avatar now uses uploaded image from database. */}
-                      <div className="h-10 w-10 rounded-full border-2 border-white shadow-sm cursor-pointer overflow-hidden bg-slate-200 flex items-center justify-center">
+                      <div className={`relative h-10 w-10 rounded-full border-2 border-white shadow-sm cursor-pointer overflow-hidden bg-slate-200 flex items-center justify-center ${headerIsAvailable ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-white' : ''}`}>
                         {displayProfileImage ? (
                           <img
                             src={displayProfileImage}
@@ -304,6 +382,12 @@ export default function Layout() {
                           />
                         ) : (
                           <span className="text-xs font-semibold text-slate-600">{profileInitials || 'ST'}</span>
+                        )}
+                        {headerIsAvailable && (
+                          <span
+                            className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white"
+                            aria-label="Open to work"
+                          />
                         )}
                       </div>
                     </Link>

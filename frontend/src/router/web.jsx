@@ -11,12 +11,16 @@ import { CompanyStep3 } from '../pages/auth/CompanyStep3';
 import { AdminStep2 } from '../pages/auth/AdminStep2';
 import Layout from '../components/Layout';
 import Home from '../pages/student/Home';
+import StudentDashboard from '../pages/student/Dashboard';
 import Internships from '../pages/student/Internships';
 import InternshipDetails from '../pages/student/InternshipDetails';
 import Companies from '../pages/student/Companies';
+import CompanyProfile from '../pages/student/CompanyProfile';
 import CareerAdvice from '../pages/student/CareerAdvice';
 import BlogList from '../pages/student/BlogList';
 import BlogDetail from '../pages/student/BlogDetail';
+import Events from '../pages/student/Events';
+import EventDetails from '../pages/student/EventDetails';
 import AccountSettings from '../pages/account/AccountSettings';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -262,13 +266,23 @@ export default function WebRouter() {
           }
         >
           <Route index element={<Home />} />
+          <Route
+            path="dashboard"
+            element={
+              <RequireAuth>
+                <StudentDashboard />
+              </RequireAuth>
+            }
+          />
           <Route path="internships" element={<Internships />} />
           <Route path="internships/:id" element={<InternshipDetails />} />
           <Route path="companies" element={<Companies />} />
-          <Route path="companies/:id" element={<Companies />} />
+          <Route path="companies/:id" element={<CompanyProfile />} />
           <Route path="career-advice" element={<CareerAdvice />} />
           <Route path="blog" element={<BlogList />} />
           <Route path="blog/:id" element={<BlogDetail />} />
+          <Route path="events" element={<Events />} />
+          <Route path="events/:id" element={<EventDetails />} />
           <Route path="student/:id" element={<StudentProfile />} />
           <Route
             path="account-settings"

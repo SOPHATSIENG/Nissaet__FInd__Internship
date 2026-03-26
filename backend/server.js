@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
@@ -31,6 +32,7 @@ app.use(cors({
 }));
 // FIX MARK: increase JSON payload limit so profile image (base64) can be saved.
 app.use(express.json({ limit: '10mb' })); // Body parser
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Basic Route
 app.get('/', (req, res) => {

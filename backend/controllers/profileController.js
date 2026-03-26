@@ -601,7 +601,6 @@ const getCompanyBilling = async (req, res) => {
         if (!userId) {
             return res.status(401).json({ message: 'Authentication required' });
         }
-
         const users = await db.query('SELECT id, role FROM users WHERE id = ? LIMIT 1', [userId]);
         if (!users.length) {
             return res.status(404).json({ message: 'User not found' });
@@ -684,6 +683,7 @@ const getNotificationCard = async (req, res) => {
         if (!userId) {
             return res.status(401).json({ message: 'Authentication required' });
         }
+        // Do not auto-mark notifications as read on fetch.
 
         let rows = [];
         try {
@@ -693,7 +693,7 @@ const getNotificationCard = async (req, res) => {
                     title,
                     message,
                     type,
-                    is_read,
+                    COALESCE(is_read, 0) AS is_read,
                     action_url,
                     created_at
                  FROM notifications
@@ -709,7 +709,7 @@ const getNotificationCard = async (req, res) => {
                     id,
                     title,
                     message,
-                    is_read,
+                    COALESCE(is_read, 0) AS is_read,
                     created_at
                  FROM notifications
                  WHERE user_id = ?
@@ -730,7 +730,7 @@ const getNotificationCard = async (req, res) => {
             unreadCount = Number(countRows?.[0]?.total || 0);
         } catch (error) {
             if (error && error.code === 'ER_BAD_FIELD_ERROR') {
-                unreadCount = rows.length;
+                unreadCount = rows.filter((row) => !toBoolean(row.is_read, false)).length;
             } else {
                 throw error;
             }

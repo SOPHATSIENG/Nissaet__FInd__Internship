@@ -326,9 +326,10 @@ export default function Home() {
           ) : (
             <div className="grid md:grid-cols-4 gap-6">
               {featuredCompanies.map((company) => (
-                <div
+                <Link
                   key={company.id}
-                  className="bg-[#f6f8f7] p-6 rounded-2xl border border-gray-100 hover:shadow-md transition-shadow"
+                  to={`/companies/${company.id}`}
+                  className="bg-[#f6f8f7] p-6 rounded-2xl border border-gray-100 hover:shadow-md transition-shadow block"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <img
@@ -347,7 +348,7 @@ export default function Home() {
                   <div className="inline-block bg-[#3b82f6]/10 text-[#2563eb] text-xs font-bold px-3 py-1.5 rounded-full">
                     {company.open_positions} Open Internships
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

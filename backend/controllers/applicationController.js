@@ -46,12 +46,21 @@ const getMyApplications = async (req, res) => {
         }
 
         const studentId = await getStudentIdByUserId(userId);
+        const { page, limit, offset } = parsePagination(req.query);
         
         if (!studentId) {
-            return res.status(404).json({ message: 'Student profile not found' });
+            return res.json({
+                applications: [],
+                pagination: {
+                    page,
+                    limit,
+                    total: 0,
+                    totalPages: 0,
+                    hasNext: false,
+                    hasPrev: false
+                }
+            });
         }
-
-        const { page, limit, offset } = parsePagination(req.query);
         const internshipFilterRaw = req.query?.internship_id;
         const internshipFilter = Number.isFinite(Number(internshipFilterRaw))
             ? Number(internshipFilterRaw)
@@ -119,7 +128,7 @@ const getMyApplications = async (req, res) => {
 
 const applyForInternship = async (req, res) => {
     try {
-        const { internship_id, cover_letter } = req.body;
+        const { internship_id, cover_letter, resume_url } = req.body;
         const userId = req.user?.role === 'student' ? req.user.userId : null;
         const studentId = userId ? await getStudentIdByUserId(userId) : null;
 
@@ -136,11 +145,12 @@ const applyForInternship = async (req, res) => {
             return res.status(400).json({ message: 'You have already applied for this internship' });
         }
 
+        const providedResumeUrl = typeof resume_url === 'string' && resume_url.trim() ? resume_url.trim() : null;
         const resumeRows = await db.query(
             'SELECT resume_url FROM students WHERE id = ? LIMIT 1',
             [studentId]
         );
-        const resumeUrl = resumeRows[0]?.resume_url || null;
+        const resumeUrl = providedResumeUrl || resumeRows[0]?.resume_url || null;
 
         const result = await db.query(
             'INSERT INTO applications (student_id, internship_id, cover_letter, resume_url, status) VALUES (?, ?, ?, ?, ?)',
@@ -327,11 +337,29 @@ const getInternshipApplications = async (req, res) => {
     }
 };
 
+const buildStatusNotification = (status, internshipTitle, companyName) => {
+    let title = 'Application Update';
+    let message = `Your application for "${internshipTitle}" at ${companyName} has been updated to: ${status}`;
+
+    if (status === 'shortlisted' || status === 'accepted') {
+        title = status === 'accepted' ? 'Application Accepted!' : 'Application Shortlisted!';
+        message =
+            status === 'accepted'
+                ? `Great news! Your application for "${internshipTitle}" at ${companyName} has been accepted.`
+                : `Congratulations! You have been shortlisted for "${internshipTitle}" at ${companyName}.`;
+    } else if (status === 'rejected') {
+        title = 'Application Status';
+        message = `We regret to inform you that your application for "${internshipTitle}" at ${companyName} was not selected at this time.`;
+    }
+
+    return { title, message };
+};
+
 const updateApplicationStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        const validStatuses = new Set(['pending', 'reviewing', 'accepted', 'rejected', 'withdrawn']);
+        const validStatuses = new Set(['pending', 'reviewing', 'accepted', 'shortlisted', 'rejected', 'withdrawn']);
 
         if (!validStatuses.has(status)) {
             return res.status(400).json({ message: 'Invalid status' });
@@ -372,19 +400,7 @@ const updateApplicationStatus = async (req, res) => {
 
         if (studentInfoRows.length > 0) {
             const { user_id, internship_title, company_name } = studentInfoRows[0];
-            let title = 'Application Update';
-            let message = `Your application for "${internship_title}" at ${company_name} has been updated to: ${status}`;
-
-            if (status === 'shortlisted') {
-                title = 'Application Shortlisted!';
-                message = `Congratulations! You have been shortlisted for "${internship_title}" at ${company_name}.`;
-            } else if (status === 'rejected') {
-                title = 'Application Status';
-                message = `We regret to inform you that your application for "${internship_title}" at ${company_name} was not selected at this time.`;
-            } else if (status === 'accepted') {
-                title = 'Application Accepted!';
-                message = `Great news! Your application for "${internship_title}" at ${company_name} has been accepted.`;
-            }
+            const { title, message } = buildStatusNotification(status, internship_title, company_name);
 
             await createNotification(
                 user_id,
@@ -393,7 +409,7 @@ const updateApplicationStatus = async (req, res) => {
                 'application',
                 'application',
                 id,
-                `/profile/applications`
+                `/account-settings?tab=applications`
             );
         }
 
@@ -434,10 +450,15 @@ const updateMyApplication = async (req, res) => {
         }
 
         const coverLetter = typeof req.body?.cover_letter === 'string' ? req.body.cover_letter.trim() : null;
+        const resumeUrl = typeof req.body?.resume_url === 'string' && req.body.resume_url.trim()
+            ? req.body.resume_url.trim()
+            : null;
 
         const result = await db.query(
-            'UPDATE applications SET cover_letter = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND student_id = ?',
-            [coverLetter || null, applicationId, studentId]
+            `UPDATE applications 
+             SET cover_letter = ?, resume_url = COALESCE(?, resume_url), updated_at = CURRENT_TIMESTAMP 
+             WHERE id = ? AND student_id = ?`,
+            [coverLetter || null, resumeUrl, applicationId, studentId]
         );
 
         if (!result?.affectedRows) {
@@ -660,7 +681,7 @@ const bulkUpdateApplicationStatus = async (req, res) => {
             return res.status(400).json({ message: 'Application IDs are required' });
         }
 
-        const validStatuses = new Set(['pending', 'reviewing', 'shortlisted', 'rejected', 'withdrawn']);
+        const validStatuses = new Set(['pending', 'reviewing', 'accepted', 'shortlisted', 'rejected', 'withdrawn']);
         if (!validStatuses.has(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }
@@ -690,6 +711,39 @@ const bulkUpdateApplicationStatus = async (req, res) => {
             }
 
             await connection.commit();
+
+            // Notify students
+            try {
+                const rows = await db.query(
+                    `SELECT 
+                        a.id,
+                        u.id as user_id,
+                        i.title as internship_title,
+                        c.name as company_name
+                     FROM applications a
+                     JOIN students s ON a.student_id = s.id
+                     JOIN users u ON s.user_id = u.id
+                     JOIN internships i ON a.internship_id = i.id
+                     JOIN companies c ON i.company_id = c.id
+                     WHERE a.id IN (${ids.map(() => '?').join(',')})`,
+                    ids
+                );
+                for (const row of rows) {
+                    const { title, message } = buildStatusNotification(status, row.internship_title, row.company_name);
+                    await createNotification(
+                        row.user_id,
+                        title,
+                        message,
+                        'application',
+                        'application',
+                        row.id,
+                        '/account-settings?tab=applications'
+                    );
+                }
+            } catch (notifyError) {
+                console.error('Bulk notification failed:', notifyError.message);
+            }
+
             return res.json({ 
                 message: `${ids.length} application(s) updated successfully`,
                 updatedCount: ids.length

@@ -33,9 +33,10 @@ const authenticate = async (req, res, next) => {
             return res.status(403).json({ message: 'Account suspended' });
         }
 
+        const normalizedRole = String(user.role || decoded.role || '').toLowerCase();
         req.user = {
             ...decoded,
-            role: user.role || decoded.role,
+            role: normalizedRole,
             userId: user.id
         };
         next();

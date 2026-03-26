@@ -47,14 +47,15 @@ async function request(path, options = {}) {
     console.log('Response status:', response.status, response.statusText);
   } catch (error) {
     console.error('Network Error:', error);
-    throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Please ensure the backend server is running and accessible at this address.`);
+    throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Please ensure the backend server is running on port 5001 and accessible. If you see "Port 5001 is in use" in the backend logs, try stopping other node processes.`);
   }
 
   const data = await response.json().catch(() => ({}));
 
   if (response.status === 401) {
+    const token = getStoredToken();
     clearStoredToken();
-    if (typeof window !== 'undefined') {
+    if (token && typeof window !== 'undefined') {
       const path = window.location?.pathname || '';
       const target = path.startsWith('/admin') ? '/admin/login' : '/login';
       if (window.location && window.location.pathname !== target) {
@@ -439,8 +440,11 @@ export const api = {
   applyForInternship(internshipId, coverLetter) {
     return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter } });
   },
-  updateMyApplication(applicationId, coverLetter) {
-    return request(`/applications/${applicationId}`, { method: 'PUT', auth: true, body: { cover_letter: coverLetter } });
+  applyForInternshipWithResume(internshipId, coverLetter, resumeUrl) {
+    return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter, resume_url: resumeUrl } });
+  },
+  updateMyApplication(applicationId, coverLetter, resumeUrl) {
+    return request(`/applications/${applicationId}`, { method: 'PUT', auth: true, body: { cover_letter: coverLetter, resume_url: resumeUrl } });
   },
   deleteMyApplication(applicationId) {
     return request(`/applications/${applicationId}`, { method: 'DELETE', auth: true });
@@ -608,6 +612,51 @@ export const api = {
 
   deleteNotification(id) {
     return request(`/notifications/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  async getCompanyById(id) {
+    try {
+      return await request(`/internships/companies/${id}`);
+    } catch (err) {
+      // If direct ID lookup fails, try user ID lookup as fallback
+      return await request(`/internships/companies/${id}?by=user`);
+    }
+  },
+
+  getCompanyByUserId(id) {
+    return request(`/internships/companies/${id}?by=user`);
+  },
+
+  // Events endpoints
+  getUpcomingEvents() {
+    return request('/events/upcoming', { auth: false });
+  },
+
+  getStudentRegisteredEvents() {
+    return request('/events/student/registered', { auth: true });
+  },
+
+  getRecommendedEvents() {
+    return request('/events/student/recommended', { auth: true });
+  },
+
+  async uploadResume(file) {
+    const token = getStoredToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/uploads/resume`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data?.message || data?.error || `Upload failed with status ${response.status}`;
+      throw new Error(message);
+    }
+    return data;
   },
 };
 

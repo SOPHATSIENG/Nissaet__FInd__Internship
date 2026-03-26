@@ -49,6 +49,17 @@ export default function Applicants() {
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const toBoolean = (value: any, fallback = false) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+      if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    }
+    return fallback;
+  };
+
   const getAvatarUrl = (profileImage?: string, name?: string, size = 40) => {
     if (profileImage) return profileImage;
     const fallbackName = encodeURIComponent(name || 'User');
@@ -67,7 +78,7 @@ export default function Applicants() {
   };
 
   const toApiStatus = (status: string) => {
-    if (status === 'Shortlisted') return 'accepted';
+    if (status === 'Shortlisted') return 'shortlisted';
     if (status === 'Pending Review') return 'pending';
     if (status === 'Unshortlisted') return 'rejected';
     if (status === 'Rejected') return 'rejected';
@@ -143,7 +154,8 @@ export default function Applicants() {
           education,
           experience,
           resumeUrl: app.resume_url || '',
-          profileImage: app.profile_image || ''
+          profileImage: app.profile_image || '',
+          is_available: toBoolean(app.is_available, true)
         };
       });
 
@@ -813,7 +825,12 @@ export default function Applicants() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <img className="h-10 w-10 rounded-full object-cover" src={getAvatarUrl(app.profileImage, app.name, 40)} alt={app.name} />
+                        <div className="relative">
+                          <img className="h-10 w-10 rounded-full object-cover" src={getAvatarUrl(app.profileImage, app.name, 40)} alt={app.name} />
+                          {app.is_available && (
+                            <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-label="Available for internships" />
+                          )}
+                        </div>
                         <div>
                           <button 
                             onClick={() => setViewingApplicant(app)}
@@ -821,7 +838,18 @@ export default function Applicants() {
                           >
                             {app.name}
                           </button>
-                          <p className="text-xs text-slate-500">{app.email}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-slate-500">{app.email}</p>
+                            {app.is_available ? (
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                Open to work
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                                Not available
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -998,11 +1026,18 @@ export default function Applicants() {
               <div className="p-8 space-y-8">
                 {/* Header Info */}
                 <div className="flex items-start gap-6">
-                  <img 
-                    className="h-24 w-24 rounded-2xl object-cover shadow-md" 
-                    src={getAvatarUrl(viewingApplicant.profileImage, viewingApplicant.name, 200)} 
-                    alt={viewingApplicant.name} 
-                  />
+                  <div className="relative">
+                    <img 
+                      className={`h-24 w-24 rounded-2xl object-cover shadow-md ${viewingApplicant.is_available ? 'ring-2 ring-emerald-400' : ''}`} 
+                      src={getAvatarUrl(viewingApplicant.profileImage, viewingApplicant.name, 200)} 
+                      alt={viewingApplicant.name} 
+                    />
+                    {viewingApplicant.is_available && (
+                      <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md">
+                        Open to work
+                      </span>
+                    )}
+                  </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-slate-900">{viewingApplicant.name}</h3>
                     <p className="text-slate-500 font-medium">{viewingApplicant.role}</p>
@@ -1013,6 +1048,11 @@ export default function Applicants() {
                         'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
                       }`}>
                         {viewingApplicant.status}
+                      </span>
+                      <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
+                        viewingApplicant.is_available ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-600 ring-slate-200'
+                      }`}>
+                        {viewingApplicant.is_available ? 'Open to work' : 'Not available'}
                       </span>
                       <span className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold bg-slate-50 text-slate-600 ring-1 ring-inset ring-slate-200">
                         Applied {viewingApplicant.date}

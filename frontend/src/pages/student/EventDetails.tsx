@@ -26,6 +26,7 @@ import api from '../../api/axios';
 interface Event {
   id: number;
   company_id: number;
+  company_profile_id?: number | null;
   title: string;
   description: string;
   type: string;
@@ -63,7 +64,8 @@ export default function EventDetails() {
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
-  const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
@@ -75,11 +77,12 @@ export default function EventDetails() {
   const fetchEvent = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/events/${id}`);
+      setLoadError('');
+      const response = await api.get(`/events/${id}`, { auth: false });
       setEvent(response.data);
     } catch (error) {
       console.error('Error fetching event:', error);
-      setError('Event not found');
+      setLoadError((error as any)?.message || 'Event not found');
     } finally {
       setLoading(false);
     }
@@ -95,10 +98,10 @@ export default function EventDetails() {
 
     try {
       setRegistering(true);
-      setError('');
+      setActionError('');
       setSuccess('');
 
-      await api.post(`/events/${event.id}/register`);
+      await api.post(`/events/${event.id}/register`, {});
       
       setSuccess('Successfully registered for the event!');
       setEvent({
@@ -114,8 +117,13 @@ export default function EventDetails() {
       setTimeout(() => setSuccess(''), 5000);
     } catch (error: any) {
       console.error('Error registering for event:', error);
-      setError(error?.message || 'Failed to register for event');
-      setTimeout(() => setError(''), 5000);
+      const message =
+        error?.message ||
+        error?.error ||
+        (typeof error === 'string' ? error : '') ||
+        'Failed to register for event';
+      setActionError(message);
+      setTimeout(() => setActionError(''), 5000);
     } finally {
       setRegistering(false);
     }
@@ -126,7 +134,7 @@ export default function EventDetails() {
 
     try {
       setRegistering(true);
-      setError('');
+      setActionError('');
       setSuccess('');
 
       await api.delete(`/events/${event.id}/register`);
@@ -141,8 +149,13 @@ export default function EventDetails() {
       setTimeout(() => setSuccess(''), 5000);
     } catch (error: any) {
       console.error('Error unregistering from event:', error);
-      setError(error?.message || 'Failed to unregister from event');
-      setTimeout(() => setError(''), 5000);
+      const message =
+        error?.message ||
+        error?.error ||
+        (typeof error === 'string' ? error : '') ||
+        'Failed to unregister from event';
+      setActionError(message);
+      setTimeout(() => setActionError(''), 5000);
     } finally {
       setRegistering(false);
     }
@@ -193,13 +206,15 @@ export default function EventDetails() {
     );
   }
 
-  if (!event || error) {
+  if (!event || loadError) {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Event Not Found</h2>
-          <p className="text-gray-600 mb-4">The event you're looking for doesn't exist or has been removed.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to Load Event</h2>
+          <p className="text-gray-600 mb-4">
+            {loadError || "The event you're looking for doesn't exist or has been removed."}
+          </p>
           <button
             onClick={() => navigate('/events')}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#137fec] text-white rounded-lg hover:bg-[#0e6bb8] transition-colors"
@@ -215,10 +230,10 @@ export default function EventDetails() {
   return (
     <div className="max-w-6xl mx-auto p-6">
       {/* Alerts */}
-      {error && (
+      {actionError && (
         <div className="mb-6 flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
           <AlertCircle className="w-5 h-5" />
-          {error}
+          {actionError}
         </div>
       )}
 
@@ -529,7 +544,22 @@ export default function EventDetails() {
             )}
 
             <button
-              onClick={() => navigate(`/companies/${event.company_id}`)}
+              onClick={() => {
+                const targetId = event.company_profile_id || event.company_id;
+                const query = event.company_profile_id ? '' : '?by=user';
+                navigate(`/companies/${targetId}${query}`, {
+                  state: {
+                    eventId: event.id,
+                    companyFallback: {
+                      company_name: event.company_name,
+                      logo: event.company_logo,
+                      industry: event.industry,
+                      location: event.company_location,
+                      website: event.website,
+                    },
+                  },
+                });
+              }}
               className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
             >
               View Company Profile

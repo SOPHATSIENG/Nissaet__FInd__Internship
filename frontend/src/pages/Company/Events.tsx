@@ -298,7 +298,6 @@ export default function Events() {
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
           </div>
-
           <div className="bg-white p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -556,7 +555,7 @@ export default function Events() {
                   className="h-56 w-full object-cover"
                 />
               ) : (
-                <div className="h-56 w-full bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center text-indigo-400">
+                <div className="flex h-56 w-full items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 text-indigo-400">
                   <Calendar className="w-12 h-12" />
                 </div>
               )}
@@ -567,7 +566,7 @@ export default function Events() {
               >
                 <X className="h-4 w-4" />
               </button>
-              <div className="absolute left-6 bottom-4 flex flex-wrap items-center gap-2">
+              <div className="absolute bottom-4 left-6 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(detailEvent.status)}`}>
                   {getStatusIcon(detailEvent.status)}
                   {detailEvent.status.charAt(0).toUpperCase() + detailEvent.status.slice(1)}
@@ -583,15 +582,15 @@ export default function Events() {
               </div>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="space-y-5 p-6">
               <div>
                 <h3 className="text-2xl font-bold text-slate-900">{detailEvent.title}</h3>
-                <p className="text-sm text-slate-500 mt-1">Created on {formatDate(detailEvent.created_at)}</p>
+                <p className="mt-1 text-sm text-slate-500">Created on {formatDate(detailEvent.created_at)}</p>
               </div>
 
-              <p className="text-slate-600 whitespace-pre-wrap">{detailEvent.description}</p>
+              <p className="whitespace-pre-wrap text-slate-600">{detailEvent.description}</p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
+              <div className="grid grid-cols-1 gap-4 text-sm text-slate-600 sm:grid-cols-2">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-slate-400" />
                   <span>{formatDate(detailEvent.event_date)}</span>
@@ -628,8 +627,8 @@ export default function Events() {
 
               {detailEvent.requirements && (
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Requirements</h4>
-                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{detailEvent.requirements}</p>
+                  <h4 className="mb-2 text-sm font-semibold text-slate-900">Requirements</h4>
+                  <p className="whitespace-pre-wrap text-sm text-slate-600">{detailEvent.requirements}</p>
                 </div>
               )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown, Calendar, History } from 'lucide-react';
+import { Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown, Calendar, History, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
@@ -126,12 +126,20 @@ export default function Navbar() {
     { name: 'Settings', path: '/company/settings', icon: SettingsIcon },
   ];
 
+  const activeLink = navLinks.find((link) => link.path === location.pathname) || navLinks[0];
+
   return (
-    <header className="sticky top-0 z-50 w-full bg-white border-b border-slate-200 px-4 md:px-6 py-4">
-      <div className="max-w-[1280px] mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <Link to="/company" className="flex items-center gap-3 group">
-            <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white overflow-hidden font-bold text-sm">
+    <header className="sticky top-0 z-50 w-full bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,249,252,0.94))] px-4 py-4 backdrop-blur-xl md:px-6">
+      <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
+        <div className="absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_38%),radial-gradient(circle_at_top_right,_rgba(20,184,166,0.14),_transparent_34%)]" />
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3 md:gap-4">
+            <Link
+              to="/company"
+              className="group flex min-w-0 items-center gap-3 rounded-[24px] border border-slate-200/70 bg-white/80 px-3 py-2 shadow-[0_12px_35px_-24px_rgba(15,23,42,0.55)] ring-1 ring-white/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_40px_-24px_rgba(37,99,235,0.45)] md:px-4"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#0f3b68,#0b6fa4_55%,#69b6dc)] text-sm font-bold text-white shadow-inner shadow-slate-900/10">
               {resolvedLogo && !logoError ? (
                 <img
                   src={resolvedLogo}
@@ -144,174 +152,207 @@ export default function Navbar() {
               ) : (
                 <Briefcase size={24} />
               )}
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="truncate font-display text-lg font-extrabold tracking-tight text-slate-900 md:text-[1.35rem]">
+                    {companyName}
+                  </p>
+                  <span className="hidden rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white sm:inline-flex">
+                    Hiring Hub
+                  </span>
+                </div>
+                <p className="hidden text-xs font-medium text-slate-500 sm:block">
+                  Manage internships, events, and talent flow in one place
+                </p>
+              </div>
+            </Link>
+
+            <div className="hidden items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/85 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm lg:flex">
+              <Sparkles size={14} />
+              <span>Workspace online</span>
             </div>
-            <h2 className="text-xl font-bold tracking-tight text-slate-900">{companyName}</h2>
-          </Link>
+          </div>
+
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="hidden rounded-[20px] border border-slate-200/70 bg-white/75 px-3 py-2 shadow-sm lg:block">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Current View
+              </p>
+              <p className="font-display text-sm font-bold text-slate-900">{activeLink.name}</p>
+            </div>
+
+            <div className="relative flex items-center gap-2 border-l border-slate-200/80 pl-3 md:pl-4" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNotificationsOpen((current) => !current);
+                  setIsProfileOpen(false);
+                  setNotificationCard((prev) =>
+                    prev
+                      ? {
+                          unreadCount: 0,
+                          items: Array.isArray(prev.items)
+                            ? prev.items.map((item) => ({ ...item, is_read: true }))
+                            : prev.items
+                        }
+                      : prev
+                  );
+                  setSuppressUnreadAt(Date.now());
+                  loadNotificationCard();
+                }}
+                className="relative rounded-2xl border border-slate-200/70 bg-white/85 p-2.5 text-slate-500 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 hover:shadow-md"
+              >
+                <Bell size={20} />
+                {getNewCountSinceSuppress() > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-gradient-to-r from-rose-500 to-orange-400 px-1 text-[10px] font-bold text-white shadow-sm">
+                    {getNewCountSinceSuppress() > 99 ? '99+' : getNewCountSinceSuppress()}
+                  </span>
+                ) : null}
+              </button>
+
+              <AnimatePresence>
+                {isNotificationsOpen ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className="absolute right-0 top-full z-[60] mt-3 w-80 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
+                  >
+                    <div className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(240,253,250,0.8))] p-4">
+                      <p className="text-sm font-semibold text-slate-900">Notifications</p>
+                      <p className="text-xs text-slate-500">
+                        {(notificationCard?.unreadCount || 0) > 0
+                          ? `${notificationCard?.unreadCount || 0} unread`
+                          : 'No unread notifications'}
+                      </p>
+                    </div>
+                    <div className="max-h-80 overflow-auto">
+                      {(notificationCard?.items || []).length > 0 ? (
+                        (notificationCard?.items || []).slice(0, 8).map((item: any, index: number) => (
+                          <div
+                            key={item?.id || index}
+                            className="border-b border-slate-50 px-4 py-3 transition-colors hover:bg-slate-50"
+                          >
+                            <p className="text-sm font-medium text-slate-900">
+                              {item?.title || 'Notification'}
+                            </p>
+                            <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                              {item?.message || ''}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-8 text-center">
+                          <p className="text-sm font-medium text-slate-700">All caught up</p>
+                          <p className="mt-1 text-xs text-slate-500">No new notifications.</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="bg-white p-3">
+                      <Link
+                        to="/company/notifications"
+                        onClick={() => setIsNotificationsOpen(false)}
+                        className="block w-full text-center text-sm font-semibold text-primary hover:underline"
+                      >
+                        View all notifications
+                      </Link>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+              <button
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="flex items-center gap-2 rounded-[22px] border border-slate-200/70 bg-white/85 p-1.5 pr-2 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+              >
+                <div
+                  className="h-10 w-10 rounded-2xl border border-white bg-slate-200 bg-cover bg-center shadow-sm"
+                  style={{ backgroundImage: avatarUrl ? `url('${avatarUrl}')` : undefined }}
+                ></div>
+                <div className="hidden text-left md:block">
+                  <p className="max-w-32 truncate text-sm font-semibold text-slate-900">{companyName}</p>
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Company</p>
+                </div>
+                <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {isProfileOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="absolute right-0 top-full z-[60] mt-3 w-64 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
+                  >
+                    <div className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(248,250,252,1),rgba(239,246,255,0.92))] p-4">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900">{companyName}</p>
+                        {accountStatus === 'suspended' && (
+                          <span className="rounded-full border border-rose-200 bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-700">
+                            Suspended
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-xs text-slate-500">{companyEmail}</p>
+                    </div>
+                    <div className="p-2">
+                      <Link
+                        to="/company/settings"
+                        className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-primary/5 hover:text-primary"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <User size={18} />
+                        Company Profile
+                      </Link>
+                      <Link
+                        to="/company/settings"
+                        className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-primary/5 hover:text-primary"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <SettingsIcon size={18} />
+                        Account Settings
+                      </Link>
+                    </div>
+                    <div className="border-t border-slate-100 p-2">
+                      <button
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+                        onClick={() => {
+                          setIsProfileOpen(false);
+                          logout(navigate);
+                        }}
+                      >
+                        <LogOut size={18} />
+                        Log out
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-6">
-          <nav className="hidden md:flex items-center gap-1">
+
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <nav className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1 py-1">
             {navLinks.map((link) => (
               <Link
                 key={link.path}
                 to={link.path}
-                className={`px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 hover:bg-slate-50 relative group ${
+                className={`group relative flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium transition-all duration-300 ${
                   location.pathname === link.path
-                    ? 'text-blue-600 bg-blue-50 font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'border-blue-200 bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(236,254,255,0.95))] text-blue-700 shadow-[0_12px_30px_-22px_rgba(37,99,235,0.65)]'
+                    : 'border-slate-200/80 bg-white/78 text-slate-600 hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-900 hover:shadow-sm'
                 }`}
               >
-                {link.name}
-                <span className={`absolute bottom-1.5 left-4 right-4 h-0.5 bg-blue-600 rounded-full transition-all duration-300 transform origin-left ${
-                  location.pathname === link.path ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                }`} />
+                <link.icon size={16} className={location.pathname === link.path ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'} />
+                <span>{link.name}</span>
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-3 pl-6 border-l border-slate-200 relative" ref={dropdownRef}>
-            <button
-              type="button"
-              onClick={() => {
-                setIsNotificationsOpen((current) => !current);
-                setIsProfileOpen(false);
-                setNotificationCard((prev) =>
-                  prev
-                    ? {
-                        unreadCount: 0,
-                        items: Array.isArray(prev.items)
-                          ? prev.items.map((item) => ({ ...item, is_read: true }))
-                          : prev.items
-                      }
-                    : prev
-                );
-                setSuppressUnreadAt(Date.now());
-                loadNotificationCard();
-              }}
-              className="relative p-2 text-slate-400 hover:text-slate-600"
-            >
-              <Bell size={24} />
-              {getNewCountSinceSuppress() > 0 ? (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  {getNewCountSinceSuppress() > 99 ? '99+' : getNewCountSinceSuppress()}
-                </span>
-              ) : null}
-            </button>
-
-            <AnimatePresence>
-              {isNotificationsOpen ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.2, ease: 'easeOut' }}
-                  className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-[60]"
-                >
-                  <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                    <p className="text-sm font-semibold text-slate-900">Notifications</p>
-                    <p className="text-xs text-slate-500">
-                      {(notificationCard?.unreadCount || 0) > 0
-                        ? `${notificationCard?.unreadCount || 0} unread`
-                        : 'No unread notifications'}
-                    </p>
-                  </div>
-                  <div className="max-h-80 overflow-auto">
-                    {(notificationCard?.items || []).length > 0 ? (
-                      (notificationCard?.items || []).slice(0, 8).map((item: any, index: number) => (
-                        <div
-                          key={item?.id || index}
-                          className="px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors"
-                        >
-                          <p className="text-sm font-medium text-slate-900">
-                            {item?.title || 'Notification'}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                            {item?.message || ''}
-                          </p>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="px-4 py-8 text-center">
-                        <p className="text-sm font-medium text-slate-700">All caught up</p>
-                        <p className="text-xs text-slate-500 mt-1">No new notifications.</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3 bg-white">
-                    <Link
-                      to="/company/notifications"
-                      onClick={() => setIsNotificationsOpen(false)}
-                      className="block w-full text-center text-sm font-semibold text-primary hover:underline"
-                    >
-                      View all notifications
-                    </Link>
-                  </div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-            <button 
-              onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="flex items-center gap-2 p-1 rounded-full hover:bg-slate-50 transition-colors"
-            >
-              <div
-                className="h-10 w-10 rounded-full bg-slate-200 bg-cover bg-center border-2 border-white shadow-sm"
-                style={{ backgroundImage: avatarUrl ? `url('${avatarUrl}')` : undefined }}
-              ></div>
-              <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            <AnimatePresence>
-              {isProfileOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-[60]"
-                >
-                  <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900">{companyName}</p>
-                      {accountStatus === 'suspended' && (
-                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase border border-rose-200">
-                          Suspended
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 truncate">{companyEmail}</p>
-                  </div>
-                  <div className="p-2">
-                    <Link
-                      to="/company/settings"
-                      className="flex items-center gap-3 px-3 py-2 text-sm text-slate-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                      onClick={() => setIsProfileOpen(false)}
-                    >
-                      <User size={18} />
-                      Company Profile
-                    </Link>
-                    <Link
-                      to="/company/settings"
-                      className="flex items-center gap-3 px-3 py-2 text-sm text-slate-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                      onClick={() => setIsProfileOpen(false)}
-                    >
-                      <SettingsIcon size={18} />
-                      Account Settings
-                    </Link>
-                  </div>
-                  <div className="p-2 border-t border-slate-100">
-                    <button
-                      className="flex items-center gap-3 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      onClick={() => {
-                        setIsProfileOpen(false);
-                        logout(navigate);
-                      }}
-                    >
-                      <LogOut size={18} />
-                      Log out
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
         </div>
       </div>
     </header>

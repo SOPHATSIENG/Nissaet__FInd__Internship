@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { History, MoreVertical, AlertTriangle, Search, RotateCcw, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../api/axios';
+import ConfirmationModal from '../../components/company-components/ConfirmationModal';
 
 const formatDeadlineDate = (value?: string | null) => {
   if (!value) return 'No deadline';
@@ -26,6 +27,7 @@ export default function ArchivedInternships() {
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const actionButtonRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
 
   useEffect(() => {
@@ -109,14 +111,12 @@ export default function ArchivedInternships() {
   };
 
   const handlePermanentDelete = async (id: number) => {
-    const confirmed = window.confirm('Delete this archived internship permanently? This cannot be undone.');
-    if (!confirmed) return;
-
     try {
       setDeletingId(id);
       await api.permanentlyDeleteInternship(id);
       setInternships(prev => prev.filter(item => item.id !== id));
       setActiveDropdown(null);
+      setDeleteTargetId(null);
     } catch (err) {
       console.error('Failed to permanently delete internship:', err);
       alert('Failed to delete internship. Please try again.');
@@ -275,7 +275,10 @@ export default function ArchivedInternships() {
                   Restore
                 </button>
                 <button
-                  onClick={() => handlePermanentDelete(activeDropdown)}
+                  onClick={() => {
+                    setDeleteTargetId(activeDropdown);
+                    setActiveDropdown(null);
+                  }}
                   disabled={deletingId === activeDropdown}
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                 >
@@ -287,6 +290,23 @@ export default function ArchivedInternships() {
             document.body
           )
         : null}
+
+      <ConfirmationModal
+        isOpen={deleteTargetId !== null}
+        onClose={() => {
+          if (deletingId !== null) return;
+          setDeleteTargetId(null);
+        }}
+        onConfirm={() => {
+          if (deleteTargetId === null) return;
+          handlePermanentDelete(deleteTargetId);
+        }}
+        title="Delete Archived Internship"
+        message="Delete this archived internship permanently? This cannot be undone."
+        confirmText={deletingId !== null ? 'Deleting...' : 'Delete'}
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 }

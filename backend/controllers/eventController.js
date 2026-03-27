@@ -644,7 +644,7 @@ const updateEvent = async (req, res) => {
             return res.status(404).json({ error: 'Event not found' });
         }
 
-        if (events[0].company_id !== companyId) {
+        if (Number(events[0].company_id) !== Number(companyId)) {
             return res.status(403).json({ error: 'Not authorized to update this event' });
         }
 
@@ -716,7 +716,7 @@ const deleteEvent = async (req, res) => {
             return res.status(404).json({ error: 'Event not found' });
         }
 
-        if (!isAdmin && events[0].company_id !== companyId) {
+        if (!isAdmin && Number(events[0].company_id) !== Number(companyId)) {
             return res.status(403).json({ error: 'Not authorized to delete this event' });
         }
 
@@ -864,11 +864,11 @@ const getEventRegistrations = async (req, res) => {
             return res.status(404).json({ error: 'Event not found' });
         }
 
-        if (events[0].company_id !== companyId) {
+        if (Number(events[0].company_id) !== Number(companyId)) {
             return res.status(403).json({ error: 'Not authorized to view registrations for this event' });
         }
 
-        const query = `
+        const registrationsQuery = `
             SELECT
                 er.id,
                 er.registration_date,
@@ -877,11 +877,11 @@ const getEventRegistrations = async (req, res) => {
                 u.id as student_id,
                 u.full_name,
                 u.email,
-                COALESCE(s.phone, u.phone) AS phone,
+                u.phone AS phone,
                 COALESCE(s.university, u.university) AS university,
-                COALESCE(s.current_education_level, s.education, u.education) AS education,
+                COALESCE(s.current_education_level, u.education) AS education,
                 COALESCE(s.graduation_year, u.graduation_year) AS graduation_year,
-                COALESCE(s.resume_url, s.cv_url, u.cv_url) AS cv_url
+                COALESCE(s.resume_url, u.cv_url) AS cv_url
             FROM event_registrations er
             JOIN users u ON er.student_id = u.id
             LEFT JOIN students s ON s.user_id = u.id
@@ -889,7 +889,33 @@ const getEventRegistrations = async (req, res) => {
             ORDER BY er.registration_date ASC
         `;
 
-        const registrations = await db.query(query, [id]);
+        const fallbackRegistrationsQuery = `
+            SELECT
+                er.id,
+                er.registration_date,
+                er.status,
+                er.notes,
+                u.id as student_id,
+                u.full_name,
+                u.email,
+                u.phone AS phone,
+                u.university AS university,
+                u.education AS education,
+                u.graduation_year AS graduation_year,
+                u.cv_url AS cv_url
+            FROM event_registrations er
+            JOIN users u ON er.student_id = u.id
+            WHERE er.event_id = ?
+            ORDER BY er.registration_date ASC
+        `;
+
+        let registrations;
+        try {
+            registrations = await db.query(registrationsQuery, [id]);
+        } catch (error) {
+            if (!isSchemaError(error)) throw error;
+            registrations = await db.query(fallbackRegistrationsQuery, [id]);
+        }
         res.json(registrations);
     } catch (error) {
         console.error('Error fetching event registrations:', error);

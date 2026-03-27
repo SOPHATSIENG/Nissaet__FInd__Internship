@@ -361,7 +361,7 @@ const buildStatusNotification = (status, internshipTitle, companyName) => {
 const updateApplicationStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body;
+        const status = String(req.body?.status || '').toLowerCase();
         const validStatuses = new Set(['pending', 'reviewing', 'accepted', 'shortlisted', 'unshortlisted', 'rejected', 'withdrawn']);
 
         if (!validStatuses.has(status)) {

@@ -80,7 +80,7 @@ export default function Applicants() {
   };
 
   const toApiStatus = (status: string) => {
-    if (status === 'Shortlisted') return 'shortlisted';
+    if (status === 'Shortlisted') return 'accepted';
     if (status === 'Pending Review') return 'pending';
     if (status === 'Unshortlisted') return 'unshortlisted';
     if (status === 'Rejected') return 'rejected';

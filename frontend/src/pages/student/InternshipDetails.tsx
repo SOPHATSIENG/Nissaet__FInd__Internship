@@ -22,6 +22,7 @@ type InternshipRecord = {
   company_website: string | null;
   location: string;
   description: string;
+  image?: string | null;
   requirements: string | null;
   responsibilities: string | null;
   benefits: string | null;
@@ -179,7 +180,7 @@ export default function InternshipDetails() {
     setShowApplyModal(true);
   };
 
-  const heroImage = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80';
+  const heroImage = internship?.image || internship?.company_logo || '';
 
   const salaryText = () => {
     if (!internship) return 'Unpaid';
@@ -394,12 +395,16 @@ export default function InternshipDetails() {
         {/* Hero Banner */}
         <div className="p-6 md:p-8 border-b border-slate-200">
           <div className="relative rounded-2xl overflow-hidden">
-            <img
-              src={heroImage}
-              alt={`${internship.title} banner`}
-              className="w-full h-[220px] md:h-[360px] object-cover"
-              referrerPolicy="no-referrer"
-            />
+            {heroImage ? (
+              <img
+                src={heroImage}
+                alt={`${internship.title} banner`}
+                className="w-full h-[220px] md:h-[360px] object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-full h-[220px] md:h-[360px] bg-slate-100" />
+            )}
             <span className="absolute left-6 bottom-6 bg-[#3b82f6] text-white text-base font-bold px-5 py-2 rounded-full uppercase tracking-wide shadow-lg">
               {safeType}
             </span>

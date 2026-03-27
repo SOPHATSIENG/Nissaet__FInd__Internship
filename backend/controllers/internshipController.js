@@ -4,6 +4,16 @@ const db = require('../config/db');
  * Helper to identify database field errors (missing columns/tables)
  */
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
+const companyPostImageSubquery = `
+    SELECT p.image_url
+    FROM posts p
+    WHERE p.company_id = i.company_id
+      AND p.status = 'published'
+      AND p.image_url IS NOT NULL
+      AND p.image_url != ''
+    ORDER BY p.created_at DESC
+    LIMIT 1
+`;
 const getInternshipColumns = async () => {
     const rows = await db.query('SHOW COLUMNS FROM internships');
     return new Set(rows.map((row) => row.Field));
@@ -381,6 +391,7 @@ const getInternshipById = async (req, res) => {
                 i.responsibilities,
                 i.benefits,
                 i.location,
+                COALESCE(i.image, (${companyPostImageSubquery})) AS image,
                 i.is_remote,
                 i.is_hybrid,
                 i.type,

@@ -14,6 +14,12 @@ const getTableColumns = async (tableName) => {
     return new Set(rows.map((row) => row.Field));
 };
 
+const buildSalaryMaxSelect = (columns, minExpr = 'i.stipend') => (
+    columns.has('stipend_max')
+        ? `COALESCE(i.stipend_max, ${minExpr})`
+        : minExpr
+);
+
 /**
  * Helper to get company ID by user ID
  */
@@ -84,6 +90,8 @@ const getAllInternships = async (req, res) => {
     try {
         await normalizeInternshipStatusByDeadline();
         await expireInternshipsByDeadline();
+        const internshipColumns = await getInternshipColumns();
+        const salaryMaxSelect = buildSalaryMaxSelect(internshipColumns);
         const { search, location, industry, companySize, skills, work_mode, salary_type, limit: queryLimit } = req.query;
         const parsedLimit = Number.parseInt(queryLimit, 10);
         const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 100;
@@ -99,7 +107,7 @@ const getAllInternships = async (req, res) => {
                 i.type AS work_mode,
                 i.duration_months AS duration,
                 i.stipend AS salary_min,
-                i.stipend AS salary_max,
+                ${salaryMaxSelect} AS salary_max,
                 CASE 
                     WHEN i.stipend > 0 THEN 'paid'
                     ELSE 'unpaid'
@@ -370,6 +378,8 @@ const getFeaturedCompanies = async (req, res) => {
 const getInternshipById = async (req, res) => {
     try {
         const { id } = req.params;
+        const internshipColumns = await getInternshipColumns();
+        const stipendMaxSelect = buildSalaryMaxSelect(internshipColumns);
 
         const sql = `
             SELECT
@@ -388,6 +398,7 @@ const getInternshipById = async (req, res) => {
                 i.duration_months,
                 i.duration_months AS duration,
                 i.stipend,
+                ${stipendMaxSelect} AS stipend_max,
                 i.stipend_currency,
                 i.application_deadline,
                 i.application_deadline AS deadline,
@@ -489,6 +500,7 @@ const createInternship = async (req, res) => {
             type = 'full-time',
             duration_months,
             stipend = 0,
+            stipend_max = 0,
             stipend_currency = 'USD',
             positions = 1,
             application_deadline,
@@ -537,6 +549,7 @@ const createInternship = async (req, res) => {
         add('duration_months', durationValue);
         add('duration', durationValue ? `${durationValue} mo` : null);
         add('stipend', Number.isFinite(Number(stipend)) ? Number(stipend) : 0);
+        add('stipend_max', Number.isFinite(Number(stipend_max)) ? Number(stipend_max) : (Number.isFinite(Number(stipend)) ? Number(stipend) : 0));
         add('stipend_currency', stipend_currency);
         add('positions', Number.isFinite(Number(positions)) ? Number(positions) : 1);
         add('application_deadline', application_deadline || null);
@@ -610,6 +623,7 @@ const updateInternship = async (req, res) => {
               type = 'full-time',
               duration_months,
               stipend = 0,
+              stipend_max = 0,
             stipend_currency = 'USD',
             positions = 1,
             application_deadline,
@@ -635,7 +649,7 @@ const updateInternship = async (req, res) => {
                 await connection.execute(
                     `UPDATE internships SET
                         title = ?, description = ?, image = ?, requirements = ?, location = ?,
-                        type = ?, duration_months = ?, stipend = ?, stipend_currency = ?,
+                        type = ?, duration_months = ?, stipend = ?, stipend_max = ?, stipend_currency = ?,
                         positions = ?, application_deadline = ?, start_date = ?, end_date = ?,
                         status = ?,
                         is_flagged = 0,
@@ -650,6 +664,7 @@ const updateInternship = async (req, res) => {
                         type,
                         duration_months,
                         stipend,
+                        stipend_max,
                         stipend_currency,
                         positions,
                         application_deadline,
@@ -1182,6 +1197,8 @@ const getSavedInternships = async (req, res) => {
         const studentId = studentRows[0].id;
 
         let savedInternships;
+        const internshipColumns = await getInternshipColumns();
+        const salaryMaxSelect = buildSalaryMaxSelect(internshipColumns);
         try {
             savedInternships = await db.query(
                 `SELECT 
@@ -1193,7 +1210,7 @@ const getSavedInternships = async (req, res) => {
                     i.type AS work_mode,
                     i.duration_months AS duration,
                     i.stipend AS salary_min,
-                    i.stipend AS salary_max,
+                    ${salaryMaxSelect} AS salary_max,
                     CASE 
                         WHEN i.stipend > 0 THEN 'paid'
                         ELSE 'unpaid'
@@ -1227,7 +1244,7 @@ const getSavedInternships = async (req, res) => {
                     i.type AS work_mode,
                     i.duration_months AS duration,
                     i.stipend AS salary_min,
-                    i.stipend AS salary_max,
+                    ${salaryMaxSelect} AS salary_max,
                     CASE 
                         WHEN i.stipend > 0 THEN 'paid'
                         ELSE 'unpaid'
@@ -1519,6 +1536,8 @@ const getCompanyInternshipById = async (req, res) => {
         const { id } = req.params;
         const userId = req.user?.userId || req.user?.id;
         const companyId = await getCompanyIdByUserId(userId);
+        const internshipColumns = await getInternshipColumns();
+        const stipendMaxSelect = buildSalaryMaxSelect(internshipColumns);
         if (!companyId) {
             return res.status(404).json({ success: false, message: 'Company profile not found' });
         }
@@ -1540,6 +1559,7 @@ const getCompanyInternshipById = async (req, res) => {
                 i.duration_months,
                 i.duration_months AS duration,
                 i.stipend,
+                ${stipendMaxSelect} AS stipend_max,
                 i.stipend_currency,
                 i.application_deadline,
                 i.application_deadline AS deadline,

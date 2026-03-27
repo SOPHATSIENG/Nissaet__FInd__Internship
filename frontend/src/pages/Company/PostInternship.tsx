@@ -14,11 +14,41 @@ import {
   ListOrdered,
   Trash2,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ChevronDown
 } from 'lucide-react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/axios';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
+
+const CAMBODIA_PROVINCES = [
+  'Banteay Meanchey',
+  'Battambang',
+  'Kampong Cham',
+  'Kampong Chhnang',
+  'Kampong Speu',
+  'Kampong Thom',
+  'Kampot',
+  'Kandal',
+  'Kep',
+  'Koh Kong',
+  'Kratie',
+  'Mondulkiri',
+  'Oddar Meanchey',
+  'Pailin',
+  'Phnom Penh',
+  'Preah Sihanouk',
+  'Preah Vihear',
+  'Prey Veng',
+  'Pursat',
+  'Ratanakiri',
+  'Siem Reap',
+  'Stung Treng',
+  'Svay Rieng',
+  'Takeo',
+  'Tboung Khmum',
+  'Remote'
+];
 
 export default function PostInternship() {
   const { id } = useParams();
@@ -31,6 +61,7 @@ export default function PostInternship() {
     location: 'Phnom Penh',
     duration: '',
     description: '',
+    responsibilities: '',
     requirements: '',
     image: '',
     salaryType: 'paid',
@@ -45,18 +76,53 @@ export default function PostInternship() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isLocationOpen, setIsLocationOpen] = useState(false);
+  const [locationSearch, setLocationSearch] = useState('');
 
   const validate = () => {
     if (!formData.title.trim()) return 'Title is required';
     if (!formData.duration) return 'Duration is required';
     if (!formData.deadline) return 'Deadline is required';
-    if (formData.salaryType !== 'unpaid' && !formData.minSalary) return 'Salary amount is required';
+    if (formData.salaryType !== 'unpaid' && (!formData.minSalary || !formData.maxSalary)) return 'Salary range is required';
+    if (
+      formData.salaryType !== 'unpaid' &&
+      Number(formData.maxSalary) < Number(formData.minSalary)
+    ) {
+      return 'Maximum salary must be greater than or equal to minimum salary';
+    }
     return null;
   };
 
   const descriptionRef = useRef(null);
+  const responsibilitiesRef = useRef(null);
   const requirementsRef = useRef(null);
-  const [showPreview, setShowPreview] = useState({ description: false, requirements: false });
+  const locationDropdownRef = useRef(null);
+  const locationSearchRef = useRef(null);
+  const [showPreview, setShowPreview] = useState({ description: false, responsibilities: false, requirements: false });
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target)) {
+        setIsLocationOpen(false);
+        setLocationSearch('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (isLocationOpen) {
+      setTimeout(() => {
+        locationSearchRef.current?.focus();
+      }, 0);
+    }
+  }, [isLocationOpen]);
+
+  const filteredProvinces = CAMBODIA_PROVINCES.filter((province) =>
+    province.toLowerCase().includes(locationSearch.toLowerCase())
+  );
 
   const applyInternshipToForm = (internship) => {
     if (!internship) return;
@@ -65,11 +131,12 @@ export default function PostInternship() {
       location: internship.location || 'Phnom Penh',
       duration: internship.duration_months?.toString() || internship.duration?.toString?.() || '',
       description: internship.description || '',
+      responsibilities: internship.responsibilities || '',
       requirements: internship.requirements || '',
       image: internship.image || '',
       salaryType: internship.stipend > 0 ? 'paid' : 'unpaid',
       minSalary: internship.stipend ? internship.stipend.toString() : '',
-      maxSalary: internship.stipend ? internship.stipend.toString() : '',
+      maxSalary: (internship.stipend_max ?? internship.salary_max ?? internship.stipend)?.toString?.() || '',
       skills: internship.skills || [],
       positions: internship.positions || 1,
       deadline: internship.application_deadline ? String(internship.application_deadline).split('T')[0] : ''
@@ -152,6 +219,8 @@ export default function PostInternship() {
     
     if (textarea === descriptionRef.current) {
       setFormData({ ...formData, description: newValue });
+    } else if (textarea === responsibilitiesRef.current) {
+      setFormData({ ...formData, responsibilities: newValue });
     } else if (textarea === requirementsRef.current) {
       setFormData({ ...formData, requirements: newValue });
     }
@@ -236,9 +305,11 @@ export default function PostInternship() {
       location: formData.location,
       duration_months: parseInt(formData.duration),
       description: formData.description,
+      responsibilities: formData.responsibilities,
       requirements: formData.requirements,
       image: formData.image || null,
-      stipend: formData.salaryType === 'paid' ? parseFloat(formData.minSalary) : 0,
+      stipend: formData.salaryType !== 'unpaid' ? parseFloat(formData.minSalary) : 0,
+      stipend_max: formData.salaryType !== 'unpaid' ? parseFloat(formData.maxSalary) : 0,
       positions: formData.positions,
       application_deadline: formData.deadline,
       skills: formData.skills.map(s => ({ name: s, required: true })),
@@ -271,7 +342,7 @@ export default function PostInternship() {
   }
 
   return (
-    <div className="max-w-[1000px] mx-auto px-4 py-8 md:px-6 flex flex-col gap-8">
+    <div className="max-w-[1000px] mx-auto px-4 pt-8 pb-32 md:px-6 flex flex-col gap-8">
       {isEditMode && loading ? (
         <div className="flex justify-center items-center py-20">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -378,21 +449,57 @@ export default function PostInternship() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="location">Location (Province) *</label>
-                <div className="mt-2">
-                  <select 
-                    className="block w-full rounded-lg border-0 py-2.5 px-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6" 
+                <div className="mt-2 relative" ref={locationDropdownRef}>
+                  <button
+                    type="button"
                     id="location"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    required
+                    onClick={() => {
+                      setIsLocationOpen((prev) => !prev);
+                      setLocationSearch('');
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg bg-white py-2.5 px-3 text-left text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                    aria-haspopup="listbox"
+                    aria-expanded={isLocationOpen}
                   >
-                    <option>Phnom Penh</option>
-                    <option>Siem Reap</option>
-                    <option>Battambang</option>
-                    <option>Sihanoukville</option>
-                    <option>Kampot</option>
-                    <option>Remote</option>
-                  </select>
+                    <span>{formData.location}</span>
+                    <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${isLocationOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isLocationOpen && (
+                    <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                      <div className="border-b border-slate-200 p-2">
+                        <input
+                          ref={locationSearchRef}
+                          type="text"
+                          value={locationSearch}
+                          onChange={(e) => setLocationSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          placeholder="Search province..."
+                          className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-600"
+                        />
+                      </div>
+                      <div className="max-h-64 overflow-y-auto py-1">
+                        {filteredProvinces.length > 0 ? filteredProvinces.map((province) => (
+                          <button
+                            key={province}
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, location: province });
+                              setIsLocationOpen(false);
+                              setLocationSearch('');
+                            }}
+                            className={`block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-blue-50 ${
+                              formData.location === province ? 'bg-blue-600 text-white hover:bg-blue-600' : 'text-slate-900'
+                            }`}
+                          >
+                            {province}
+                          </button>
+                        )) : (
+                          <p className="px-3 py-2 text-sm text-slate-500">No province found.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
@@ -481,6 +588,78 @@ export default function PostInternship() {
                     rows={4}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  ></textarea>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium leading-6 text-slate-900 mb-2">
+                Key Responsibilities
+                <button 
+                  type="button"
+                  onClick={() => setShowPreview({ ...showPreview, responsibilities: !showPreview.responsibilities })}
+                  className="ml-2 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  {showPreview.responsibilities ? 'Edit' : 'Preview'}
+                </button>
+              </label>
+              <div className="rounded-lg ring-1 ring-inset ring-slate-300 overflow-hidden bg-white">
+                <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-3 py-2">
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('bold', responsibilitiesRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Bold"
+                  >
+                    <Bold size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('italic', responsibilitiesRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Italic"
+                  >
+                    <Italic size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('underline', responsibilitiesRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Underline"
+                  >
+                    <Underline size={18} />
+                  </button>
+                  <span className="w-px h-4 bg-slate-300 mx-1"></span>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('unorderedList', responsibilitiesRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Unordered List"
+                  >
+                    <List size={18} />
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => formatText('orderedList', responsibilitiesRef)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors"
+                    title="Ordered List"
+                  >
+                    <ListOrdered size={18} />
+                  </button>
+                </div>
+                {showPreview.responsibilities ? (
+                  <div 
+                    className="block w-full border-0 py-3 px-3 text-slate-900 sm:text-sm sm:leading-6 min-h-[100px]"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(formData.responsibilities) }}
+                  />
+                ) : (
+                  <textarea 
+                    ref={responsibilitiesRef}
+                    className="block w-full border-0 py-3 px-3 text-slate-900 placeholder:text-slate-400 focus:ring-0 sm:text-sm sm:leading-6 resize-none" 
+                    placeholder="List the key responsibilities for this position..." 
+                    rows={4}
+                    value={formData.responsibilities}
+                    onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })}
                   ></textarea>
                 )}
               </div>
@@ -594,7 +773,7 @@ export default function PostInternship() {
               {formData.salaryType !== 'unpaid' && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="min-salary">Amount (USD)</label>
+                    <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="min-salary">From (USD)</label>
                     <div className="mt-2 relative rounded-md shadow-sm">
                       <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                         <span className="text-slate-500 sm:text-sm">$</span>
@@ -602,10 +781,27 @@ export default function PostInternship() {
                       <input 
                         className="block w-full rounded-lg border-0 py-2.5 pl-7 text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6" 
                         id="min-salary" 
-                        placeholder="150" 
+                        placeholder="300" 
                         type="number" 
                         value={formData.minSalary}
                         onChange={(e) => setFormData({ ...formData, minSalary: e.target.value })}
+                        required={formData.salaryType !== 'unpaid'}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium leading-6 text-slate-900" htmlFor="max-salary">To (USD)</label>
+                    <div className="mt-2 relative rounded-md shadow-sm">
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                        <span className="text-slate-500 sm:text-sm">$</span>
+                      </div>
+                      <input 
+                        className="block w-full rounded-lg border-0 py-2.5 pl-7 text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6" 
+                        id="max-salary" 
+                        placeholder="1500" 
+                        type="number" 
+                        value={formData.maxSalary}
+                        onChange={(e) => setFormData({ ...formData, maxSalary: e.target.value })}
                         required={formData.salaryType !== 'unpaid'}
                       />
                     </div>

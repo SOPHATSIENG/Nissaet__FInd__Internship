@@ -98,6 +98,7 @@ CREATE TABLE `internships` (
   `type` enum('full-time','part-time','contract') DEFAULT 'full-time',
   `duration_months` int(11) DEFAULT NULL,
   `stipend` decimal(10,2) DEFAULT NULL,
+  `stipend_max` decimal(10,2) DEFAULT NULL,
   `stipend_currency` varchar(3) DEFAULT 'USD',
   `application_deadline` date DEFAULT NULL,
   `start_date` date DEFAULT NULL,

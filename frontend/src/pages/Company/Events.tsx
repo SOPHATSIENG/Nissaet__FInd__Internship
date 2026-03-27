@@ -546,16 +546,16 @@ export default function Events() {
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="relative">
               {detailEvent.image_url ? (
                 <img
                   src={detailEvent.image_url}
                   alt={detailEvent.title}
-                  className="h-56 w-full object-cover"
+                  className="h-40 w-full object-cover"
                 />
               ) : (
-                <div className="flex h-56 w-full items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 text-indigo-400">
+                <div className="flex h-40 w-full items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 text-indigo-400">
                   <Calendar className="w-12 h-12" />
                 </div>
               )}
@@ -566,7 +566,7 @@ export default function Events() {
               >
                 <X className="h-4 w-4" />
               </button>
-              <div className="absolute bottom-4 left-6 flex flex-wrap items-center gap-2">
+              <div className="absolute bottom-3 left-4 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(detailEvent.status)}`}>
                   {getStatusIcon(detailEvent.status)}
                   {detailEvent.status.charAt(0).toUpperCase() + detailEvent.status.slice(1)}
@@ -582,9 +582,9 @@ export default function Events() {
               </div>
             </div>
 
-            <div className="space-y-5 p-6">
+            <div className="space-y-4 overflow-y-auto p-5">
               <div>
-                <h3 className="text-2xl font-bold text-slate-900">{detailEvent.title}</h3>
+                <h3 className="text-xl font-bold text-slate-900">{detailEvent.title}</h3>
                 <p className="mt-1 text-sm text-slate-500">Created on {formatDate(detailEvent.created_at)}</p>
               </div>
 
@@ -620,7 +620,7 @@ export default function Events() {
               </div>
 
               {detailEvent.registration_deadline && (
-                <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
                   Registration closes on {formatDate(detailEvent.registration_deadline)}.
                 </div>
               )}
@@ -642,7 +642,7 @@ export default function Events() {
                 </div>
               )}
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-wrap justify-end gap-3 pt-1">
                 <button
                   onClick={() => setDetailEvent(null)}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"

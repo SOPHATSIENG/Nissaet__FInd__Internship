@@ -1,15 +1,10 @@
 import {
   Search,
   MapPin,
-  Code,
-  Map,
   DollarSign,
   Bookmark,
   Building2,
-  ChevronLeft,
   ChevronRight,
-  Briefcase,
-  Users,
   Filter,
   Check,
   X,
@@ -54,10 +49,15 @@ type InternshipApiItem = {
   applicationStatus?: string;
 };
 
+type PaginationState = {
+  page: number;
+};
+
 const ITEMS_PER_PAGE = 10;
 
 export default function Internships() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const currentPage = Math.max(Number.parseInt(searchParams.get("page") || "1", 10) || 1, 1);
   
   // State for search and filters
   const [query, setQuery] = useState(searchParams.get("search") || "");
@@ -78,9 +78,15 @@ export default function Internships() {
   const [savedInternships, setSavedInternships] = useState<InternshipApiItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [totalInternships, setTotalInternships] = useState(0);
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+  });
   const industryDropdownRef = useRef<HTMLDivElement | null>(null);
   const locationDropdownRef = useRef<HTMLDivElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
+  const previousFilterSignature = useRef("");
+  const previousPageRef = useRef(currentPage);
 
   // Debounced search term
   const [debouncedQuery, setDebouncedQuery] = useState(query);
@@ -92,16 +98,51 @@ export default function Internships() {
     return () => clearTimeout(timer);
   }, [query]);
 
+  useEffect(() => {
+    const nextQuery = searchParams.get("search") || "";
+    const nextLocations = searchParams.get("location")?.split(',').filter(Boolean) || [];
+    const nextIndustries = searchParams.get("industry")?.split(',').filter(Boolean) || [];
+    const nextCompensation = searchParams.get("compensation") || "All";
+
+    setQuery((prev) => prev === nextQuery ? prev : nextQuery);
+    setSelectedLocations((prev) => JSON.stringify(prev) === JSON.stringify(nextLocations) ? prev : nextLocations);
+    setSelectedIndustries((prev) => JSON.stringify(prev) === JSON.stringify(nextIndustries) ? prev : nextIndustries);
+    setSelectedCompensation((prev) => prev === nextCompensation ? prev : nextCompensation);
+  }, [searchParams]);
+
+  const updatePage = useCallback((page: number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (page <= 1) {
+      nextParams.delete("page");
+    } else {
+      nextParams.set("page", String(page));
+    }
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // Sync state with URL
   useEffect(() => {
-    const params: any = {};
-    if (debouncedQuery) params.search = debouncedQuery;
-    if (selectedLocations.length > 0) params.location = selectedLocations.join(',');
-    if (selectedIndustries.length > 0) params.industry = selectedIndustries.join(',');
-    if (selectedCompensation !== "All") params.compensation = selectedCompensation;
-    
-    setSearchParams(params, { replace: true });
-  }, [debouncedQuery, selectedLocations, selectedIndustries, selectedCompensation]);
+    const params = new URLSearchParams();
+    const filterSignature = JSON.stringify({
+      search: debouncedQuery,
+      location: selectedLocations,
+      industry: selectedIndustries,
+      compensation: selectedCompensation,
+    });
+    const filtersChanged = previousFilterSignature.current !== "" && previousFilterSignature.current !== filterSignature;
+    const pageForUrl = filtersChanged ? 1 : currentPage;
+
+    if (debouncedQuery) params.set("search", debouncedQuery);
+    if (selectedLocations.length > 0) params.set("location", selectedLocations.join(','));
+    if (selectedIndustries.length > 0) params.set("industry", selectedIndustries.join(','));
+    if (selectedCompensation !== "All") params.set("compensation", selectedCompensation);
+    if (pageForUrl > 1) params.set("page", String(pageForUrl));
+
+    previousFilterSignature.current = filterSignature;
+    if (params.toString() !== searchParams.toString()) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [currentPage, debouncedQuery, searchParams, selectedLocations, selectedIndustries, selectedCompensation, setSearchParams]);
 
   // Utility to format salary text
   const salaryText = (item: InternshipApiItem) => {
@@ -122,21 +163,47 @@ export default function Internships() {
         location: selectedLocations.length > 0 ? selectedLocations.join(',') : undefined,
         industry: selectedIndustries.length > 0 ? selectedIndustries.join(',') : undefined,
         salary_type: selectedCompensation !== "All" ? selectedCompensation.toLowerCase() : undefined,
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
       };
 
       const res = await api.getInternships(params);
       setInternships(Array.isArray(res?.internships) ? res.internships : []);
+      setTotalInternships(Number.isFinite(res?.total) ? res.total : 0);
+      setPagination({
+        page: Number.isFinite(res?.page) ? res.page : currentPage,
+      });
+
+      const responsePage = Number.isFinite(res?.page) ? res.page : currentPage;
+      const responseTotalPages = Number.isFinite(res?.totalPages) ? res.totalPages : 1;
+      if (responsePage !== currentPage) {
+        updatePage(responsePage);
+      } else if (responseTotalPages > 0 && currentPage > responseTotalPages) {
+        updatePage(responseTotalPages);
+      }
     } catch (err) {
       console.error('Internship load error:', err);
       setError("Failed to load internships. Please try again later.");
+      setInternships([]);
+      setTotalInternships(0);
+      setPagination({
+        page: 1,
+      });
     } finally {
       setLoading(false);
     }
-  }, [debouncedQuery, selectedLocations, selectedIndustries, selectedCompensation]);
+  }, [currentPage, debouncedQuery, selectedLocations, selectedIndustries, selectedCompensation, updatePage]);
 
   useEffect(() => {
     loadInternships();
   }, [loadInternships]);
+
+  useEffect(() => {
+    if (previousPageRef.current !== currentPage) {
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    previousPageRef.current = currentPage;
+  }, [currentPage]);
 
   // Fetch saved internships
   useEffect(() => {
@@ -172,12 +239,6 @@ export default function Internships() {
     });
   }, [internships, savedInternshipIds]);
 
-  const totalPages = Math.ceil(cards.length / ITEMS_PER_PAGE);
-  const paginatedCards = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return cards.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [cards, currentPage]);
-
   const handleToggleSave = async (internshipId: number, currentlySaved: boolean) => {
     try {
       if (currentlySaved) {
@@ -191,15 +252,6 @@ export default function Internships() {
     } catch (err) {
       console.error('Error toggling saved internship:', err);
     }
-  };
-
-  const toggleFilter = (list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, value: string) => {
-    if (list.includes(value)) {
-      setList(list.filter(v => v !== value));
-    } else {
-      setList([...list, value]);
-    }
-    setCurrentPage(1);
   };
 
   const industries = [
@@ -327,9 +379,10 @@ export default function Internships() {
 
       {/* Main Content */}
       <section className="py-12 px-4 sm:px-6 lg:px-8 flex-grow">
-        <div className="max-w-[1440px] mx-auto flex flex-col lg:flex-row gap-8">
+        <div className="max-w-[1440px] mx-auto">
+          <div className="flex flex-col items-start lg:flex-row lg:items-start gap-8">
           {/* Sidebar Filters */}
-          <aside className="w-full lg:w-72 flex-shrink-0 space-y-6">
+            <aside className="w-full lg:w-72 flex-shrink-0 space-y-6">
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <h3 className="font-bold flex items-center gap-2 mb-4 text-gray-900">
                 <Filter className="w-5 h-5 text-[#3b82f6]" /> Filters
@@ -362,7 +415,7 @@ export default function Internships() {
                         type="button"
                         onClick={() => {
                           setSelectedIndustries([]);
-                          setCurrentPage(1);
+                          updatePage(1);
                         }}
                         className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-[#2563eb] hover:bg-blue-100"
                       >
@@ -389,7 +442,7 @@ export default function Internships() {
                               type="button"
                               onClick={() => {
                                 setSelectedIndustries([]);
-                                setCurrentPage(1);
+                                updatePage(1);
                               }}
                               className="font-semibold text-[#3b82f6] hover:underline"
                             >
@@ -404,7 +457,7 @@ export default function Internships() {
                           type="button"
                           onClick={() => {
                             setSelectedIndustries([]);
-                            setCurrentPage(1);
+                            updatePage(1);
                           }}
                           className="w-full px-4 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
                         >
@@ -427,7 +480,7 @@ export default function Internships() {
                                 } else {
                                   setSelectedIndustries([...selectedIndustries, industry]);
                                 }
-                                setCurrentPage(1);
+                                updatePage(1);
                               }}
                               className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
                                 isSelected ? "text-[#2563eb] font-semibold" : "text-gray-700"
@@ -474,7 +527,7 @@ export default function Internships() {
                         type="button"
                         onClick={() => {
                           setSelectedLocations([]);
-                          setCurrentPage(1);
+                          updatePage(1);
                         }}
                         className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-[#2563eb] hover:bg-blue-100"
                       >
@@ -501,7 +554,7 @@ export default function Internships() {
                               type="button"
                               onClick={() => {
                                 setSelectedLocations([]);
-                                setCurrentPage(1);
+                                updatePage(1);
                               }}
                               className="font-semibold text-[#3b82f6] hover:underline"
                             >
@@ -516,7 +569,7 @@ export default function Internships() {
                           type="button"
                           onClick={() => {
                             setSelectedLocations([]);
-                            setCurrentPage(1);
+                            updatePage(1);
                           }}
                           className="w-full px-4 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
                         >
@@ -539,7 +592,7 @@ export default function Internships() {
                                 } else {
                                   setSelectedLocations([...selectedLocations, province]);
                                 }
-                                setCurrentPage(1);
+                                updatePage(1);
                               }}
                               className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
                                 isSelected ? "text-[#2563eb] font-semibold" : "text-gray-700"
@@ -569,7 +622,10 @@ export default function Internships() {
                   {["All", "Paid", "Unpaid"].map((comp) => (
                     <button
                       key={comp}
-                      onClick={() => setSelectedCompensation(comp)}
+                      onClick={() => {
+                        setSelectedCompensation(comp);
+                        updatePage(1);
+                      }}
                       className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                         selectedCompensation === comp
                           ? "bg-[#3b82f6]/10 text-[#2563eb] border border-[#3b82f6]/30"
@@ -588,143 +644,106 @@ export default function Internships() {
                   setSelectedLocations([]);
                   setSelectedIndustries([]);
                   setSelectedCompensation("All");
+                  updatePage(1);
                 }}
                 className="w-full mt-6 py-2 text-sm font-bold text-gray-400 hover:text-[#3b82f6] transition-colors"
               >
                 Clear all filters
               </button>
             </div>
-          </aside>
+            </aside>
 
-          {/* Internship List Area */}
-          <div className="flex-1">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                {loading ? "Searching..." : `${cards.length} Internships found`}
-              </h2>
-            </div>
-
-            {error && (
-              <div className="mb-8 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium text-center">
-                {error}
+            {/* Internship List Area */}
+            <div ref={resultsRef} className="flex-1">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {loading ? "Searching..." : `${totalInternships} Internships found`}
+                </h2>
               </div>
-            )}
 
-            <div className="space-y-4">
-              {loading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 animate-pulse h-40"></div>
-                ))
-              ) : cards.length === 0 ? (
-                <div className="bg-white p-20 rounded-2xl border border-dashed border-gray-200 text-center flex flex-col items-center">
-                  <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-full flex items-center justify-center mb-4">
-                    <Search size={32} />
-                  </div>
-                  <p className="text-gray-500 font-medium">No internships match your criteria.</p>
-                  <p className="text-sm text-gray-400 mt-1">Try adjusting your filters or search terms.</p>
+              {error && (
+                <div className="mb-8 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium text-center">
+                  {error}
                 </div>
-              ) : (
-                paginatedCards.map((job) => (
-                  <div
-                    key={job.id}
-                    className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:border-[#3b82f6]/50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-6"
-                  >
-                    <div className="flex items-start gap-4 flex-1">
-                      <img
-                        src={job.logo}
-                        alt={job.company}
-                        className="w-12 h-12 rounded-xl object-cover shadow-sm"
-                      />
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Link
-                            to={`/internships/${job.id}`}
-                            className="font-bold text-lg hover:text-[#3b82f6] transition-colors"
-                          >
-                            {job.title}
-                          </Link>
-                          {job.isNew && (
-                            <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                              New
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 mb-3 font-medium">
-                          <span className="flex items-center gap-1"><Building2 className="w-4 h-4" /> {job.company}</span>
-                          <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {job.location}</span>
-                          <span className="flex items-center gap-1"><DollarSign className="w-4 h-4" /> {job.pay}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {job.tags.map((tag) => (
-                            <span key={tag} className="bg-gray-50 text-gray-500 text-xs px-2.5 py-1 rounded-md font-medium">
-                              {tag}
-                            </span>
-                          ))}
+              )}
+
+              <div className="space-y-4">
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 animate-pulse h-40"></div>
+                  ))
+                ) : cards.length === 0 ? (
+                  <div className="bg-white p-20 rounded-2xl border border-dashed border-gray-200 text-center flex flex-col items-center">
+                    <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-full flex items-center justify-center mb-4">
+                      <Search size={32} />
+                    </div>
+                    <p className="text-gray-500 font-medium">No internships match your criteria.</p>
+                    <p className="text-sm text-gray-400 mt-1">Try adjusting your filters or search terms.</p>
+                  </div>
+                ) : (
+                  cards.map((job) => (
+                    <div
+                      key={job.id}
+                      className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:border-[#3b82f6]/50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-6"
+                    >
+                      <div className="flex items-start gap-4 flex-1">
+                        <img
+                          src={job.logo}
+                          alt={job.company}
+                          className="w-12 h-12 rounded-xl object-cover shadow-sm"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Link
+                              to={`/internships/${job.id}`}
+                              className="font-bold text-lg hover:text-[#3b82f6] transition-colors"
+                            >
+                              {job.title}
+                            </Link>
+                            {job.isNew && (
+                              <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                New
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 mb-3 font-medium">
+                            <span className="flex items-center gap-1"><Building2 className="w-4 h-4" /> {job.company}</span>
+                            <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> {job.location}</span>
+                            <span className="flex items-center gap-1"><DollarSign className="w-4 h-4" /> {job.pay}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {job.tags.map((tag) => (
+                              <span key={tag} className="bg-gray-50 text-gray-500 text-xs px-2.5 py-1 rounded-md font-medium">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex flex-col md:flex-row gap-3 justify-end items-stretch pt-4 md:pt-0">
-                      <Link
-                        to={`/internships/${job.id}`}
-                        className="bg-[#3b82f6] hover:bg-[#2563eb] text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-center shadow-sm"
-                      >
-                        View Details
-                      </Link>
-                      <button
-                        className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors ${
-                          job.saved
-                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
-                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                        }`}
-                        onClick={() => handleToggleSave(job.id, !!job.saved)}
-                      >
-                        <Bookmark className="w-4 h-4" /> {job.saved ? 'Unsave' : 'Save'}
-                      </button>
+                      <div className="flex flex-col md:flex-row gap-3 justify-end items-stretch pt-4 md:pt-0">
+                        <Link
+                          to={`/internships/${job.id}`}
+                          className="bg-[#3b82f6] hover:bg-[#2563eb] text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-center shadow-sm"
+                        >
+                          View Details
+                        </Link>
+                        <button
+                          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-colors ${
+                            job.saved
+                              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                          }`}
+                          onClick={() => handleToggleSave(job.id, !!job.saved)}
+                        >
+                          <Bookmark className="w-4 h-4" /> {job.saved ? 'Unsave' : 'Save'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-12 flex items-center justify-center gap-2">
-                <button 
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
-                >
-                  <ChevronLeft size={16} />
-                  Previous
-                </button>
-                
-                <div className="flex gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`w-10 h-10 rounded-lg border text-sm font-bold transition-all ${
-                        currentPage === page
-                          ? "bg-[#3b82f6] text-white border-[#3b82f6]"
-                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-                
-                <button 
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </button>
+                  ))
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </section>

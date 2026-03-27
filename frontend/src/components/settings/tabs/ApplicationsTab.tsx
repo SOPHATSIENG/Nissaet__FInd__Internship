@@ -19,6 +19,22 @@ export function ApplicationsTab({ applications }: { applications: any[] }) {
     );
   }
 
+  const getStatusLabel = (status?: string) => {
+    const value = String(status || 'pending').toLowerCase();
+    if (value === 'shortlisted' || value === 'accepted') return 'Shortlisted';
+    if (value === 'unshortlisted' || value === 'rejected') return 'Unshortlisted';
+    if (value === 'reviewing') return 'Under Review';
+    return 'Pending';
+  };
+
+  const getStatusClass = (status?: string) => {
+    const value = String(status || 'pending').toLowerCase();
+    if (value === 'shortlisted' || value === 'accepted') return 'text-green-600';
+    if (value === 'unshortlisted' || value === 'rejected') return 'text-red-600';
+    if (value === 'reviewing') return 'text-amber-600';
+    return 'text-indigo-600';
+  };
+
   return (
     <div className="space-y-4">
       {applications.map((app) => (
@@ -32,15 +48,9 @@ export function ApplicationsTab({ applications }: { applications: any[] }) {
               <div className="text-sm text-gray-500">
                 Status:{' '}
                 <span
-                  className={`font-semibold ${
-                    app.status === 'accepted'
-                      ? 'text-green-600'
-                      : app.status === 'rejected'
-                        ? 'text-red-600'
-                        : 'text-indigo-600'
-                  }`}
+                  className={`font-semibold ${getStatusClass(app.status)}`}
                 >
-                  {app.status}
+                  {getStatusLabel(app.status)}
                 </span>
               </div>
               <div className="text-sm text-gray-500">

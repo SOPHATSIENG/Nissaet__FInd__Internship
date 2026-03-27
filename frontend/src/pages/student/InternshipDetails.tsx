@@ -22,6 +22,7 @@ type InternshipRecord = {
   company_website: string | null;
   location: string;
   description: string;
+  image?: string | null;
   requirements: string | null;
   responsibilities: string | null;
   benefits: string | null;
@@ -99,7 +100,7 @@ export default function InternshipDetails() {
   useEffect(() => {
     let mounted = true;
 
-    const loadApplicationStatus = async () => {
+    const loadApplicationStatus = async (silent = false) => {
       if (!id || !isAuthenticated || user?.role !== 'student') {
         if (mounted) {
           setApplicationInfo(null);
@@ -107,7 +108,7 @@ export default function InternshipDetails() {
         }
         return;
       }
-      setIsCheckingApplication(true);
+      if (!silent) setIsCheckingApplication(true);
       try {
         const res = await api.getMyApplications({ limit: 1, internship_id: id });
         const application = Array.isArray(res?.applications) && res.applications.length > 0
@@ -120,11 +121,30 @@ export default function InternshipDetails() {
       } catch (error) {
         console.error('Error loading application status:', error);
       } finally {
-        if (mounted) setIsCheckingApplication(false);
+        if (mounted && !silent) setIsCheckingApplication(false);
       }
     };
 
     loadApplicationStatus();
+
+    if (id && isAuthenticated && user?.role === 'student') {
+      const interval = setInterval(() => loadApplicationStatus(true), 30000);
+      const handleFocus = () => loadApplicationStatus(true);
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible') {
+          loadApplicationStatus(true);
+        }
+      };
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibility);
+      return () => {
+        mounted = false;
+        clearInterval(interval);
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
+    }
+
     return () => {
       mounted = false;
     };
@@ -160,7 +180,7 @@ export default function InternshipDetails() {
     setShowApplyModal(true);
   };
 
-  const heroImage = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80';
+  const heroImage = internship?.image || internship?.company_logo || '';
 
   const salaryText = () => {
     if (!internship) return 'Unpaid';
@@ -173,6 +193,35 @@ export default function InternshipDetails() {
   const internshipDuration = internship?.duration_months ?? internship?.duration ?? 'Variable';
   const applicationDeadline = internship?.application_deadline || internship?.deadline;
   const hasApplied = Boolean(applicationInfo);
+  const applicationStatus = (applicationInfo?.status || 'pending').toLowerCase();
+  const isUnshortlisted = applicationStatus === 'unshortlisted' || applicationStatus === 'rejected';
+  const isShortlisted = applicationStatus === 'shortlisted' || applicationStatus === 'accepted';
+  const isPending = applicationStatus === 'pending' || applicationStatus === 'reviewing';
+
+  const getApplicationButtonLabel = () => {
+    if (!hasApplied) return 'Apply for this Internship';
+    if (applicationStatus === 'shortlisted') return 'Shortlisted';
+    if (isUnshortlisted) return 'Unshortlisted';
+    if (applicationStatus === 'accepted') return 'Accepted';
+    if (applicationStatus === 'reviewing') return 'Under Review';
+    return 'Pending';
+  };
+
+  const getApplicationButtonClass = () => {
+    if (!hasApplied) {
+      return 'bg-indigo-700 hover:bg-indigo-800 text-white shadow-[0_8px_24px_rgba(67,56,202,0.35)]';
+    }
+    if (isShortlisted) {
+      return 'bg-emerald-600 text-white';
+    }
+    if (isUnshortlisted) {
+      return 'bg-red-600 text-white';
+    }
+    if (isPending) {
+      return 'bg-slate-200 text-slate-600';
+    }
+    return 'bg-slate-200 text-slate-600';
+  };
 
   const getPostedTime = (dateStr: string) => {
     try {
@@ -213,6 +262,7 @@ export default function InternshipDetails() {
         resume_url: resumeUrl,
         created_at: new Date().toISOString(),
       });
+      setEditCoverLetter(coverLetter);
       setShowApplyModal(false);
       setCoverLetter('');
       setResumeFile(null);
@@ -228,6 +278,11 @@ export default function InternshipDetails() {
       setResumeUploading(false);
       setIsApplying(false);
     }
+  };
+
+  const handleOpenEditModal = () => {
+    setEditCoverLetter(applicationInfo?.cover_letter || '');
+    setShowEditModal(true);
   };
 
   const handleUpdateApplication = async () => {
@@ -340,12 +395,16 @@ export default function InternshipDetails() {
         {/* Hero Banner */}
         <div className="p-6 md:p-8 border-b border-slate-200">
           <div className="relative rounded-2xl overflow-hidden">
-            <img
-              src={heroImage}
-              alt={`${internship.title} banner`}
-              className="w-full h-[220px] md:h-[360px] object-cover"
-              referrerPolicy="no-referrer"
-            />
+            {heroImage ? (
+              <img
+                src={heroImage}
+                alt={`${internship.title} banner`}
+                className="w-full h-[220px] md:h-[360px] object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-full h-[220px] md:h-[360px] bg-slate-100" />
+            )}
             <span className="absolute left-6 bottom-6 bg-[#3b82f6] text-white text-base font-bold px-5 py-2 rounded-full uppercase tracking-wide shadow-lg">
               {safeType}
             </span>
@@ -519,7 +578,7 @@ export default function InternshipDetails() {
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button
                       type="button"
-                      onClick={() => setShowEditModal(true)}
+                      onClick={handleOpenEditModal}
                       className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors"
                     >
                       Edit Application
@@ -567,13 +626,11 @@ export default function InternshipDetails() {
             type="button"
             onClick={handleApplyClick}
             disabled={hasApplied || isCheckingApplication}
-            className={`font-bold text-xl md:text-lg px-10 py-3 rounded-2xl transition-colors ${
-              hasApplied
-                ? 'bg-slate-200 text-slate-600 cursor-not-allowed'
-                : 'bg-indigo-700 hover:bg-indigo-800 text-white shadow-[0_8px_24px_rgba(67,56,202,0.35)]'
+            className={`font-bold text-xl md:text-lg px-10 py-3 rounded-2xl transition-colors ${getApplicationButtonClass()} ${
+              hasApplied ? 'cursor-not-allowed' : ''
             } ${isCheckingApplication ? 'opacity-70 cursor-wait' : ''}`}
           >
-            {hasApplied ? 'Application Submitted' : 'Apply for this Internship'}
+            {getApplicationButtonLabel()}
           </button>
         </div>
       </div>

@@ -8,6 +8,8 @@ import api from '../../api/axios';
 import { Post } from '../../components/student-components/PostCard';
 
 const BlogDetail: React.FC = () => {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [post, setPost] = useState<(Post & { related_posts: any[], company_description?: string }) | null>(null);
@@ -42,6 +44,15 @@ const BlogDetail: React.FC = () => {
             day: 'numeric',
             year: 'numeric'
         });
+    };
+
+    const resolveImageUrl = (value?: string) => {
+        if (!value) return '';
+        const trimmed = String(value).trim();
+        if (!trimmed) return '';
+        if (trimmed.startsWith('data:')) return trimmed;
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+        return `${API_ORIGIN}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
     };
 
     if (loading) {
@@ -95,12 +106,15 @@ const BlogDetail: React.FC = () => {
                     </button>
 
                     <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-                        {post.image_url && (
+                        {resolveImageUrl(post.image_url) && (
                             <div className="w-full h-80 md:h-[450px]">
                                 <img 
-                                    src={post.image_url} 
+                                    src={resolveImageUrl(post.image_url)} 
                                     alt={post.title} 
                                     className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.currentTarget.src = 'https://images.unsplash.com/photo-1540575467063-178a50c2df7f?w=1200&h=400&fit=crop';
+                                    }}
                                 />
                             </div>
                         )}
@@ -123,8 +137,8 @@ const BlogDetail: React.FC = () => {
                             <div className="flex flex-wrap items-center gap-6 p-4 bg-slate-50 rounded-2xl mb-8 border border-slate-100">
                                 <div className="flex items-center">
                                     <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border border-slate-200 mr-3 overflow-hidden">
-                                        {post.company_logo ? (
-                                            <img src={post.company_logo} alt={post.company_name} className="w-full h-full object-contain" />
+                                        {resolveImageUrl(post.company_logo) ? (
+                                            <img src={resolveImageUrl(post.company_logo)} alt={post.company_name} className="w-full h-full object-contain" />
                                         ) : (
                                             <Building2 className="w-5 h-5 text-slate-400" />
                                         )}
@@ -194,8 +208,8 @@ const BlogDetail: React.FC = () => {
                         <h3 className="text-lg font-bold text-slate-900 mb-4">About Company</h3>
                         <div className="flex items-center mb-4">
                             <div className="w-16 h-16 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden mr-4">
-                                {post.company_logo ? (
-                                    <img src={post.company_logo} alt={post.company_name} className="w-full h-full object-contain" />
+                                {resolveImageUrl(post.company_logo) ? (
+                                    <img src={resolveImageUrl(post.company_logo)} alt={post.company_name} className="w-full h-full object-contain" />
                                 ) : (
                                     <Building2 className="w-8 h-8 text-slate-300" />
                                 )}
@@ -223,12 +237,19 @@ const BlogDetail: React.FC = () => {
                                 {post.related_posts.map((related) => (
                                     <Link 
                                         key={related.id} 
-                                        to={`/student/blog/${related.id}`}
+                                        to={`/blog/${related.id}`}
                                         className="flex gap-4 p-3 bg-white rounded-2xl border border-slate-100 hover:border-[#137fec]/30 hover:shadow-md transition-all group"
                                     >
-                                        {related.image_url && (
+                                        {resolveImageUrl(related.image_url) && (
                                             <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
-                                                <img src={related.image_url} alt={related.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                                <img
+                                                    src={resolveImageUrl(related.image_url)}
+                                                    alt={related.title}
+                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                                    onError={(e) => {
+                                                        e.currentTarget.src = 'https://images.unsplash.com/photo-1540575467063-178a50c2df7f?w=800&h=400&fit=crop';
+                                                    }}
+                                                />
                                             </div>
                                         )}
                                         <div className="flex flex-col justify-center">

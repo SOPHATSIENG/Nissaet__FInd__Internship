@@ -12,7 +12,6 @@ export default function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationCard, setNotificationCard] = useState<{ unreadCount: number; items: any[] } | null>(null);
-  const [suppressUnreadAt, setSuppressUnreadAt] = useState<number | null>(null);
   const [logoError, setLogoError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -46,24 +45,6 @@ export default function Navbar() {
 
   const avatarUrl = user?.profile_image || resolvedLogo || companyLogo || '';
   const accountStatus = String(user?.status || 'active').toLowerCase();
-
-  const hasNewSinceSuppress = () => {
-    if (!notificationCard?.items?.length) return false;
-    if (!suppressUnreadAt) return true;
-    return notificationCard.items.some((item: any) => {
-      const t = new Date(item.created_at || item.createdAt || item.timestamp || 0).getTime();
-      return t > suppressUnreadAt;
-    });
-  };
-
-  const getNewCountSinceSuppress = () => {
-    if (!notificationCard?.items?.length) return 0;
-    if (!suppressUnreadAt) return notificationCard.items.length;
-    return notificationCard.items.filter((item: any) => {
-      const t = new Date(item.created_at || item.createdAt || item.timestamp || 0).getTime();
-      return t > suppressUnreadAt;
-    }).length;
-  };
 
   const companyInitials = companyName
     .split(' ')
@@ -115,6 +96,46 @@ export default function Navbar() {
       window.clearInterval(id);
     };
   }, [loadNotificationCard]);
+
+  const handleNotificationToggle = useCallback(async () => {
+    const nextOpen = !isNotificationsOpen;
+    setIsNotificationsOpen(nextOpen);
+    setIsProfileOpen(false);
+
+    if (!nextOpen) {
+      return;
+    }
+
+    const unreadIds = Array.isArray(notificationCard?.items)
+      ? notificationCard.items
+          .filter((item: any) => !(item?.is_read ?? item?.read))
+          .map((item: any) => item.id)
+          .filter(Boolean)
+      : [];
+
+    setNotificationCard((prev) =>
+      prev
+        ? {
+            unreadCount: 0,
+            items: Array.isArray(prev.items)
+              ? prev.items.map((item) => ({ ...item, is_read: true, read: true }))
+              : prev.items
+          }
+        : prev
+    );
+
+    try {
+      if (unreadIds.length > 0) {
+        await api.markNotificationsRead({ ids: unreadIds });
+      } else {
+        await api.markNotificationsRead({ all: true });
+      }
+    } catch (error) {
+      // Keep the UI responsive; the next refresh will re-sync if needed.
+    }
+
+    loadNotificationCard();
+  }, [isNotificationsOpen, loadNotificationCard, notificationCard]);
 
   const navLinks = [
     { name: 'Dashboard', path: '/company', icon: LayoutDashboard },
@@ -186,28 +207,13 @@ export default function Navbar() {
             <div className="relative flex items-center gap-2 border-l border-slate-200/80 pl-3 md:pl-4" ref={dropdownRef}>
               <button
                 type="button"
-                onClick={() => {
-                  setIsNotificationsOpen((current) => !current);
-                  setIsProfileOpen(false);
-                  setNotificationCard((prev) =>
-                    prev
-                      ? {
-                          unreadCount: 0,
-                          items: Array.isArray(prev.items)
-                            ? prev.items.map((item) => ({ ...item, is_read: true }))
-                            : prev.items
-                        }
-                      : prev
-                  );
-                  setSuppressUnreadAt(Date.now());
-                  loadNotificationCard();
-                }}
+                onClick={handleNotificationToggle}
                 className="relative rounded-2xl border border-slate-200/70 bg-white/85 p-2.5 text-slate-500 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 hover:shadow-md"
               >
                 <Bell size={20} />
-                {getNewCountSinceSuppress() > 0 ? (
+                {(notificationCard?.unreadCount || 0) > 0 ? (
                   <span className="absolute -right-1 -top-1 flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-gradient-to-r from-rose-500 to-orange-400 px-1 text-[10px] font-bold text-white shadow-sm">
-                    {getNewCountSinceSuppress() > 99 ? '99+' : getNewCountSinceSuppress()}
+                    {(notificationCard?.unreadCount || 0) > 99 ? '99+' : (notificationCard?.unreadCount || 0)}
                   </span>
                 ) : null}
               </button>

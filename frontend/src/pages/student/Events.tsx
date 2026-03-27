@@ -56,6 +56,8 @@ interface Event {
 }
 
 export default function Events() {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+  const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
@@ -79,6 +81,15 @@ export default function Events() {
     { value: 'networking', label: 'Networking' },
     { value: 'other', label: 'Other' }
   ];
+
+  const resolveImageUrl = (value?: string) => {
+    if (!value) return '';
+    const trimmed = String(value).trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('data:')) return trimmed;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    return `${API_ORIGIN}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+  };
 
   useEffect(() => {
     fetchEvents();
@@ -252,12 +263,14 @@ export default function Events() {
     return matchesSearch && matchesType && matchesLocation;
   });
 
-  const EventCard = ({ event, isFeatured = false }: { event: Event; isFeatured?: boolean }) => (
+  const EventCard = ({ event, isFeatured = false }: { event: Event; isFeatured?: boolean }) => {
+    const imageUrl = resolveImageUrl(event.image_url || event.company_logo);
+    return (
     <div className={`bg-white rounded-lg border ${isFeatured ? 'border-blue-200 shadow-md' : 'border-gray-200'} hover:shadow-lg transition-shadow`}>
-      {event.image_url && (
+      {imageUrl && (
         <div className="relative h-48 overflow-hidden rounded-t-lg">
           <img 
-            src={event.image_url} 
+            src={imageUrl} 
             alt={event.title}
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -286,7 +299,7 @@ export default function Events() {
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-600 mb-3">{event.company_name} • {event.industry}</p>
+            <p className="text-sm text-gray-600 mb-3">{event.company_name} - {event.industry}</p>
           </div>
         </div>
 
@@ -296,7 +309,7 @@ export default function Events() {
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Calendar className="w-4 h-4" />
             <span>{formatDate(event.event_date)}</span>
-            <span className="text-gray-400">•</span>
+            <span className="text-gray-400">-</span>
             <Clock className="w-4 h-4" />
             <span>{formatTime(event.start_time)} - {formatTime(event.end_time)}</span>
           </div>
@@ -319,7 +332,7 @@ export default function Events() {
             <Users className="w-4 h-4" />
             <span>{event.current_participants || 0} participants</span>
             {event.max_participants && (
-              <span className="text-gray-400">• {event.max_participants} max</span>
+              <span className="text-gray-400">- {event.max_participants} max</span>
             )}
           </div>
 
@@ -411,6 +424,7 @@ export default function Events() {
       </div>
     </div>
   );
+  };
 
   if (loading) {
     return (

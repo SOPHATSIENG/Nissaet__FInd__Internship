@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Loader2, Calendar, MapPin, Video, Clock } from 'lucide-react';
 import api from '../../api/axios';
 import PostCard, { Post } from '../../components/student-components/PostCard';
@@ -10,7 +10,7 @@ const BlogList: React.FC = () => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [filter, setFilter] = useState('all');
+    const [filter, setFilter] = useState('events');
     const [search, setSearch] = useState('');
     const [events, setEvents] = useState<any[]>([]);
     const [eventsLoading, setEventsLoading] = useState(true);
@@ -20,9 +20,10 @@ const BlogList: React.FC = () => {
         total: 0
     });
 
-    const fetchPosts = async (page = 1, currentFilter = filter, currentSearch = search) => {
+    const fetchPosts = useCallback(async (page = 1, currentFilter = filter, currentSearch = search) => {
         try {
             setLoading(true);
+            setError('');
             const response = await api.getPosts({
                 page,
                 type: currentFilter,
@@ -31,22 +32,24 @@ const BlogList: React.FC = () => {
             });
             
             if (response && response.success) {
-                setPosts(response.data);
-                setPagination(response.pagination);
+                setPosts(Array.isArray(response.data) ? response.data : []);
+                setPagination(response.pagination || { page, pages: 1, total: Array.isArray(response.data) ? response.data.length : 0 });
             } else if (Array.isArray(response)) {
                 setPosts(response);
-                setPagination({ ...pagination, page, pages: 1, total: response.length });
+                setPagination({ page, pages: 1, total: response.length });
             } else {
                 setPosts([]);
-                setPagination({ ...pagination, page, pages: 1, total: 0 });
+                setPagination({ page, pages: 1, total: 0 });
             }
         } catch (err) {
             console.error('Error fetching posts:', err);
             setError('Failed to load posts. Please try again later.');
+            setPosts([]);
+            setPagination({ page: 1, pages: 1, total: 0 });
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     const fetchEvents = async () => {
         try {
@@ -68,7 +71,7 @@ const BlogList: React.FC = () => {
 
     useEffect(() => {
         fetchPosts(1, filter, search);
-    }, [filter]);
+    }, [fetchPosts, filter]);
 
     useEffect(() => {
         fetchEvents();
@@ -111,12 +114,12 @@ const BlogList: React.FC = () => {
             </div>
 
             {/* Search and Filter Section */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
-                <div className="flex-grow max-w-xl">
-                    <form onSubmit={handleSearch} className="flex gap-2">
+            <div className="flex justify-center mb-10">
+                <div className="w-full max-w-2xl">
+                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 sm:items-end">
                         <div className="flex-grow">
                             <Input
-                                label="Search posts"
+                                label=""
                                 placeholder="Search by title, company, or keywords..."
                                 icon={Search}
                                 value={search}
@@ -125,7 +128,7 @@ const BlogList: React.FC = () => {
                         </div>
                         <button 
                             type="submit"
-                            className="h-[52px] px-6 bg-[#137fec] text-white rounded-lg font-semibold hover:bg-[#1171d1] transition-colors mt-[26px]"
+                            className="h-[52px] px-6 bg-[#137fec] text-white rounded-lg font-semibold hover:bg-[#1171d1] transition-colors"
                         >
                             Search
                         </button>
@@ -217,15 +220,21 @@ const BlogList: React.FC = () => {
                     {error}
                 </div>
             ) : posts.length === 0 ? (
-                <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                    <div className="mb-4 inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 text-slate-400">
-                        <Search className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">No posts found</h3>
-                    <p className="text-slate-500">Try adjusting your search or filters to find what you're looking for.</p>
+                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-8 text-center">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-1">No events yet</h3>
+                    <p className="text-sm text-slate-500">Check back later for new workshops and career fairs.</p>
                 </div>
             ) : (
                 <>
+                    <div className="mb-6 flex items-center justify-between">
+                        <h2 className="text-2xl font-bold text-slate-900">
+                            {pagination.total} {pagination.total === 1 ? 'post' : 'posts'} found
+                        </h2>
+                        <p className="text-sm text-slate-500">
+                            Filter: {filter === 'events' ? 'Events' : filter.replace('_', ' ')}
+                        </p>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {posts.map((post) => (
                             <PostCard key={post.id} post={post} />

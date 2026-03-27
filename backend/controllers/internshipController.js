@@ -23,6 +23,117 @@ const getTableColumns = async (tableName) => {
     const rows = await db.query(`SHOW COLUMNS FROM ${tableName}`);
     return new Set(rows.map((row) => row.Field));
 };
+const getPostsColumns = async () => getTableColumns('posts');
+const runExecutor = async (executor, sql, params = []) => {
+    if (executor && typeof executor.execute === 'function') {
+        const [rows] = await executor.execute(sql, params);
+        return rows;
+    }
+    return db.query(sql, params);
+};
+const buildInternshipPostPayload = (internship, companyId, adminId = null) => {
+    const plainDescription = String(internship.description || '').trim();
+    const plainRequirements = String(internship.requirements || '').trim();
+    const shortDescriptionSource = plainDescription || plainRequirements || internship.title || '';
+    const shortDescription = shortDescriptionSource.slice(0, 500);
+
+    return {
+        title: internship.title,
+        content: plainDescription || plainRequirements || internship.title || 'Internship opportunity',
+        short_description: shortDescription || null,
+        image_url: internship.image || null,
+        post_type: 'internship',
+        internship_id: internship.id,
+        company_id: companyId,
+        admin_id: adminId,
+        location: internship.location || null,
+        event_date: internship.application_deadline || null,
+        status: internship.status === 'active' ? 'published' : 'archived'
+    };
+};
+const syncInternshipPost = async (executor, internship, companyId, adminId = null) => {
+    try {
+        const postColumns = await getPostsColumns();
+        const payload = buildInternshipPostPayload(internship, companyId, adminId);
+        const hasInternshipId = postColumns.has('internship_id');
+
+        let existingPost = [];
+        if (hasInternshipId) {
+            existingPost = await runExecutor(
+                executor,
+                'SELECT id FROM posts WHERE internship_id = ? LIMIT 1',
+                [internship.id]
+            );
+        } else {
+            existingPost = await runExecutor(
+                executor,
+                'SELECT id FROM posts WHERE company_id = ? AND post_type = ? AND title = ? ORDER BY id DESC LIMIT 1',
+                [companyId, 'internship', internship.title]
+            );
+        }
+
+        const columns = [];
+        const values = [];
+        Object.entries(payload).forEach(([key, value]) => {
+            if (postColumns.has(key)) {
+                columns.push(key);
+                values.push(value);
+            }
+        });
+
+        if (columns.length === 0) {
+            return;
+        }
+
+        if (existingPost.length > 0) {
+            const updateSql = `
+                UPDATE posts
+                SET ${columns.map((column) => `${column} = ?`).join(', ')},
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `;
+            await runExecutor(executor, updateSql, [...values, existingPost[0].id]);
+            return;
+        }
+
+        const placeholders = columns.map(() => '?').join(', ');
+        const insertSql = `INSERT INTO posts (${columns.join(', ')}) VALUES (${placeholders})`;
+        await runExecutor(executor, insertSql, values);
+    } catch (error) {
+        if (error && (error.code === 'ER_NO_SUCH_TABLE' || error.code === 'ER_BAD_FIELD_ERROR')) {
+            console.warn('Skipping internship post sync because posts schema is not ready:', error.message);
+            return;
+        }
+        throw error;
+    }
+};
+const archiveInternshipPost = async (executor, internshipId, companyId, title = null) => {
+    try {
+        const postColumns = await getPostsColumns();
+        if (postColumns.has('internship_id')) {
+            await runExecutor(
+                executor,
+                'UPDATE posts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE internship_id = ?',
+                ['archived', internshipId]
+            );
+            return;
+        }
+
+        if (title) {
+            await runExecutor(
+                executor,
+                'UPDATE posts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE company_id = ? AND post_type = ? AND title = ?',
+                ['archived', companyId, 'internship', title]
+            );
+        }
+    } catch (error) {
+        if (error && (error.code === 'ER_NO_SUCH_TABLE' || error.code === 'ER_BAD_FIELD_ERROR')) {
+            console.warn('Skipping internship post archive because posts schema is not ready:', error.message);
+            return;
+        }
+        throw error;
+    }
+};
 
 /**
  * Helper to get company ID by user ID
@@ -94,9 +205,11 @@ const getAllInternships = async (req, res) => {
     try {
         await normalizeInternshipStatusByDeadline();
         await expireInternshipsByDeadline();
-        const { search, location, industry, companySize, skills, work_mode, salary_type, limit: queryLimit } = req.query;
+        const { search, location, industry, companySize, skills, work_mode, salary_type, limit: queryLimit, page: queryPage } = req.query;
         const parsedLimit = Number.parseInt(queryLimit, 10);
+        const parsedPage = Number.parseInt(queryPage, 10);
         const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 100;
+        const requestedPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
         let query = `
             SELECT
@@ -198,11 +311,6 @@ const getAllInternships = async (req, res) => {
 
         query += ' ORDER BY i.created_at DESC';
 
-        if (limit) {
-            query += ' LIMIT ?';
-            queryParams.push(limit);
-        }
-
         // Get total count before applying limit
         let countQuery = `
             SELECT COUNT(*) as total
@@ -277,15 +385,33 @@ const getAllInternships = async (req, res) => {
 
         let internships;
         let total = 0;
+        let page = requestedPage;
+        let totalPages = 0;
 
         try {
             const countResult = await db.query(countQuery, countParams);
             total = countResult[0]?.total || 0;
+            totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+            page = totalPages > 0 ? Math.min(requestedPage, totalPages) : 1;
+            const offset = (page - 1) * limit;
+            query += ' LIMIT ? OFFSET ?';
+            queryParams.push(limit, offset);
             internships = await db.query(query, queryParams);
         } catch (error) {
             console.warn('Primary query failed:', error);
             // Fallback for legacy schema or SQL differences
             try {
+                const fallbackCountResult = await db.query(
+                    `SELECT COUNT(*) as total
+                     FROM internships i
+                     JOIN companies c ON i.company_id = c.id
+                     WHERE i.status = 'active'`,
+                    []
+                );
+                total = fallbackCountResult[0]?.total || 0;
+                totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+                page = totalPages > 0 ? Math.min(requestedPage, totalPages) : 1;
+                const fallbackOffset = (page - 1) * limit;
                 let fallbackSql = `
                     SELECT
                         i.*,
@@ -296,10 +422,9 @@ const getAllInternships = async (req, res) => {
                     JOIN companies c ON i.company_id = c.id
                     WHERE i.status = 'active'
                     ORDER BY i.created_at DESC
-                    LIMIT ?
+                    LIMIT ? OFFSET ?
                 `;
-                internships = await db.query(fallbackSql, [limit || 10]);
-                total = internships.length;
+                internships = await db.query(fallbackSql, [limit, fallbackOffset]);
             } catch (fallbackError) {
                 console.error('Fallback query failed:', fallbackError);
                 throw fallbackError;
@@ -309,7 +434,12 @@ const getAllInternships = async (req, res) => {
         return res.json({ 
             success: true,
             total,
+            page,
+            limit,
+            totalPages,
             count: internships.length,
+            hasNextPage: totalPages > 0 && page < totalPages,
+            hasPrevPage: page > 1,
             internships 
         });
     } catch (error) {
@@ -565,24 +695,50 @@ const createInternship = async (req, res) => {
         const placeholders = insertColumns.map(() => '?').join(', ');
         const sql = `INSERT INTO internships (${insertColumns.join(', ')}) VALUES (${placeholders})`;
 
-        const result = await db.query(sql, insertValues);
+        const connection = await db.connection();
 
-        const internshipId = result.insertId;
+        try {
+            await connection.beginTransaction();
 
-        // Skills insertion
-        if (Array.isArray(skills)) {
-            for (const skill of skills) {
-                const skillId = skill.id || skill.skill_id;
-                if (skillId) {
-                    await db.query(
-                        'INSERT INTO internship_skills (internship_id, skill_id, skill_level, is_required) VALUES (?, ?, ?, ?)',
-                        [internshipId, skillId, skill.level || 'intermediate', skill.required !== false]
-                    ).catch(err => console.error('Skill insert failed:', err.message));
+            const [result] = await connection.execute(sql, insertValues);
+            const internshipId = result.insertId;
+
+            if (Array.isArray(skills)) {
+                for (const skill of skills) {
+                    const skillId = skill.id || skill.skill_id;
+                    if (skillId) {
+                        await connection.execute(
+                            'INSERT INTO internship_skills (internship_id, skill_id, skill_level, is_required) VALUES (?, ?, ?, ?)',
+                            [internshipId, skillId, skill.level || 'intermediate', skill.required !== false]
+                        ).catch(err => console.error('Skill insert failed:', err.message));
+                    }
                 }
             }
-        }
 
-        return res.status(201).json({ success: true, message: 'Internship created', internshipId });
+            await syncInternshipPost(
+                connection,
+                {
+                    id: internshipId,
+                    title,
+                    description,
+                    requirements,
+                    image,
+                    location,
+                    application_deadline,
+                    status: 'active'
+                },
+                companyId,
+                req.user?.userId || null
+            );
+
+            await connection.commit();
+            return res.status(201).json({ success: true, message: 'Internship created', internshipId });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
     } catch (error) {
         console.error('Error creating internship:', error);
         return res.status(500).json({ success: false, message: 'Server error' });
@@ -734,6 +890,22 @@ const updateInternship = async (req, res) => {
                 }
             }
 
+            await syncInternshipPost(
+                connection,
+                {
+                    id: Number(id),
+                    title,
+                    description,
+                    requirements,
+                    image,
+                    location,
+                    application_deadline,
+                    status: nextStatus
+                },
+                companyId,
+                req.user?.userId || null
+            );
+
             await connection.commit();
 
             return res.json({ message: 'Internship updated successfully' });
@@ -758,9 +930,10 @@ const deleteInternship = async (req, res) => {
         
         if (req.user && req.user.role === 'company') {
             const companyId = await getCompanyIdByUserId(req.user.userId);
-            const existing = await db.query('SELECT company_id FROM internships WHERE id = ?', [id]);
+            const existing = await db.query('SELECT company_id, title FROM internships WHERE id = ?', [id]);
             if (existing.length === 0) return res.status(404).json({ message: 'Not found' });
             if (existing[0].company_id !== companyId) return res.status(403).json({ message: 'Forbidden' });
+            await archiveInternshipPost(db, id, companyId, existing[0].title || null);
         }
 
         try {
@@ -1707,6 +1880,19 @@ const restoreInternship = async (req, res) => {
                  END
                  WHERE id = ?`,
                 [id]
+            );
+        }
+
+        const restoredRows = await db.query(
+            'SELECT id, title, description, requirements, image, location, application_deadline, status, company_id FROM internships WHERE id = ? LIMIT 1',
+            [id]
+        );
+        if (restoredRows.length > 0) {
+            await syncInternshipPost(
+                db,
+                restoredRows[0],
+                restoredRows[0].company_id,
+                req.user?.userId || null
             );
         }
 

@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../api/axios';
+import { useAuth } from './AuthContext';
 
 interface ProfileSettings {
   accentColor: string;
@@ -35,6 +37,7 @@ export const defaultSettings: ProfileSettings = {
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [settings, setSettings] = useState<ProfileSettings>(() => {
     const saved = localStorage.getItem('profile_settings');
     // Merge saved settings with default settings to ensure new fields (like username, coverImage) are present
@@ -62,6 +65,60 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
     document.documentElement.style.setProperty('--accent', colorMap[settings.accentColor] || colorMap.emerald);
   }, [settings]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const formatRole = (value?: string) => {
+      if (!value) return '';
+      const normalized = String(value).toLowerCase();
+      if (normalized === 'admin') return 'Admin';
+      if (normalized === 'super_admin' || normalized === 'super admin') return 'Super Admin';
+      return normalized.replace(/(^|\s|_)\w/g, (match) => match.replace('_', ' ').toUpperCase());
+    };
+
+    const fallbackFromUser = (previous: ProfileSettings) => ({
+      ...previous,
+      username: previous.username || user?.username || user?.email?.split('@')[0] || previous.email.split('@')[0],
+      name: user?.full_name || user?.name || previous.name,
+      email: user?.email || previous.email,
+      phone: user?.phone || previous.phone,
+      location: user?.location || previous.location,
+      bio: user?.bio || previous.bio,
+      role: formatRole(user?.role) || previous.role,
+      avatar: user?.profile_image || previous.avatar,
+    });
+
+    const loadProfile = async () => {
+      if (!user) return;
+      try {
+        const response = await api.getProfileSettings();
+        const payload = response?.settings || response || {};
+        const personal = payload.personal || {};
+        if (!mounted) return;
+        setSettings((prev) => ({
+          ...prev,
+          username: personal.username || prev.username || user?.username || user?.email?.split('@')[0] || prev.email.split('@')[0],
+          name: personal.full_name || user?.full_name || user?.name || prev.name,
+          email: personal.email || user?.email || prev.email,
+          phone: personal.phone || user?.phone || prev.phone,
+          location: personal.address || user?.location || prev.location,
+          bio: personal.bio || user?.bio || prev.bio,
+          role: personal.role || formatRole(user?.role) || prev.role,
+          avatar: personal.profile_image || user?.profile_image || prev.avatar,
+          coverImage: personal.cover_image || prev.coverImage,
+        }));
+      } catch (error) {
+        if (!mounted) return;
+        setSettings((prev) => fallbackFromUser(prev));
+      }
+    };
+
+    loadProfile();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   const updateSettings = (newSettings: Partial<ProfileSettings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));

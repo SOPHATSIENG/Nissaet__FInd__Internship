@@ -82,6 +82,43 @@ const formatDateLabel = (value?: string) => {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
+const normalizeInternships = (payload: any) => {
+  const list =
+    payload?.internships ||
+    payload?.items ||
+    payload?.data?.internships ||
+    payload?.data?.items ||
+    (Array.isArray(payload) ? payload : []);
+
+  if (!Array.isArray(list)) return [];
+
+  return list.map((item: any) => {
+    const company = item?.company || item?.company_profile || {};
+    return {
+      ...item,
+      company_name:
+        item?.company_name ||
+        company?.company_name ||
+        company?.name ||
+        item?.company?.name ||
+        item?.company?.company_name ||
+        item?.company_name ||
+        item?.company ||
+        '',
+      company_logo:
+        item?.company_logo ||
+        company?.logo ||
+        company?.company_logo ||
+        item?.company?.logo ||
+        item?.company?.company_logo ||
+        '',
+      company_industry: item?.company_industry || company?.industry || '',
+      company_location: item?.company_location || company?.location || '',
+      company_website: item?.company_website || company?.website || '',
+    };
+  });
+};
+
 export const CategoryManagement = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'Job Categories' | 'Skills' | 'Job Types'>('Job Categories');
@@ -106,6 +143,20 @@ export const CategoryManagement = () => {
   const [selectedIconName, setSelectedIconName] = useState('LayoutGrid');
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [newSkillCategory, setNewSkillCategory] = useState('Software Development');
+
+  const totalListings = useMemo(() => {
+    return jobCategories.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  }, [jobCategories]);
+
+  const summaryCards = useMemo(
+    () => [
+      { label: 'Job Categories', value: jobCategories.length, hint: 'Industry groupings', tone: 'from-blue-600 to-cyan-500' },
+      { label: 'Skills', value: skills.length, hint: 'Skill keywords', tone: 'from-emerald-500 to-teal-500' },
+      { label: 'Job Types', value: jobTypes.length, hint: 'Contract formats', tone: 'from-slate-700 to-slate-900' },
+      { label: 'Total Listings', value: totalListings, hint: 'Across categories', tone: 'from-violet-600 to-indigo-600' },
+    ],
+    [jobCategories.length, skills.length, jobTypes.length, totalListings]
+  );
 
   const fetchAllData = async () => {
     setIsLoading(true);
@@ -166,11 +217,11 @@ export const CategoryManagement = () => {
       setIsRelatedLoading(true);
       try {
         if (activeTab === 'Job Categories') {
-          const res = await api.adminGetCategoryInternships(selectedDetailItem.id);
-          setRelatedItems(res?.internships || []);
+          const res = await api.adminGetCategoryInternships(selectedDetailItem.id, { limit: 1000, page: 1 });
+          setRelatedItems(normalizeInternships(res));
         } else if (activeTab === 'Skills') {
-          const res = await api.adminGetSkillInternships(selectedDetailItem.id);
-          setRelatedItems(res?.internships || []);
+          const res = await api.adminGetSkillInternships(selectedDetailItem.id, { limit: 1000, page: 1 });
+          setRelatedItems(normalizeInternships(res));
         }
       } catch (error) {
         setRelatedItems([]);
@@ -274,30 +325,47 @@ export const CategoryManagement = () => {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
-      <div className="flex justify-between items-end">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-black text-text-primary tracking-tight">Category Management</h1>
-          <p className="text-text-secondary text-base">Manage job industries, required skills, and employment types.</p>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Admin Console</p>
+            <h1 className="text-3xl font-black text-text-primary tracking-tight">Category Management</h1>
+            <p className="text-text-secondary text-base">Manage job industries, required skills, and employment types.</p>
+          </div>
+          <button 
+            onClick={() => {
+              setEditingItem(null);
+              setNewName('');
+              setNewDescription('');
+              setSelectedIconName('LayoutGrid');
+              setIsAddModalOpen(true);
+            }}
+            disabled={activeTab === 'Job Types'}
+            className={cn(
+              "flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md transform active:scale-95",
+              activeTab === 'Job Types'
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            )}
+          >
+            <Plus className="size-4" />
+            Add New {activeTab.slice(0, -1)}
+          </button>
         </div>
-        <button 
-          onClick={() => {
-            setEditingItem(null);
-            setNewName('');
-            setNewDescription('');
-            setSelectedIconName('LayoutGrid');
-            setIsAddModalOpen(true);
-          }}
-          disabled={activeTab === 'Job Types'}
-          className={cn(
-            "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md transform active:scale-95",
-            activeTab === 'Job Types'
-              ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-              : "bg-blue-600 text-white hover:bg-blue-700"
-          )}
-        >
-          <Plus className="size-4" />
-          Add New {activeTab.slice(0, -1)}
-        </button>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {summaryCards.map((card) => (
+            <div key={card.label} className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm">
+              <div className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r ${card.tone} px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white`}>
+                {card.label}
+              </div>
+              <div className="mt-3 flex items-end justify-between">
+                <span className="text-2xl font-black text-slate-900">{card.value.toLocaleString()}</span>
+                <span className="text-xs font-semibold text-slate-400">{card.hint}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -330,8 +398,8 @@ export const CategoryManagement = () => {
       </div>
 
       {/* Search & Actions */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 group">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 min-w-[240px] group">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary size-4 group-focus-within:text-primary transition-colors" />
           <input 
             className="h-11 w-full rounded-xl border border-border bg-surface pl-10 pr-10 text-sm text-text-primary placeholder-text-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary shadow-sm transition-all" 
@@ -428,7 +496,7 @@ export const CategoryManagement = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1" 
+              <div className="flex flex-col gap-1 cursor-pointer" 
               onClick={() => {
                     if (activeTab === 'Job Categories') {
                       navigate(`/admin/categories/details_list?categoryId=${item.id}`);
@@ -615,7 +683,7 @@ export const CategoryManagement = () => {
                               <div className="flex flex-col">
                                 <span className="text-sm font-bold text-text-primary">{item.title}</span>
                                 <span className="text-[11px] text-text-secondary">
-                                  {item.company_name} • {item.location || 'No location'}
+                                  {item.company_name} * {item.location || 'No location'}
                                 </span>
                               </div>
                               <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border border-border bg-surface text-text-secondary">

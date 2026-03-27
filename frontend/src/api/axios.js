@@ -487,6 +487,28 @@ export const api = {
     return request('/admin/settings/export', { method: 'POST', auth: true });
   },
 
+  async adminExportDataFile() {
+    const token = getStoredToken();
+    const response = await fetch(`${API_BASE_URL}/admin/settings/export`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData?.message || errorData?.error || `Request failed with status ${response.status}`;
+      throw new Error(message);
+    }
+
+    const contentDisposition = response.headers.get('content-disposition') || '';
+    const filenameMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+    const filename = filenameMatch?.[1];
+    const exportedAt = response.headers.get('x-exported-at') || undefined;
+    const blob = await response.blob();
+
+    return { blob, filename, exportedAt };
+  },
+
   adminPurgeLogs() {
     return request('/admin/settings/purge', { method: 'POST', auth: true });
   },
@@ -535,8 +557,13 @@ export const api = {
     return request(`/admin/categories/${id}`, { method: 'DELETE', auth: true });
   },
 
-  adminGetCategoryInternships(id) {
-    return request(`/admin/categories/${id}/internships`, { auth: true });
+  adminGetCategoryInternships(id, params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+    return request(`/admin/categories/${id}/internships${query ? `?${query}` : ''}`, { auth: true });
   },
 
   adminGetSkills() {
@@ -555,8 +582,13 @@ export const api = {
     return request(`/admin/skills/${id}`, { method: 'DELETE', auth: true });
   },
 
-  adminGetSkillInternships(id) {
-    return request(`/admin/skills/${id}/internships`, { auth: true });
+  adminGetSkillInternships(id, params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+    return request(`/admin/skills/${id}/internships${query ? `?${query}` : ''}`, { auth: true });
   },
 
   adminGetInternship(id) {
@@ -565,6 +597,10 @@ export const api = {
 
   adminUpdateInternship(id, payload) {
     return request(`/admin/internships/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminDeleteInternship(id) {
+    return request(`/admin/internships/${id}`, { method: 'DELETE', auth: true });
   },
 
   adminFlagInternship(id, payload = {}) {

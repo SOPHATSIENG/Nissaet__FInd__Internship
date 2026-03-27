@@ -396,9 +396,9 @@ export default function Events() {
       </div>
 
       {/* Events List */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filteredEvents.length === 0 ? (
-          <div className="bg-white p-8 rounded-lg border border-gray-200 text-center">
+          <div className="col-span-full bg-white p-8 rounded-lg border border-gray-200 text-center">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
             <p className="text-gray-600 mb-4">
@@ -418,8 +418,8 @@ export default function Events() {
           </div>
         ) : (
           filteredEvents.map(event => (
-            <div key={event.id} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
+            <div key={event.id} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-md transition-shadow min-h-[280px]">
+              <div className="flex h-full flex-col justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
@@ -437,7 +437,7 @@ export default function Events() {
                     </span>
                   </div>
 
-                  <p className="text-gray-600 mb-4 line-clamp-2">{event.description}</p>
+                  <p className="text-gray-600 mb-4 line-clamp-3">{event.description}</p>
 
                   <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                     <div className="flex items-center gap-1">
@@ -454,9 +454,9 @@ export default function Events() {
                         Virtual Event
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 min-w-0">
                         <MapPin className="w-4 h-4" />
-                        {event.location}
+                        <span className="line-clamp-1">{event.location}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-1">
@@ -477,7 +477,7 @@ export default function Events() {
                   )}
                 </div>
 
-                <div className="relative ml-4">
+                <div className="relative mt-4 flex justify-end gap-1">
                   <button
                     onClick={() => setDetailEvent(event)}
                     className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"

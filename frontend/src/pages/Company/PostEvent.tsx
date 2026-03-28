@@ -24,7 +24,7 @@ import ConfirmationModal from '../../components/company-components/ConfirmationM
 interface EventFormData {
   title: string;
   description: string;
-  type: 'workshop' | 'seminar' | 'webinar' | 'competition' | 'networking' | 'other';
+  type: 'workshop' | 'seminar' | 'webinar' | 'competition' | 'networking' | 'career_fair' | 'other';
   event_date: string;
   start_time: string;
   end_time: string;
@@ -77,6 +77,7 @@ export default function PostEvent() {
     { value: 'webinar', label: 'Webinar' },
     { value: 'competition', label: 'Competition' },
     { value: 'networking', label: 'Networking Event' },
+    { value: 'career_fair', label: 'Career Fair' },
     { value: 'other', label: 'Other' }
   ];
 

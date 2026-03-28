@@ -212,40 +212,146 @@ export default function Applicants() {
       return;
     }
 
-    const lowerUrl = resumeUrl.toLowerCase();
-    const isPdf = lowerUrl.split('?')[0].endsWith('.pdf');
-    const isGoogleDrive = lowerUrl.includes('drive.google.com');
-    if (!isPdf) {
+    const apiOrigin = (() => {
+      const raw = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+      try {
+        return new URL(raw).origin;
+      } catch {
+        return '';
+      }
+    })();
+
+    const fileBase = String(name || 'Applicant')
+      .trim()
+      .replace(/\s+/g, '_')
+      .replace(/[^\w.-]/g, '');
+
+    const triggerBlobDownload = (blob: Blob, filename: string) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    const normalizeResumeUrl = (url: string) => {
+      const trimmed = url.trim();
+      if (!trimmed) return trimmed;
+
+      if (apiOrigin) {
+        if (trimmed.startsWith('/uploads/')) return `${apiOrigin}${trimmed}`;
+        if (trimmed.startsWith('uploads/')) return `${apiOrigin}/${trimmed}`;
+      }
+
+      try {
+        const parsed = new URL(trimmed);
+        if (
+          apiOrigin &&
+          parsed.hostname === 'localhost' &&
+          new URL(apiOrigin).hostname === 'localhost' &&
+          parsed.pathname.startsWith('/uploads/')
+        ) {
+          return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+      } catch {
+        // Ignore URL parse failure and keep as-is
+      }
+
+      return trimmed;
+    };
+
+    const getGoogleDriveDirectDownloadUrl = (url: string) => {
+      try {
+        const parsed = new URL(url);
+        const idFromQuery = parsed.searchParams.get('id');
+        if (idFromQuery) {
+          return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(idFromQuery)}`;
+        }
+        const match = parsed.pathname.match(/\/d\/([^/]+)/);
+        if (match?.[1]) {
+          return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(match[1])}`;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
+    const downloadPdf = async () => {
+      const resolvedUrl = normalizeResumeUrl(resumeUrl);
+      const lowerUrl = resolvedUrl.toLowerCase();
+      const isGoogleDrive = lowerUrl.includes('drive.google.com');
       if (isGoogleDrive) {
-        const link = document.createElement('a');
-        link.href = resumeUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.download = `${name}-CV`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        const directUrl = getGoogleDriveDirectDownloadUrl(resolvedUrl);
+        window.open(directUrl || resolvedUrl, '_blank', 'noopener,noreferrer');
         return;
       }
-      setModalConfig({
-        isOpen: true,
-        type: 'info',
-        title: 'Download CV',
-        message: `Only PDF files are allowed. The CV for ${name} is not a PDF.`,
-        confirmText: 'Got it',
-        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
-      });
-      return;
-    }
 
-    const link = document.createElement('a');
-    link.href = resumeUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.download = `${name}-CV`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+      try {
+        const token = localStorage.getItem('nissaet_auth_token');
+        const response = await fetch(resolvedUrl, {
+          method: 'GET',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!response.ok) {
+          const reason =
+            response.status === 404
+              ? 'File not found (404).'
+              : response.status === 401 || response.status === 403
+                ? 'Access denied. Please log in again.'
+                : `Download failed (${response.status}).`;
+
+          setModalConfig({
+            isOpen: true,
+            type: 'info',
+            title: 'Download CV',
+            message: `Unable to download ${name}'s CV. ${reason}`,
+            confirmText: 'Got it',
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+          });
+          return;
+        }
+
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        const blob = await response.blob();
+
+        const isPdfHeader = await blob
+          .slice(0, 5)
+          .text()
+          .then((text) => text.startsWith('%PDF-'))
+          .catch(() => false);
+
+        if (!contentType.includes('application/pdf') && !isPdfHeader) {
+          setModalConfig({
+            isOpen: true,
+            type: 'info',
+            title: 'Download CV',
+            message: `The CV link for ${name} did not return a valid PDF (it may be expired or broken).`,
+            confirmText: 'Got it',
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+          });
+          return;
+        }
+
+        triggerBlobDownload(blob, `${fileBase || 'CV'}-CV.pdf`);
+      } catch (error) {
+        console.warn('PDF download failed:', error);
+        setModalConfig({
+          isOpen: true,
+          type: 'info',
+          title: 'Download CV',
+          message: `Unable to download ${name}'s CV. Please try again, or ask the applicant to re-upload their CV.`,
+          confirmText: 'Got it',
+          onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+        });
+      }
+    };
+
+    void downloadPdf();
   };
 
   const handleExportList = () => {

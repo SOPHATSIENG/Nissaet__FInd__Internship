@@ -396,8 +396,14 @@ export const api = {
     return request('/internships/dashboard/stats', { auth: true });
   },
 
-  getApplicationTrends() {
-    return request('/internships/dashboard/trends', { auth: true });
+  getApplicationTrends(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/internships/dashboard/trends${query ? `?${query}` : ''}`, { auth: true });
   },
 
   // Application endpoints

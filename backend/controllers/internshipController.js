@@ -1759,36 +1759,181 @@ const getApplicationTrends = async (req, res) => {
             return res.status(404).json({ message: 'Company not found' });
         }
 
-        // Get monthly application trends for last 6 months
+        const granularity = String(req.query?.granularity || '').toLowerCase();
+        const now = new Date();
+
+        if (granularity === 'year') {
+            const requestedYears = Number.parseInt(String(req.query?.years ?? ''), 10);
+            const yearsWindow = Number.isFinite(requestedYears)
+                ? Math.min(10, Math.max(1, requestedYears))
+                : 5;
+
+            const endYear = now.getFullYear();
+            const startYear = endYear - (yearsWindow - 1);
+            const startDateKey = `${startYear}-01-01`;
+
+            let trends;
+            try {
+                trends = await db.query(
+                    `SELECT
+                        YEAR(created_at) AS year,
+                        COUNT(*) AS posts,
+                        COALESCE(SUM(applications_count), 0) AS applications
+                     FROM internships
+                     WHERE company_id = ? AND created_at >= ? AND is_flagged = 0
+                     GROUP BY YEAR(created_at)
+                     ORDER BY year ASC`,
+                    [companyId, startDateKey]
+                );
+            } catch (error) {
+                if (!isBadFieldError(error)) throw error;
+                trends = await db.query(
+                    `SELECT
+                        YEAR(created_at) AS year,
+                        COUNT(*) AS posts,
+                        COALESCE(SUM(applications_count), 0) AS applications
+                     FROM internships
+                     WHERE company_id = ? AND created_at >= ?
+                     GROUP BY YEAR(created_at)
+                     ORDER BY year ASC`,
+                    [companyId, startDateKey]
+                );
+            }
+
+            const rows = Array.isArray(trends) ? trends : [];
+            const byYear = new Map(
+                rows
+                    .filter((row) => row && (row.year !== undefined && row.year !== null))
+                    .map((row) => [String(row.year), row])
+            );
+
+            const filled = Array.from({ length: yearsWindow }, (_, index) => String(startYear + index)).map((year) => {
+                const row = byYear.get(year);
+                return {
+                    year,
+                    posts: row ? Number(row.posts) || 0 : 0,
+                    applications: row ? Number(row.applications) || 0 : 0
+                };
+            });
+
+            return res.json({ trends: filled });
+        }
+
+        if (granularity === 'month' && req.query?.year) {
+            const requestedYear = Number.parseInt(String(req.query.year), 10);
+            const targetYear = Number.isFinite(requestedYear) ? requestedYear : now.getFullYear();
+
+            const monthKeys = Array.from({ length: 12 }, (_, index) => `${targetYear}-${String(index + 1).padStart(2, '0')}`);
+            const startKey = `${targetYear}-01-01`;
+            const endKey = `${targetYear + 1}-01-01`;
+
+            let trends;
+            try {
+                trends = await db.query(
+                    `SELECT
+                        DATE_FORMAT(created_at, '%Y-%m') AS month,
+                        COUNT(*) AS posts,
+                        COALESCE(SUM(applications_count), 0) AS applications
+                     FROM internships
+                     WHERE company_id = ? AND created_at >= ? AND created_at < ? AND is_flagged = 0
+                     GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+                     ORDER BY month ASC`,
+                    [companyId, startKey, endKey]
+                );
+            } catch (error) {
+                if (!isBadFieldError(error)) throw error;
+                trends = await db.query(
+                    `SELECT
+                        DATE_FORMAT(created_at, '%Y-%m') AS month,
+                        COUNT(*) AS posts,
+                        COALESCE(SUM(applications_count), 0) AS applications
+                     FROM internships
+                     WHERE company_id = ? AND created_at >= ? AND created_at < ?
+                     GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+                     ORDER BY month ASC`,
+                    [companyId, startKey, endKey]
+                );
+            }
+
+            const rows = Array.isArray(trends) ? trends : [];
+            const byMonth = new Map(
+                rows
+                    .filter((row) => row && row.month)
+                    .map((row) => [String(row.month), row])
+            );
+
+            const filled = monthKeys.map((month) => {
+                const row = byMonth.get(month);
+                return {
+                    month,
+                    posts: row ? Number(row.posts) || 0 : 0,
+                    applications: row ? Number(row.applications) || 0 : 0
+                };
+            });
+
+            return res.json({ trends: filled });
+        }
+
+        // Backward-compatible rolling-window monthly trends (?months=...)
+        const requestedMonths = Number.parseInt(String(req.query?.months ?? ''), 10);
+        const monthsWindow = Number.isFinite(requestedMonths)
+            ? Math.min(24, Math.max(1, requestedMonths))
+            : 12;
+
+        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        startMonth.setMonth(startMonth.getMonth() - (monthsWindow - 1));
+        const startMonthKey = `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, '0')}-01`;
+
+        const monthKeys = Array.from({ length: monthsWindow }, (_, index) => {
+            const date = new Date(startMonth.getFullYear(), startMonth.getMonth() + index, 1);
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        });
+
         let trends;
         try {
             trends = await db.query(
-                `SELECT 
+                `SELECT
                     DATE_FORMAT(created_at, '%Y-%m') as month,
                     COUNT(*) as posts,
                     COALESCE(SUM(applications_count), 0) as applications
-                 FROM internships 
-                 WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND is_flagged = 0
+                 FROM internships
+                 WHERE company_id = ? AND created_at >= ? AND is_flagged = 0
                  GROUP BY DATE_FORMAT(created_at, '%Y-%m')
                  ORDER BY month ASC`,
-                [companyId]
+                [companyId, startMonthKey]
             );
         } catch (error) {
             if (!isBadFieldError(error)) throw error;
             trends = await db.query(
-                `SELECT 
+                `SELECT
                     DATE_FORMAT(created_at, '%Y-%m') as month,
                     COUNT(*) as posts,
                     COALESCE(SUM(applications_count), 0) as applications
-                 FROM internships 
-                 WHERE company_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+                 FROM internships
+                 WHERE company_id = ? AND created_at >= ?
                  GROUP BY DATE_FORMAT(created_at, '%Y-%m')
                  ORDER BY month ASC`,
-                [companyId]
+                [companyId, startMonthKey]
             );
         }
 
-        return res.json({ trends });
+        const rows = Array.isArray(trends) ? trends : [];
+        const byMonth = new Map(
+            rows
+                .filter((row) => row && row.month)
+                .map((row) => [String(row.month), row])
+        );
+
+        const filled = monthKeys.map((month) => {
+            const row = byMonth.get(month);
+            return {
+                month,
+                posts: row ? Number(row.posts) || 0 : 0,
+                applications: row ? Number(row.applications) || 0 : 0
+            };
+        });
+
+        return res.json({ trends: filled });
     } catch (error) {
         console.error('Error fetching application trends:', error);
         return res.status(500).json({ message: 'Server error' });

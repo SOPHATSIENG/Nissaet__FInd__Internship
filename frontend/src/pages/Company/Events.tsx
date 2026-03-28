@@ -93,6 +93,7 @@ export default function Events() {
     { value: 'webinar', label: 'Webinar' },
     { value: 'competition', label: 'Competition' },
     { value: 'networking', label: 'Networking' },
+    { value: 'career_fair', label: 'Career Fair' },
     { value: 'other', label: 'Other' }
   ];
 

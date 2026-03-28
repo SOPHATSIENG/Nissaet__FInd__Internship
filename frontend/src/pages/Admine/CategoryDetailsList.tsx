@@ -175,7 +175,7 @@ export const CategoryDetailsList = () => {
   };
 
   const handleFlag = async (id: string) => {
-    const reason = window.prompt('Reason for flagging (optional):') || '';
+    const reason = window.prompt('Reason for banning (optional):') || '';
     setIsSaving(true);
     setErrorMessage('');
     try {
@@ -188,7 +188,7 @@ export const CategoryDetailsList = () => {
         )
       );
     } catch (error: any) {
-      setErrorMessage(error?.message || 'Unable to flag internship.');
+      setErrorMessage(error?.message || 'Unable to ban internship.');
     } finally {
       setIsSaving(false);
     }
@@ -207,7 +207,7 @@ export const CategoryDetailsList = () => {
         )
       );
     } catch (error: any) {
-      setErrorMessage(error?.message || 'Unable to unflag internship.');
+      setErrorMessage(error?.message || 'Unable to unban internship.');
     } finally {
       setIsSaving(false);
     }
@@ -271,7 +271,7 @@ export const CategoryDetailsList = () => {
   }, [internships, filter]);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
+    <div className="admin-page">
       {!categoryId && (
         <div className="rounded-2xl border border-border bg-surface p-6 text-sm text-text-secondary flex items-center justify-between">
           <span>No category selected.</span>
@@ -304,7 +304,7 @@ export const CategoryDetailsList = () => {
             {[
               { id: 'all', label: 'All' },
               { id: 'clean', label: 'Clean' },
-              { id: 'flagged', label: 'Flagged' },
+              { id: 'flagged', label: 'Banned' },
             ].map((item) => (
               <button
                 key={item.id}
@@ -414,7 +414,7 @@ export const CategoryDetailsList = () => {
                 <div className="flex items-center gap-2">
                   {item.is_flagged ? (
                     <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600">
-                      Flagged
+                      Banned
                     </span>
                   ) : null}
                   <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border border-border bg-background text-text-secondary">
@@ -444,7 +444,7 @@ export const CategoryDetailsList = () => {
               )}
               {item.is_flagged && item.flag_reason && (
                 <p className="mt-2 text-xs text-red-600 leading-relaxed">
-                  <span className="font-semibold">Flag reason:</span> {item.flag_reason}
+                  <span className="font-semibold">Ban reason:</span> {item.flag_reason}
                 </p>
               )}
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-text-secondary">
@@ -493,7 +493,7 @@ export const CategoryDetailsList = () => {
                           ? "text-text-secondary/50 cursor-not-allowed"
                           : "text-text-secondary hover:text-red-500 hover:bg-red-50"
                     )}
-                    title="Flag inappropriate content"
+                    title="Ban inappropriate content"
                   >
                     {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Ban className="size-4" />}
                   </button>
@@ -505,7 +505,7 @@ export const CategoryDetailsList = () => {
                         "p-2 rounded-lg border border-border transition-all",
                         isSaving ? "text-emerald-300 cursor-not-allowed" : "text-emerald-600 hover:bg-emerald-50"
                       )}
-                      title="Unflag internship"
+                      title="Unban internship"
                     >
                       {isSaving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle className="size-4" />}
                     </button>

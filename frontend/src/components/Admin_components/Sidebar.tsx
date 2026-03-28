@@ -40,7 +40,7 @@ export const Sidebar = ({ collapsed = false, onToggle }: SidebarProps) => {
   const navBase =
     "flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-semibold transition-all duration-200 group border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40";
   const navActive =
-    "bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(236,254,255,0.95))] text-blue-700 border-blue-200 shadow-[0_12px_30px_-22px_rgba(37,99,235,0.65)]";
+    "bg-[linear-gradient(135deg,rgba(241,245,249,0.95),rgba(236,254,255,0.7))] text-blue-700 border-blue-200 shadow-[0_12px_30px_-22px_rgba(37,99,235,0.55)]";
   const navInactive =
     "text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-200";
 
@@ -53,7 +53,7 @@ export const Sidebar = ({ collapsed = false, onToggle }: SidebarProps) => {
     >
       <div className={cn("relative px-6 pt-7 pb-6 border-b border-slate-200/70", collapsed && "px-4")}>
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-          <div className="size-10 rounded-xl bg-[linear-gradient(135deg,#0f3b68,#0b6fa4_55%,#69b6dc)] flex items-center justify-center shadow-sm shadow-blue-900/20">
+          <div className="size-10 rounded-xl bg-[linear-gradient(135deg,#153554,#2c6a9b_55%,#8fc4df)] flex items-center justify-center shadow-sm shadow-blue-900/15">
             <ShieldCheck className="text-white size-5" />
           </div>
           {!collapsed && (
@@ -67,7 +67,7 @@ export const Sidebar = ({ collapsed = false, onToggle }: SidebarProps) => {
           type="button"
           onClick={onToggle}
             className={cn(
-              "hidden lg:flex absolute top-7 right-5 size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:text-blue-700 hover:border-blue-200 hover:bg-blue-50/60 transition",
+              "hidden lg:flex absolute top-7 right-5 size-9 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary transition hover:text-primary hover:border-primary/30 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25",
               collapsed && "right-4"
             )}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}

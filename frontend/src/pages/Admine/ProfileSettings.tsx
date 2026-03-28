@@ -347,7 +347,7 @@ export const ProfileSettings = () => {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
+    <div className="admin-page">
       {isLoading && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
           Loading profile...

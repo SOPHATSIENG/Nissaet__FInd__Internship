@@ -14,6 +14,11 @@ interface HeaderNotificationItem {
   created_at: string;
 }
 
+const replaceFlaggedText = (value?: string | null) => {
+  if (!value) return '';
+  return value.replace(/\bflagged\b/gi, 'Banned');
+};
+
 export default function Layout() {
   const location = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
@@ -336,8 +341,8 @@ export default function Layout() {
                                 >
                                   <div className="flex items-start justify-between gap-3">
                                     <div>
-                                      <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-                                      <p className="text-xs text-slate-600 mt-1">{item.message}</p>
+                                      <p className="text-sm font-semibold text-slate-800">{replaceFlaggedText(item.title)}</p>
+                                      <p className="text-xs text-slate-600 mt-1">{replaceFlaggedText(item.message)}</p>
                                       <p className="text-[11px] text-slate-400 mt-1">
                                         {formatNotificationTime(item.created_at)}
                                       </p>

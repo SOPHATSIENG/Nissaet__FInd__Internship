@@ -374,7 +374,7 @@ export const UserManagement = () => {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-8 overflow-y-auto no-scrollbar">
+    <div className="admin-page">
       <div className="flex justify-between items-end">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 flex-wrap">

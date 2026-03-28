@@ -44,6 +44,11 @@ const mapType = (value?: string) => {
   return 'info';
 };
 
+const replaceFlaggedText = (value?: string | null) => {
+  if (!value) return '';
+  return value.replace(/\bflagged\b/gi, 'Banned');
+};
+
 export const Header: React.FC<HeaderProps> = ({ title, children }) => {
   const { settings } = useProfile();
   const navigate = useNavigate();
@@ -74,8 +79,8 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
         const items = Array.isArray(data?.activity) ? data.activity : [];
         const mapped = items.map((item: any, idx: number) => ({
           id: `${item.title || 'activity'}-${item.time || idx}`,
-          title: item.title || 'Activity',
-          message: item.desc || '',
+          title: replaceFlaggedText(item.title || 'Activity'),
+          message: replaceFlaggedText(item.desc || ''),
           time: timeAgo(item.time),
           read: false,
           type: mapType(item.type),
@@ -89,8 +94,8 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
       const items = Array.isArray(data?.notifications) ? data.notifications : Array.isArray(data?.items) ? data.items : [];
       const mapped = items.map((item: any) => ({
         id: item.id,
-        title: item.title || 'Notification',
-        message: item.message || '',
+        title: replaceFlaggedText(item.title || 'Notification'),
+        message: replaceFlaggedText(item.message || ''),
         time: timeAgo(item.created_at),
         read: Boolean(item.is_read),
         type: mapType(item.type),
@@ -158,8 +163,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
   };
 
   return (
-    <header className="sticky top-0 z-10 flex h-[72px] w-full items-center justify-between border-b border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,249,252,0.94))] px-8 backdrop-blur-xl relative">
-      <div className="absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_38%),radial-gradient(circle_at_top_right,_rgba(20,184,166,0.14),_transparent_34%)]" />
+    <header className="sticky top-0 z-10 flex h-[72px] w-full items-center justify-between border-b border-border bg-surface px-6 sm:px-8 lg:px-10 relative">
       <div className="flex items-center gap-4">
         <h2 className="text-xl font-semibold text-slate-900 tracking-tight">{title}</h2>
       </div>
@@ -182,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                 className={cn(
                   "relative flex items-center justify-center size-11 rounded-2xl transition-all cursor-pointer border group bg-white/85",
                   showNotifications
-                    ? "bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(236,254,255,0.95))] text-blue-700 border-blue-200 shadow-[0_12px_30px_-22px_rgba(37,99,235,0.65)]"
+                    ? "bg-[linear-gradient(135deg,rgba(241,245,249,0.95),rgba(236,254,255,0.7))] text-blue-700 border-blue-200 shadow-[0_12px_30px_-22px_rgba(37,99,235,0.55)]"
                     : "hover:-translate-y-0.5 hover:text-blue-600 hover:border-blue-200 text-slate-500"
                 )}
               >
@@ -201,7 +205,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                     transition={{ duration: 0.2 }}
                     className="absolute right-0 mt-4 w-96 rounded-3xl border border-slate-200/70 bg-white shadow-2xl overflow-hidden z-50 origin-top-right"
                   >
-                    <div className="p-4 border-b border-slate-200/70 flex items-center justify-between bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(240,253,250,0.8))] backdrop-blur-sm">
+                    <div className="p-4 border-b border-slate-200/70 flex items-center justify-between bg-[linear-gradient(135deg,rgba(241,245,249,0.95),rgba(240,253,250,0.7))] backdrop-blur-sm">
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-slate-900">Notifications</h3>
                         {unreadCount > 0 && (

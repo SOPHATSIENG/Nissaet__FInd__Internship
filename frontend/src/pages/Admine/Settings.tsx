@@ -189,10 +189,19 @@ export const SettingsPage = () => {
     try {
       setIsExporting(true);
       setShowExportModal(false);
-      const response = await api.adminExportData();
+      const response = await api.adminExportDataFile();
+      const fileUrl = URL.createObjectURL(response.blob);
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = response.filename || `nissaet-export-${new Date().toISOString().slice(0, 19)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(fileUrl);
+
       setSettings(prev => ({
         ...prev,
-        lastBackupAt: response?.lastBackupAt || new Date().toISOString(),
+        lastBackupAt: response?.exportedAt || new Date().toISOString(),
       }));
       setActionSuccess({ type: 'export', message: 'System data exported successfully!' });
       setTimeout(() => setActionSuccess(null), 4000);

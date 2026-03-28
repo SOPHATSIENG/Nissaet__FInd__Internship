@@ -83,6 +83,61 @@ const buildInClause = (columnName, items) => {
     };
 };
 
+const normalizeCategoryName = (value) => {
+    if (!value) return '';
+    return String(value).trim().replace(/\s+/g, ' ');
+};
+
+const ensureCategoriesForInternship = async (companyId, skills) => {
+    try {
+        if (companyId) {
+            const [company] = await db.query('SELECT industry FROM companies WHERE id = ? LIMIT 1', [companyId]);
+            const industryName = normalizeCategoryName(company?.industry);
+            if (industryName) {
+                await db.query('INSERT IGNORE INTO categories (name, is_active) VALUES (?, 1)', [industryName]);
+            }
+        }
+
+        if (Array.isArray(skills) && skills.length > 0) {
+            const skillIds = skills
+                .map((skill) => skill?.id || skill?.skill_id)
+                .filter((value) => Number.isFinite(Number(value)))
+                .map((value) => Number(value));
+
+            const skillNames = skills
+                .map((skill) => (typeof skill === 'string' ? skill : skill?.name))
+                .filter((value) => typeof value === 'string' && String(value).trim().length > 0)
+                .map((value) => String(value).trim());
+
+            let categories = [];
+
+            if (skillIds.length > 0) {
+                const placeholders = skillIds.map(() => '?').join(', ');
+                categories = categories.concat(
+                    await db.query(`SELECT DISTINCT category AS name FROM skills WHERE id IN (${placeholders})`, skillIds)
+                );
+            }
+
+            if (skillNames.length > 0) {
+                const placeholders = skillNames.map(() => '?').join(', ');
+                categories = categories.concat(
+                    await db.query(`SELECT DISTINCT category AS name FROM skills WHERE name IN (${placeholders})`, skillNames)
+                );
+            }
+
+            const uniqueNames = Array.from(
+                new Set(categories.map((row) => normalizeCategoryName(row.name)).filter(Boolean))
+            );
+
+            for (const name of uniqueNames) {
+                await db.query('INSERT IGNORE INTO categories (name, is_active) VALUES (?, 1)', [name]);
+            }
+        }
+    } catch (error) {
+        console.error('Error ensuring categories for internship:', error);
+    }
+};
+
 /**
  * Get all internships with dynamic filtering and search
  */
@@ -571,6 +626,8 @@ const createInternship = async (req, res) => {
 
         const internshipId = result.insertId;
 
+        await ensureCategoriesForInternship(companyId, skills);
+
         // Skills insertion
         if (Array.isArray(skills)) {
             for (const skill of skills) {
@@ -631,6 +688,8 @@ const updateInternship = async (req, res) => {
             end_date,
             skills = []
         } = req.body;
+
+        await ensureCategoriesForInternship(companyId, skills);
 
         const today = new Date();
         const deadlineDate = application_deadline ? new Date(application_deadline) : null;
@@ -1490,14 +1549,14 @@ const getDashboardStats = async (req, res) => {
                     a.student_id,
                     u.full_name as name, 
                     i.title as role, 
-                    a.created_at as time,
+                    a.applied_at as time,
                     u.profile_image
                  FROM applications a
                  JOIN students s ON a.student_id = s.id
                  JOIN users u ON s.user_id = u.id
                  JOIN internships i ON a.internship_id = i.id
                  WHERE i.company_id = ?
-                 ORDER BY a.created_at DESC
+                 ORDER BY a.applied_at DESC
                  LIMIT 3`,
                 [companyId]
             );

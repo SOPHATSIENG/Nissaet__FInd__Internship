@@ -86,7 +86,11 @@ export const Reports = () => {
   };
   
   const accentHex = colorMap[settings.accentColor] || colorMap.emerald;
-  const COLORS = [accentHex, '#3b82f6', '#8b5cf6', '#f59e0b'];
+  const BASE_COLORS = ['#2563eb', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#10b981', '#e11d48'];
+  const COLORS = useMemo(() => {
+    const filtered = BASE_COLORS.filter((color) => color.toLowerCase() !== accentHex.toLowerCase());
+    return [accentHex, ...filtered];
+  }, [accentHex]);
 
   useEffect(() => {
     let isActive = true;
@@ -146,9 +150,27 @@ export const Reports = () => {
     ? reportData.growth
     : [{ name: 'No data', students: 0, companies: 0, placements: 0 }];
 
-  const placementData = reportData?.industry?.length
-    ? reportData.industry
-    : [];
+  const placementData = useMemo(() => {
+    const raw = reportData?.industry || [];
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+
+    const aggregated = new Map<string, { name: string; value: number }>();
+
+    raw.forEach((item: any) => {
+      const rawName = String(item?.name || item?.industry || '').trim();
+      if (!rawName) return;
+      const key = rawName.toLowerCase();
+      const value = Number(item?.value || item?.count || 0);
+      const existing = aggregated.get(key);
+      if (existing) {
+        existing.value += value;
+      } else {
+        aggregated.set(key, { name: rawName, value });
+      }
+    });
+
+    return Array.from(aggregated.values()).sort((a, b) => b.value - a.value);
+  }, [reportData?.industry]);
   const placementTotal = useMemo(
     () => placementData.reduce((sum, row) => sum + (row.value || 0), 0),
     [placementData]

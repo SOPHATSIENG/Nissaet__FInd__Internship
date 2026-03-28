@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Ban, ArrowLeft, Briefcase, CalendarClock, CheckCircle, Edit2, Globe, MapPin, RefreshCw, Trash2, Users } from 'lucide-react';
+import { Ban, ArrowLeft, Briefcase, CalendarClock, CheckCircle, Edit2, Globe, MapPin, RefreshCw, Trash2, Users, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../api/axios';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,43 @@ const formatCurrency = (value: number | string | null | undefined, currency?: st
   return `${currency || 'USD'} ${numberValue.toFixed(0)}`;
 };
 
+const normalizeInternships = (payload: any) => {
+  const list =
+    payload?.internships ||
+    payload?.items ||
+    payload?.data?.internships ||
+    payload?.data?.items ||
+    (Array.isArray(payload) ? payload : []);
+
+  if (!Array.isArray(list)) return [];
+
+  return list.map((item: any) => {
+    const company = item?.company || item?.company_profile || {};
+    return {
+      ...item,
+      company_name:
+        item?.company_name ||
+        company?.company_name ||
+        company?.name ||
+        item?.company?.name ||
+        item?.company?.company_name ||
+        item?.company_name ||
+        item?.company ||
+        '',
+      company_logo:
+        item?.company_logo ||
+        company?.logo ||
+        company?.company_logo ||
+        item?.company?.logo ||
+        item?.company?.company_logo ||
+        '',
+      company_industry: item?.company_industry || company?.industry || '',
+      company_location: item?.company_location || company?.location || '',
+      company_website: item?.company_website || company?.website || '',
+    };
+  });
+};
+
 export const CategoryDetailsList = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -31,30 +68,51 @@ export const CategoryDetailsList = () => {
   const [formState, setFormState] = useState<any>(null);
   const [filter, setFilter] = useState<'all' | 'flagged' | 'clean'>('all');
 
-  const loadCategory = async () => {
+  const loadCategory = async (options?: { withMeta?: boolean; showLoading?: boolean }) => {
     if (!categoryId) return;
-    setIsLoading(true);
+    const { withMeta = true, showLoading = true } = options || {};
+
+    if (showLoading) {
+      setIsLoading(true);
+    } else {
+      setIsSaving(true);
+    }
+
     setErrorMessage('');
     try {
-      const [categoryRes, internshipsRes] = await Promise.all([
-        api.adminGetCategories(),
-        api.adminGetCategoryInternships(categoryId),
-      ]);
+      if (withMeta) {
+        const [categoryRes, internshipsRes] = await Promise.all([
+          api.adminGetCategories(),
+          api.adminGetCategoryInternships(categoryId, { limit: 1000, page: 1 }),
+        ]);
 
-      const categories = categoryRes?.categories || [];
-      const selected = categories.find((cat: any) => String(cat.id) === String(categoryId));
-      setCategoryName(selected?.name || 'Category');
-
-      setInternships(internshipsRes?.internships || []);
+        const categories = categoryRes?.categories || [];
+        const selected = categories.find((cat: any) => String(cat.id) === String(categoryId));
+        if (!selected) {
+          setCategoryName('Category');
+          setInternships([]);
+          setErrorMessage('This category no longer exists. It may have been deleted.');
+          return;
+        }
+        setCategoryName(selected?.name || 'Category');
+        setInternships(normalizeInternships(internshipsRes));
+      } else {
+        const internshipsRes = await api.adminGetCategoryInternships(categoryId, { limit: 1000, page: 1 });
+        setInternships(normalizeInternships(internshipsRes));
+      }
     } catch (error: any) {
       setErrorMessage(error?.message || 'Unable to load internships.');
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      } else {
+        setIsSaving(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadCategory();
+    loadCategory({ withMeta: true, showLoading: true });
   }, [categoryId]);
 
   const openEdit = async (id: string) => {
@@ -98,8 +156,17 @@ export const CategoryDetailsList = () => {
     setIsSaving(true);
     setErrorMessage('');
     try {
-      await api.deleteInternship(id);
-      await loadCategory();
+      try {
+        await api.adminDeleteInternship(id);
+      } catch (error: any) {
+        // Fallback to shared internship delete endpoint (admin is authorized there too)
+        await api.deleteInternship(id);
+      }
+      setInternships((prev) => prev.filter((item) => String(item.id) !== String(id)));
+      if (editingInternship && String(editingInternship.id) === String(id)) {
+        setEditingInternship(null);
+        setFormState(null);
+      }
     } catch (error: any) {
       setErrorMessage(error?.message || 'Unable to delete internship.');
     } finally {
@@ -113,7 +180,13 @@ export const CategoryDetailsList = () => {
     setErrorMessage('');
     try {
       await api.adminFlagInternship(id, { reason });
-      await loadCategory();
+      setInternships((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(id)
+            ? { ...item, is_flagged: true, flag_reason: reason || item.flag_reason }
+            : item
+        )
+      );
     } catch (error: any) {
       setErrorMessage(error?.message || 'Unable to flag internship.');
     } finally {
@@ -126,7 +199,13 @@ export const CategoryDetailsList = () => {
     setErrorMessage('');
     try {
       await api.adminUnflagInternship(id);
-      await loadCategory();
+      setInternships((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(id)
+            ? { ...item, is_flagged: false, flag_reason: '' }
+            : item
+        )
+      );
     } catch (error: any) {
       setErrorMessage(error?.message || 'Unable to unflag internship.');
     } finally {
@@ -144,7 +223,7 @@ export const CategoryDetailsList = () => {
         ? formState.skills.split(',').map((s: string) => s.trim()).filter(Boolean)
         : [];
 
-      await api.adminUpdateInternship(editingInternship.id, {
+      const payload = {
         title: formState.title,
         description: formState.description,
         requirements: formState.requirements,
@@ -158,11 +237,26 @@ export const CategoryDetailsList = () => {
         start_date: formState.start_date || null,
         end_date: formState.end_date || null,
         skills,
-      });
+      };
+
+      const res = await api.adminUpdateInternship(editingInternship.id, payload);
+      const updatedFromApi = res?.internship || res?.data?.internship || null;
+      const updatedInternship = updatedFromApi || {
+        ...editingInternship,
+        ...payload,
+        skills: payload.skills,
+      };
+
+      setInternships((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(editingInternship.id)
+            ? { ...item, ...updatedInternship }
+            : item
+        )
+      );
 
       setEditingInternship(null);
       setFormState(null);
-      await loadCategory();
     } catch (error: any) {
       setErrorMessage(error?.message || 'Unable to update internship.');
     } finally {
@@ -178,6 +272,17 @@ export const CategoryDetailsList = () => {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
+      {!categoryId && (
+        <div className="rounded-2xl border border-border bg-surface p-6 text-sm text-text-secondary flex items-center justify-between">
+          <span>No category selected.</span>
+          <button
+            onClick={() => navigate('/admin/categories')}
+            className="px-4 py-2 rounded-xl text-xs font-bold text-primary border border-primary/20 hover:bg-primary/5 transition-colors"
+          >
+            Back to Categories
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-2">
           <button
@@ -216,11 +321,15 @@ export const CategoryDetailsList = () => {
             ))}
           </div>
           <button
-            onClick={loadCategory}
-            className="flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-bold text-text-secondary hover:text-primary hover:border-primary transition-all"
+            onClick={() => loadCategory({ withMeta: false, showLoading: false })}
+            disabled={isSaving}
+            className={cn(
+              "flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-bold transition-all",
+              isSaving ? "text-text-secondary/50 cursor-not-allowed" : "text-text-secondary hover:text-primary hover:border-primary"
+            )}
           >
-            <RefreshCw className="size-4" />
-            Refresh
+            <RefreshCw className={cn("size-4", isSaving && "animate-spin")} />
+            {isSaving ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -228,6 +337,12 @@ export const CategoryDetailsList = () => {
       {errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {errorMessage}
+        </div>
+      )}
+      {isSaving && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 flex items-center gap-2">
+          <Loader2 className="size-4 animate-spin" />
+          Processing request...
         </div>
       )}
 
@@ -247,8 +362,22 @@ export const CategoryDetailsList = () => {
             <Briefcase className="size-8 text-text-secondary opacity-20" />
           </div>
           <div className="flex flex-col gap-1">
-            <h3 className="text-lg font-bold text-text-primary">No internships found</h3>
-            <p className="text-sm text-text-secondary">Try again later or update company categories.</p>
+            <h3 className="text-lg font-bold text-text-primary">
+              {errorMessage ? 'Category not found' : 'No internships found'}
+            </h3>
+            <p className="text-sm text-text-secondary">
+              {errorMessage
+                ? 'Return to Category Management to pick another category.'
+                : 'Try again later or update company categories.'}
+            </p>
+            {errorMessage && (
+              <button
+                onClick={() => navigate('/admin/categories')}
+                className="mt-3 inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs font-bold text-primary border border-primary/20 hover:bg-primary/5 transition-colors"
+              >
+                Back to Categories
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -355,37 +484,51 @@ export const CategoryDetailsList = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleFlag(item.id)}
-                    disabled={!!item.is_flagged}
+                    disabled={!!item.is_flagged || isSaving}
                     className={cn(
                       "p-2 rounded-lg border border-border transition-all",
                       item.is_flagged
                         ? "text-red-300 bg-red-50 cursor-not-allowed"
-                        : "text-text-secondary hover:text-red-500 hover:bg-red-50"
+                        : isSaving
+                          ? "text-text-secondary/50 cursor-not-allowed"
+                          : "text-text-secondary hover:text-red-500 hover:bg-red-50"
                     )}
                     title="Flag inappropriate content"
                   >
-                    <Ban className="size-4" />
+                    {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Ban className="size-4" />}
                   </button>
                   {item.is_flagged && (
                     <button
                       onClick={() => handleUnflag(item.id)}
-                      className="p-2 rounded-lg border border-border text-emerald-600 hover:bg-emerald-50 transition-all"
+                      disabled={isSaving}
+                      className={cn(
+                        "p-2 rounded-lg border border-border transition-all",
+                        isSaving ? "text-emerald-300 cursor-not-allowed" : "text-emerald-600 hover:bg-emerald-50"
+                      )}
                       title="Unflag internship"
                     >
-                      <CheckCircle className="size-4" />
+                      {isSaving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle className="size-4" />}
                     </button>
                   )}
                   <button
                     onClick={() => openEdit(item.id)}
-                    className="p-2 rounded-lg border border-border text-text-secondary hover:text-primary hover:bg-primary/5 transition-all"
+                    disabled={isSaving}
+                    className={cn(
+                      "p-2 rounded-lg border border-border transition-all",
+                      isSaving ? "text-text-secondary/50 cursor-not-allowed" : "text-text-secondary hover:text-primary hover:bg-primary/5"
+                    )}
                   >
-                    <Edit2 className="size-4" />
+                    {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Edit2 className="size-4" />}
                   </button>
                   <button
                     onClick={() => handleDelete(item.id)}
-                    className="p-2 rounded-lg border border-border text-text-secondary hover:text-red-500 hover:bg-red-50 transition-all"
+                    disabled={isSaving}
+                    className={cn(
+                      "p-2 rounded-lg border border-border transition-all",
+                      isSaving ? "text-text-secondary/50 cursor-not-allowed" : "text-text-secondary hover:text-red-500 hover:bg-red-50"
+                    )}
                   >
-                    <Trash2 className="size-4" />
+                    {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
                   </button>
                 </div>
               </div>
@@ -425,9 +568,13 @@ export const CategoryDetailsList = () => {
                     setEditingInternship(null);
                     setFormState(null);
                   }}
-                  className="p-2 text-text-secondary hover:text-text-primary hover:bg-background rounded-lg transition-all"
+                  disabled={isSaving}
+                  className={cn(
+                    "p-2 rounded-lg transition-all",
+                    isSaving ? "text-text-secondary/50 cursor-not-allowed" : "text-text-secondary hover:text-text-primary hover:bg-background"
+                  )}
                 >
-                  ✕
+                  X
                 </button>
               </div>
 
@@ -597,7 +744,11 @@ export const CategoryDetailsList = () => {
                       setEditingInternship(null);
                       setFormState(null);
                     }}
-                    className="px-6 py-2.5 rounded-xl text-sm font-bold text-text-secondary hover:bg-background transition-colors"
+                    disabled={isSaving}
+                    className={cn(
+                      "px-6 py-2.5 rounded-xl text-sm font-bold transition-colors",
+                      isSaving ? "text-text-secondary/50 cursor-not-allowed" : "text-text-secondary hover:bg-background"
+                    )}
                   >
                     Cancel
                   </button>

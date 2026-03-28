@@ -158,9 +158,10 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
   };
 
   return (
-    <header className="sticky top-0 z-10 flex h-20 w-full items-center justify-between border-b border-gray-200 bg-white px-8 backdrop-blur-md">
+    <header className="sticky top-0 z-10 flex h-[72px] w-full items-center justify-between border-b border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,249,252,0.94))] px-8 backdrop-blur-xl relative">
+      <div className="absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_38%),radial-gradient(circle_at_top_right,_rgba(20,184,166,0.14),_transparent_34%)]" />
       <div className="flex items-center gap-4">
-        <h2 className="text-2xl font-black text-text-primary tracking-tight">{title}</h2>
+        <h2 className="text-xl font-semibold text-slate-900 tracking-tight">{title}</h2>
       </div>
       <div className="flex items-center gap-6">
         {children || (
@@ -179,10 +180,10 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
               <button 
                 onClick={() => setShowNotifications(!showNotifications)}
                 className={cn(
-                  "relative flex items-center justify-center size-11 rounded-2xl transition-all cursor-pointer border group",
+                  "relative flex items-center justify-center size-11 rounded-2xl transition-all cursor-pointer border group bg-white/85",
                   showNotifications
-                    ? "bg-blue-100 text-blue-600 border-blue-200 shadow-sm shadow-blue-600/20"
-                    : "hover:bg-white hover:text-blue-600 hover:border-gray-300 hover:shadow-md hover:shadow-black/5 hover:scale-105 text-gray-500"
+                    ? "bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(236,254,255,0.95))] text-blue-700 border-blue-200 shadow-[0_12px_30px_-22px_rgba(37,99,235,0.65)]"
+                    : "hover:-translate-y-0.5 hover:text-blue-600 hover:border-blue-200 text-slate-500"
                 )}
               >
                 <Bell className="size-6" />
@@ -198,13 +199,13 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute right-0 mt-4 w-96 rounded-3xl border border-border bg-surface shadow-2xl overflow-hidden z-50 origin-top-right"
+                    className="absolute right-0 mt-4 w-96 rounded-3xl border border-slate-200/70 bg-white shadow-2xl overflow-hidden z-50 origin-top-right"
                   >
-                    <div className="p-4 border-b border-border flex items-center justify-between bg-background/50 backdrop-blur-sm">
+                    <div className="p-4 border-b border-slate-200/70 flex items-center justify-between bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(240,253,250,0.8))] backdrop-blur-sm">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-black text-text-primary">Notifications</h3>
+                        <h3 className="font-semibold text-slate-900">Notifications</h3>
                         {unreadCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black border border-primary/20">
+                          <span className="px-2 py-0.5 rounded-full bg-blue-600/10 text-blue-700 text-[10px] font-semibold border border-blue-200">
                             {unreadCount} NEW
                           </span>
                         )}
@@ -213,7 +214,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                         {unreadCount > 0 && (
                           <button 
                             onClick={markAllAsRead}
-                            className="text-xs font-bold text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+                            className="text-xs font-semibold text-blue-700 hover:text-blue-600 transition-colors flex items-center gap-1"
                             title="Mark all as read"
                           >
                             <Check className="size-3" /> Mark read
@@ -222,7 +223,7 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                         {notifications.length > 0 && (
                           <button 
                             onClick={clearAllNotifications}
-                            className="text-xs font-bold text-text-secondary hover:text-red-500 transition-colors flex items-center gap-1 ml-2"
+                            className="text-xs font-semibold text-slate-500 hover:text-red-600 transition-colors flex items-center gap-1 ml-2"
                             title="Clear all notifications"
                           >
                             <Trash2 className="size-3" /> Clear all
@@ -234,11 +235,11 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                     <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
                       {notifications.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                          <div className="size-12 rounded-full bg-background border border-border flex items-center justify-center mb-3">
-                            <Bell className="size-6 text-text-secondary/50" />
+                          <div className="size-12 rounded-full bg-slate-50 border border-slate-200/70 flex items-center justify-center mb-3">
+                            <Bell className="size-6 text-slate-400" />
                           </div>
-                          <p className="text-sm font-bold text-text-primary">No notifications</p>
-                          <p className="text-xs text-text-secondary mt-1">You're all caught up!</p>
+                          <p className="text-sm font-semibold text-slate-900">No notifications</p>
+                          <p className="text-xs text-slate-500 mt-1">You're all caught up!</p>
                         </div>
                       ) : (
                         <div className="flex flex-col">
@@ -246,8 +247,8 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                             <div 
                               key={notification.id}
                               className={cn(
-                                "relative p-4 border-b border-border last:border-0 hover:bg-background/50 transition-colors group",
-                                !notification.read && "bg-primary/[0.02]"
+                                "relative p-4 border-b border-slate-200/70 last:border-0 hover:bg-slate-50 transition-colors group",
+                                !notification.read && "bg-blue-600/[0.03]"
                               )}
                               onClick={() => {
                                 if (!notification.read) markAsRead(notification.id);
@@ -266,45 +267,45 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-start justify-between gap-2">
-                                    <p className={cn("text-sm font-bold truncate", !notification.read ? "text-text-primary" : "text-text-secondary")}>
-                                      {notification.title}
-                                    </p>
-                                    <span className="text-[10px] font-medium text-text-secondary shrink-0 flex items-center gap-1">
-                                      <Clock className="size-3" /> {notification.time}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-text-secondary mt-0.5 line-clamp-2 leading-relaxed">
-                                    {notification.message}
+                                  <p className={cn("text-sm font-semibold truncate", !notification.read ? "text-slate-900" : "text-slate-600")}>
+                                    {notification.title}
                                   </p>
+                                  <span className="text-[10px] font-medium text-slate-500 shrink-0 flex items-center gap-1">
+                                    <Clock className="size-3" /> {notification.time}
+                                  </span>
                                 </div>
+                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
+                                  {notification.message}
+                                </p>
                               </div>
+                            </div>
                               
-                              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {!notification.read && (
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); markAsRead(notification.id); }}
-                                    className="p-1.5 rounded-lg hover:bg-background text-primary hover:text-primary/80 transition-colors"
-                                    title="Mark as read"
-                                  >
-                                    <div className="size-1.5 rounded-full bg-primary" />
-                                  </button>
-                                )}
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {!notification.read && (
                                 <button 
-                                  onClick={(e) => { e.stopPropagation(); deleteNotification(notification.id); }}
-                                  className="p-1.5 rounded-lg hover:bg-red-50 text-text-secondary hover:text-red-500 transition-colors"
-                                  title="Delete"
+                                  onClick={(e) => { e.stopPropagation(); markAsRead(notification.id); }}
+                                  className="p-1.5 rounded-lg hover:bg-slate-50 text-blue-700 transition-colors"
+                                  title="Mark as read"
                                 >
-                                  <X className="size-3" />
+                                  <div className="size-1.5 rounded-full bg-blue-600" />
                                 </button>
-                              </div>
+                              )}
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); deleteNotification(notification.id); }}
+                                className="p-1.5 rounded-lg hover:bg-red-50 text-slate-500 hover:text-red-600 transition-colors"
+                                title="Delete"
+                              >
+                                <X className="size-3" />
+                              </button>
+                            </div>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
                     
-                    <div className="p-3 border-t border-border bg-background/50 backdrop-blur-sm text-center">
-                      <button className="text-xs font-bold text-text-secondary hover:text-primary transition-colors">
+                    <div className="p-3 border-t border-slate-200/70 bg-slate-50/70 backdrop-blur-sm text-center">
+                      <button className="text-xs font-semibold text-slate-600 hover:text-blue-600 transition-colors">
                         View All Activity
                       </button>
                     </div>
@@ -315,17 +316,17 @@ export const Header: React.FC<HeaderProps> = ({ title, children }) => {
           </>
         )}
         
-        <div className="h-8 w-px bg-border mx-2"></div>
+        <div className="h-8 w-px bg-slate-200/70 mx-2"></div>
 
         <div 
-          className="flex items-center gap-3 cursor-pointer hover:bg-white p-2 -m-2 rounded-xl transition-all hover:shadow-md hover:shadow-black/5 hover:scale-[1.02]"
+          className="flex items-center gap-3 cursor-pointer hover:bg-white/70 p-2 -m-2 rounded-xl transition-all hover:shadow-sm hover:shadow-black/5"
           onClick={() => navigate('/admin/profile')}
         >
           <div className="flex flex-col items-end">
-            <span className="text-sm font-bold text-text-primary">{settings.name || 'Sophea Chan'}</span>
-            <span className="text-[10px] font-black text-primary uppercase tracking-wider">{settings.role || 'Super Admin'}</span>
+            <span className="text-sm font-semibold text-slate-900">{settings.name || 'Sophea Chan'}</span>
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.2em]">{settings.role || 'Super Admin'}</span>
           </div>
-          <div className="size-11 rounded-2xl bg-primary/10 flex items-center justify-center border-2 border-primary/20 text-primary shadow-sm shadow-primary/5 overflow-hidden">
+          <div className="size-11 rounded-2xl bg-white/90 flex items-center justify-center border border-slate-200 text-slate-700 shadow-sm overflow-hidden">
             {settings.avatar ? (
               <img src={settings.avatar} alt="Profile" className="w-full h-full object-cover" />
             ) : (

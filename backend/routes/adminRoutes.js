@@ -33,6 +33,7 @@ router.delete('/skills/:id', adminController.deleteSkill);
 router.get('/skills/:id/internships', adminController.getSkillInternships);
 router.get('/internships/:id', adminController.getInternshipByIdForAdmin);
 router.put('/internships/:id', adminController.updateInternshipForAdmin);
+router.delete('/internships/:id', adminController.deleteInternshipForAdmin);
 router.put('/internships/:id/flag', adminController.flagInternshipForAdmin);
 router.put('/internships/:id/unflag', adminController.unflagInternshipForAdmin);
 router.get('/job-types', adminController.getJobTypes);

@@ -208,6 +208,13 @@ const PageWrapper = ({ children }) => {
 
 const AdminLayout = () => {
   const location = useLocation();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem('adminSidebarCollapsed');
+    if (saved === 'true') setIsSidebarCollapsed(true);
+  }, []);
 
   const getTitle = (path) => {
     if (path.includes('/admin/users')) return 'User Management';
@@ -224,8 +231,19 @@ const AdminLayout = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background-light">
-      <AdminSidebar />
-      <main className="flex flex-1 flex-col ml-72 overflow-hidden">
+      <AdminSidebar
+        collapsed={isSidebarCollapsed}
+        onToggle={() =>
+          setIsSidebarCollapsed((prev) => {
+            const next = !prev;
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem('adminSidebarCollapsed', String(next));
+            }
+            return next;
+          })
+        }
+      />
+      <main className={`flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
         <AdminHeader title={getTitle(location.pathname)} />
         <div className="flex-1 overflow-y-auto no-scrollbar">
           <PageWrapper>

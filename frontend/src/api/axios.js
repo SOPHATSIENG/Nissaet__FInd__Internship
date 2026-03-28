@@ -579,6 +579,11 @@ export const api = {
     return request('/admin/job-types', { auth: true });
   },
 
+  // Public branding endpoint (logo/platform name)
+  getBranding() {
+    return request('/branding', { auth: false });
+  },
+
   companyCreateVerification(payload) {
     return request('/verification/company', { method: 'POST', auth: true, body: payload });
   },

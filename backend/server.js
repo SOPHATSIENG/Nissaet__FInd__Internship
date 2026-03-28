@@ -49,6 +49,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const postRoutes = require('./routes/postRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const brandingRoutes = require('./routes/brandingRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/internships', internshipRoutes);
@@ -60,6 +61,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/branding', brandingRoutes);
 
 const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 5001;
 const PORT_RETRY_COUNT = Number.parseInt(process.env.PORT_RETRY_COUNT, 10) || 10;

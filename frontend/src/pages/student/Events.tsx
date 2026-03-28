@@ -61,7 +61,6 @@ export default function Events() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
-  const [featuredEvents, setFeaturedEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -93,27 +92,23 @@ export default function Events() {
 
   useEffect(() => {
     fetchEvents();
-    fetchFeaturedEvents();
   }, []);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/events/upcoming', { auth: false });
-      setEvents(response.data);
+      const response = await api.getUpcomingEvents();
+      const list = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+          ? response.data
+          : [];
+      setEvents(list);
     } catch (error) {
       console.error('Error fetching events:', error);
+      setEvents([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchFeaturedEvents = async () => {
-    try {
-      const response = await api.get('/events/featured', { auth: false });
-      setFeaturedEvents(response.data);
-    } catch (error) {
-      console.error('Error fetching featured events:', error);
     }
   };
 
@@ -134,20 +129,6 @@ export default function Events() {
       
       // Update the events list to reflect registration
       setEvents((previous) => previous.map(event => 
-        event.id === eventId 
-          ? { 
-              ...event, 
-              current_participants: (event.current_participants || 0) + 1,
-              userRegistration: {
-                id: 0,
-                registration_date: new Date().toISOString(),
-                status: 'registered'
-              }
-            }
-          : event
-      ));
-      
-      setFeaturedEvents((previous) => previous.map(event => 
         event.id === eventId 
           ? { 
               ...event, 
@@ -188,16 +169,6 @@ export default function Events() {
       
       // Update the events list to reflect unregistration
       setEvents((previous) => previous.map(event => 
-        event.id === eventId 
-          ? { 
-              ...event, 
-              current_participants: Math.max(0, (event.current_participants || 0) - 1),
-              userRegistration: undefined
-            }
-          : event
-      ));
-      
-      setFeaturedEvents((previous) => previous.map(event => 
         event.id === eventId 
           ? { 
               ...event, 
@@ -363,7 +334,7 @@ export default function Events() {
             onClick={() => navigate(`/events/${event.id}`)}
             className="flex items-center gap-1 px-4 py-2 text-[#137fec] hover:bg-blue-50 rounded-lg transition-colors text-sm font-medium"
           >
-            View Details
+            Read More
             <ChevronRight className="w-4 h-4" />
           </button>
 
@@ -468,18 +439,6 @@ export default function Events() {
         <div className="mb-6 flex items-center gap-2 p-4 bg-green-50 text-green-700 rounded-lg max-w-2xl mx-auto">
           <CheckCircle className="w-5 h-5" />
           {success}
-        </div>
-      )}
-
-      {/* Featured Events */}
-      {featuredEvents.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Featured Events</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredEvents.map(event => (
-              <EventCard key={event.id} event={event} isFeatured />
-            ))}
-          </div>
         </div>
       )}
 

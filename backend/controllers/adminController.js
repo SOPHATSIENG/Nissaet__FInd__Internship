@@ -1443,6 +1443,23 @@ const getDashboardOverview = async (req, res) => {
             }
         }
 
+        if (!skillsRows || skillsRows.length === 0) {
+            try {
+                skillsRows = await db.query(
+                    `SELECT s.name, COUNT(us.user_id) AS value
+                     FROM skills s
+                     LEFT JOIN user_skills us ON us.skill_id = s.id
+                     GROUP BY s.id, s.name
+                     ORDER BY value DESC, s.name ASC
+                     LIMIT 6`
+                );
+            } catch (error) {
+                if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                    console.error('Dashboard skills fallback query failed:', error);
+                }
+            }
+        }
+
         const skills = skillsRows.map(row => ({
             name: row.name,
             value: Number(row.value || 0)

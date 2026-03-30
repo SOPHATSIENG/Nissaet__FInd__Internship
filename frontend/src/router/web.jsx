@@ -47,7 +47,6 @@ import { Sidebar as AdminSidebar } from '../components/Admin_components/Sidebar'
 import { Header as AdminHeader } from '../components/Admin_components/Header';
 import { Dashboard as AdminDashboard } from '../pages/Admine/Dashboard';
 import { UserManagement } from '../pages/Admine/UserManagement';
-import { TeamManagement } from '../pages/Admine/TeamManagement';
 import { CategoryManagement } from '../pages/Admine/CategoryManagement';
 import { CategoryDetailsList } from '../pages/Admine/CategoryDetailsList';
 import { Reports } from '../pages/Admine/Reports';
@@ -218,7 +217,6 @@ const AdminLayout = () => {
 
   const getTitle = (path) => {
     if (path.includes('/admin/users')) return 'User Management';
-    if (path.includes('/admin/team')) return 'Team Management';
     if (path.includes('/admin/categories/details_list')) return 'Category Details';
     if (path.includes('/admin/categories')) return 'Category Management';
     if (path.includes('/admin/reports')) return 'Platform Reports';
@@ -352,7 +350,6 @@ export default function WebRouter() {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<UserManagement />} />
-          <Route path="team" element={<TeamManagement />} />
           <Route path="categories" element={<CategoryManagement />} />
           <Route path="categories/details_list" element={<CategoryDetailsList />} />
           <Route path="reports" element={<Reports />} />

@@ -194,7 +194,7 @@ export default function StudentProfile() {
                   View Resume
                 </a>
               )}
-              <button className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all">
+              <button className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-sm font-semibold text-white shadow-sm hover:bg-primary-dark transition-all">
                 <MessageSquare size={18} />
                 Contact Student
               </button>
@@ -289,7 +289,7 @@ export default function StudentProfile() {
                 <button
                   type="submit"
                   disabled={userRating === 0}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-sm font-semibold text-white shadow-sm hover:bg-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send size={18} />
                   Submit Rating

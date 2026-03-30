@@ -718,14 +718,14 @@ export default function Applicants() {
             onClick={() => setIsFilterOpen(!isFilterOpen)}
             className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg border transition-all ${
               isFilterOpen
-                ? 'bg-primary text-background-dark border-primary'
+                ? 'bg-primary text-white border-primary'
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
             <Filter size={20} />
             Filters
             {activeFilterCount > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 bg-primary text-background-dark text-[10px] font-bold rounded-full">
+              <span className="ml-1 px-1.5 py-0.5 bg-primary text-white text-[10px] font-bold rounded-full">
                 {activeFilterCount}
               </span>
             )}
@@ -831,7 +831,7 @@ export default function Applicants() {
               initial={{ y: -50, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -50, opacity: 0 }}
-              className="absolute top-0 left-0 right-0 z-10 bg-primary/95 backdrop-blur-sm text-background-dark px-6 py-3 flex items-center justify-between shadow-lg"
+              className="absolute top-0 left-0 right-0 z-10 bg-primary/95 backdrop-blur-sm text-white px-6 py-3 flex items-center justify-between shadow-lg"
             >
               <div className="flex items-center gap-4">
                 <span className="text-sm font-bold">
@@ -1068,7 +1068,7 @@ export default function Applicants() {
                   onClick={() => setCurrentPage(page)}
                   className={`px-3 py-1 text-sm font-medium rounded-lg border transition-all ${
                     currentPage === page 
-                      ? 'bg-primary text-background-dark border-primary' 
+                      ? 'bg-primary text-white border-primary' 
                       : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                   }`}
                 >
@@ -1253,7 +1253,7 @@ export default function Applicants() {
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button 
                       onClick={() => handleDownload(viewingApplicant.name, viewingApplicant.resumeUrl)}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-background-dark rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all"
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all"
                     >
                       <Download size={18} />
                       Download Resume

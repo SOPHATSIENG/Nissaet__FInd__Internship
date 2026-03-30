@@ -97,7 +97,7 @@ export default function Internships() {
             onChange={(e) => setLocationFilter(e.target.value)}
           />
         </div>
-        <button className="bg-primary text-background-dark px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-primary-dark transition-all">
+        <button className="bg-primary text-white px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-primary-dark transition-all">
           <Filter size={20} />
           More Filters
         </button>
@@ -140,7 +140,7 @@ export default function Internships() {
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row md:flex-col justify-center gap-3">
-                    <button className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-background-dark font-bold hover:bg-primary-dark transition-all">
+                    <button className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-primary text-white font-bold hover:bg-primary-dark transition-all">
                       View Details
                       <ChevronRight size={20} />
                     </button>

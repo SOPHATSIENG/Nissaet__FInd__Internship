@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { 
   Calendar,
   Clock,
+  Loader2,
   MapPin,
+  MoreVertical,
   Users,
   Globe,
   Plus,
@@ -152,15 +154,15 @@ export default function Events() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'published':
-        return 'bg-green-100 text-green-800';
+        return 'bg-emerald-50 text-emerald-700';
       case 'draft':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-slate-100 text-slate-700';
       case 'cancelled':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-50 text-red-700';
       case 'completed':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-50 text-blue-700';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-slate-100 text-slate-700';
     }
   };
 
@@ -255,22 +257,22 @@ export default function Events() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#137fec]"></div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-primary" size={40} />
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Events & Workshops</h1>
-          <p className="text-gray-600 mt-1">Manage your company events and workshops</p>
+    <div className="max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Events & Workshops</h1>
+          <p className="text-slate-500">Manage your company events and workshops</p>
         </div>
         <button
           onClick={() => navigate('/company/events/post')}
-          className="flex items-center gap-2 px-4 py-2 bg-[#137fec] text-white rounded-lg hover:bg-[#0e6bb8] transition-colors"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-dark transition-all"
         >
           <Plus className="w-4 h-4" />
           Create Event
@@ -279,72 +281,79 @@ export default function Events() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-gray-600">Total Events</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total_events}</p>
+                <p className="text-sm font-medium text-slate-500">Total Events</p>
+                <p className="text-3xl font-bold text-slate-900 mt-1">{stats.total_events}</p>
               </div>
-              <Calendar className="w-8 h-8 text-[#137fec]" />
+              <div className="rounded-lg bg-sky-50 p-2 text-sky-700">
+                <Calendar className="h-6 w-6" />
+              </div>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between">
+          <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-gray-600">Published</p>
-                <p className="text-2xl font-bold text-green-600">{stats.published_events}</p>
+                <p className="text-sm font-medium text-slate-500">Published</p>
+                <p className="text-3xl font-bold text-emerald-700 mt-1">{stats.published_events}</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Participants</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.total_participants}</p>
+              <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700">
+                <CheckCircle className="h-6 w-6" />
               </div>
-              <Users className="w-8 h-8 text-blue-600" />
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between">
+          <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-gray-600">Upcoming</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.upcoming_events}</p>
+                <p className="text-sm font-medium text-slate-500">Total Participants</p>
+                <p className="text-3xl font-bold text-blue-700 mt-1">{stats.total_participants}</p>
               </div>
-              <Clock className="w-8 h-8 text-orange-600" />
+              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
+                <Users className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Upcoming</p>
+                <p className="text-3xl font-bold text-orange-700 mt-1">{stats.upcoming_events}</p>
+              </div>
+              <div className="rounded-lg bg-orange-50 p-2 text-orange-700">
+                <Clock className="h-6 w-6" />
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-center gap-3">
           <AlertCircle className="w-5 h-5" />
           {error}
         </div>
       )}
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search events..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
-              />
-            </div>
+      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-0 ring-1 ring-slate-200 rounded-lg focus:ring-2 focus:ring-primary transition-all"
+            />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => {
@@ -356,10 +365,10 @@ export default function Events() {
                   return next;
                 });
               }}
-              className={`px-4 py-2 rounded-lg border transition-colors ${
+              className={`px-4 py-2.5 text-sm font-semibold rounded-lg ring-1 transition-all ${
                 showDraftOnly
-                  ? 'border-[#137fec] bg-[#137fec] text-white'
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-primary text-white ring-primary/30'
+                  : 'bg-slate-50 text-slate-700 ring-slate-200 hover:bg-slate-100'
               }`}
             >
               Draft ({draftEventsCount})
@@ -371,7 +380,7 @@ export default function Events() {
                 setStatusFilter(e.target.value);
                 setShowDraftOnly(false);
               }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
+              className="px-4 py-2.5 text-sm font-semibold bg-slate-50 border-0 ring-1 ring-slate-200 rounded-lg focus:ring-2 focus:ring-primary transition-all text-slate-700"
             >
               {statusOptions.map(option => (
                 <option key={option.value} value={option.value}>
@@ -383,7 +392,7 @@ export default function Events() {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
+              className="px-4 py-2.5 text-sm font-semibold bg-slate-50 border-0 ring-1 ring-slate-200 rounded-lg focus:ring-2 focus:ring-primary transition-all text-slate-700"
             >
               <option value="all">All Types</option>
               {eventTypes.map(type => (
@@ -399,10 +408,10 @@ export default function Events() {
       {/* Events List */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filteredEvents.length === 0 ? (
-          <div className="col-span-full bg-white p-8 rounded-lg border border-gray-200 text-center">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
-            <p className="text-gray-600 mb-4">
+          <div className="col-span-full bg-white p-10 rounded-xl border border-slate-100 shadow-sm text-center">
+            <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">No events found</h3>
+            <p className="text-slate-500 mb-4">
               {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' || showDraftOnly
                 ? 'Try adjusting your filters or search terms'
                 : 'Get started by creating your first event'}
@@ -410,7 +419,7 @@ export default function Events() {
             {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && !showDraftOnly && (
               <button
                 onClick={() => navigate('/company/events/post')}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-[#137fec] text-white rounded-lg hover:bg-[#0e6bb8] transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-dark transition-all"
               >
                 <Plus className="w-4 h-4" />
                 Create Event
@@ -419,28 +428,28 @@ export default function Events() {
           </div>
         ) : (
           filteredEvents.map(event => (
-            <div key={event.id} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-md transition-shadow min-h-[280px]">
+            <div key={event.id} className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all min-h-[280px]">
               <div className="flex h-full flex-col justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                    <h3 className="text-xl font-bold text-slate-900">{event.title}</h3>
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusColor(event.status)}`}>
                       {getStatusIcon(event.status)}
                       {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
                     </span>
                     {isPastDeadline(event.registration_deadline) && (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700">
                         Expired
                       </span>
                     )}
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 text-sky-700 rounded-full text-xs font-semibold">
                       {getTypeLabel(event.type)}
                     </span>
                   </div>
 
-                  <p className="text-gray-600 mb-4 line-clamp-3">{event.description}</p>
+                  <p className="text-slate-600 mb-4 line-clamp-3">{event.description}</p>
 
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
                     <div className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
                       {formatDate(event.event_date)}
@@ -470,7 +479,7 @@ export default function Events() {
                   {event.tags && (
                     <div className="flex flex-wrap gap-2 mt-3">
                       {event.tags.split(',').map((tag, index) => (
-                        <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                        <span key={index} className="px-2 py-1 bg-slate-100 text-slate-600 rounded-md text-xs font-medium">
                           {tag.trim()}
                         </span>
                       ))}
@@ -481,7 +490,7 @@ export default function Events() {
                 <div className="relative mt-4 flex justify-end gap-1">
                   <button
                     onClick={() => setDetailEvent(event)}
-                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
                     title="View Details"
                   >
                     <Eye className="w-4 h-4" />
@@ -492,17 +501,17 @@ export default function Events() {
                     className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                     title="More actions"
                   >
-                    <span className="inline-flex h-4 w-4 items-center justify-center text-lg leading-none">⋮</span>
+                    <MoreVertical className="h-4 w-4" />
                   </button>
 
                   {openMenuId === event.id && (
-                    <div className="absolute right-0 top-11 z-10 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                    <div className="absolute right-0 top-11 z-10 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                       <button
                         onClick={() => {
                           setOpenMenuId(null);
                           navigate(`/company/events/post/${event.id}`);
                         }}
-                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
                         <Edit className="h-4 w-4" />
                         Edit event
@@ -513,7 +522,7 @@ export default function Events() {
                           setSelectedEvent(event);
                           setIsDeleteModalOpen(true);
                         }}
-                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete event
@@ -665,7 +674,7 @@ export default function Events() {
                     setDetailEvent(null);
                     navigate(`/company/events/post/${detailEvent.id}`);
                   }}
-                  className="rounded-lg bg-[#137fec] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0e6bb8]"
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark transition-all"
                 >
                   Edit Event
                 </button>
@@ -710,7 +719,7 @@ export default function Events() {
 
               {registrationsLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#137fec]"></div>
+                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
                 </div>
               ) : registrations.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
@@ -739,8 +748,8 @@ export default function Events() {
                             )}
                           </td>
                           <td className="py-3 pr-4">{registration.email}</td>
-                          <td className="py-3 pr-4">{registration.university || '—'}</td>
-                          <td className="py-3 pr-4">{registration.graduation_year || '—'}</td>
+                          <td className="py-3 pr-4">{registration.university || '-'}</td>
+                          <td className="py-3 pr-4">{registration.graduation_year || '-'}</td>
                           <td className="py-3 pr-4">{formatDateTime(registration.registration_date)}</td>
                           <td className="py-3">
                             <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">

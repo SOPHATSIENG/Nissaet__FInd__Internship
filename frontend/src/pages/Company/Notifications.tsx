@@ -339,7 +339,7 @@ export default function Notifications() {
                   type="button"
                   onClick={handleSavePreferences}
                   disabled={settingsLoading || settingsSaving}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-background-dark shadow-sm hover:bg-primary-dark transition-all disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-white shadow-sm hover:bg-primary-dark transition-all disabled:opacity-60"
                 >
                   {settingsSaving ? 'Saving...' : 'Save Preferences'}
                 </button>

@@ -5,12 +5,14 @@ import { SplitLayout } from '../../components/SplitLayout';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import loginImage from '../../../image/3.png';
+import brandLogo from '../../../image/1.png';
 import { useAuth } from '../../context/AuthContext';
+import { registrationStorage } from '../../utils/registrationStorage';
 
 export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, loginWithGoogle, loginWithGithub } = useAuth();
+  const { login, loginWithToken } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -19,6 +21,98 @@ export function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+    const authError = params.get('error');
+    const registerFlow = params.get('register') === '1';
+    const roleParam = params.get('role');
+    const providerParam = params.get('provider');
+    const companyNameParam = params.get('company_name');
+    const locationParam = params.get('location');
+
+    if (token) {
+      const handleTokenLogin = async () => {
+        try {
+          setIsLoading(true);
+          const session = await loginWithToken(token);
+          const role = session?.user?.role;
+
+          const hasValue = (value: unknown) => String(value || '').trim().length > 0;
+          const studentProfile = session?.user?.student_profile || {};
+          const companyProfile = session?.user?.company_profile || {};
+
+          const isStudentProfileComplete = () => {
+            return (
+              hasValue(studentProfile.phone || session?.user?.phone) &&
+              hasValue(studentProfile.dob || studentProfile.date_of_birth || session?.user?.dob) &&
+              hasValue(studentProfile.address || session?.user?.address) &&
+              hasValue(studentProfile.education || studentProfile.current_education_level || session?.user?.education) &&
+              hasValue(studentProfile.graduation_year || session?.user?.graduation_year) &&
+              hasValue(studentProfile.university || session?.user?.university) &&
+              hasValue(studentProfile.bio || session?.user?.bio) &&
+              hasValue(studentProfile.cv_url || studentProfile.resume_url || session?.user?.cv_url || session?.user?.resume_url)
+            );
+          };
+
+          const isCompanyProfileComplete = () => {
+            return hasValue(companyProfile.company_name || companyProfile.name);
+          };
+
+          const normalizedRole = String(roleParam || role || 'student').toLowerCase();
+          const shouldCompleteProfile =
+            registerFlow ||
+            (normalizedRole === 'student' && !isStudentProfileComplete()) ||
+            (normalizedRole === 'company' && !isCompanyProfileComplete());
+
+          if (shouldCompleteProfile && normalizedRole !== 'admin') {
+            const fullName = session?.user?.full_name || session?.user?.name || 'Social User';
+            const email = session?.user?.email || '';
+
+            registrationStorage.setStep1({
+              full_name: fullName,
+              email,
+              role: normalizedRole,
+              company_name:
+                normalizedRole === 'company'
+                  ? (companyNameParam || companyProfile.company_name || companyProfile.name || '')
+                  : undefined,
+              location:
+                normalizedRole === 'company'
+                  ? (locationParam || companyProfile.location || '')
+                  : undefined,
+              is_social: true,
+              auth_provider: providerParam || 'social',
+            });
+            registrationStorage.setRole(normalizedRole);
+            registrationStorage.clearStep2();
+
+            navigate(
+              normalizedRole === 'company' ? '/register/company/step-2' : '/register/student/step-2',
+              { replace: true }
+            );
+            return;
+          }
+
+          if (role === 'admin') {
+            navigate('/admin');
+          } else if (role === 'company') {
+            navigate('/company');
+          } else {
+            navigate('/');
+          }
+        } catch (err) {
+          setError('Social login failed to initialize session.');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      handleTokenLogin();
+    } else if (authError) {
+      setError('Social authentication failed. Please try again.');
+    }
+  }, [location, navigate, loginWithToken]);
 
   const inferredGoogleName = useMemo(() => {
     const prefix = email.split('@')[0] || '';
@@ -38,10 +132,10 @@ export function Login() {
 
   const validateLogin = () => {
     if (!isValidEmail(email)) {
-      return 'Please enter a valid email address.';
+      return 'Enter a valid email address (e.g., name@example.com).';
     }
     if (!password) {
-      return 'Password is required.';
+      return 'Please enter your password.';
     }
     return '';
   };
@@ -84,92 +178,28 @@ export function Login() {
         navigate('/');
       }
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Login failed.');
+      const rawMessage = submitError instanceof Error ? submitError.message : 'Login failed.';
+      const lowered = rawMessage.toLowerCase();
+      if (lowered.includes("couldn't find an account")) {
+        setError("We couldn't find an account with that email.");
+      } else if (lowered.includes('incorrect password')) {
+        setError('Incorrect password. Please try again.');
+      } else {
+        setError(rawMessage);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
-    if (!isValidEmail(email)) {
-      setError('Enter your Google email first, then click Google login.');
-      return;
-    }
-
-    try {
-      setError('');
-      setIsGoogleLoading(true);
-      const session = await loginWithGoogle({
-        email: email.trim(),
-        fullName: inferredGoogleName,
-      });
-      const target = typeof location.state?.from === 'string' ? location.state.from : '';
-      const role = session?.user?.role;
-
-      if (target.startsWith('/company') && role !== 'company') {
-        setError('This account is not a company account.');
-        navigate('/', { replace: true });
-        return;
-      }
-
-      if (target) {
-        navigate(target);
-        return;
-      }
-
-      if (role === 'admin') {
-        navigate('/admin');
-      } else if (role === 'company') {
-        navigate('/company');
-      } else {
-        navigate('/');
-      }
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Google login failed.');
-    } finally {
-      setIsGoogleLoading(false);
-    }
+  const handleGoogleLogin = () => {
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    window.location.href = `${backendUrl}/auth/google`;
   };
 
-  const handleGithubLogin = async () => {
-    if (!isValidEmail(email)) {
-      setError('Enter your GitHub email first, then click GitHub login.');
-      return;
-    }
-
-    try {
-      setError('');
-      setIsGithubLoading(true);
-      const session = await loginWithGithub({
-        email: email.trim(),
-        fullName: inferredGoogleName,
-      });
-      const target = typeof location.state?.from === 'string' ? location.state.from : '';
-      const role = session?.user?.role;
-
-      if (target.startsWith('/company') && role !== 'company') {
-        setError('This account is not a company account.');
-        navigate('/', { replace: true });
-        return;
-      }
-
-      if (target) {
-        navigate(target);
-        return;
-      }
-
-      if (role === 'admin') {
-        navigate('/admin');
-      } else if (role === 'company') {
-        navigate('/company');
-      } else {
-        navigate('/');
-      }
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'GitHub login failed.');
-    } finally {
-      setIsGithubLoading(false);
-    }
+  const handleGithubLogin = () => {
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    window.location.href = `${backendUrl}/auth/github`;
   };
 
   const handleDirectAdminLogin = async () => {
@@ -207,14 +237,13 @@ export function Login() {
         </div>
       }
     >
-      <div className="mb-10 flex items-center gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold text-sm">
-          NI
+      <div className="mb-10">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
+            <img src={brandLogo} alt="Nissaet logo" className="h-full w-full object-contain scale-110" />
+          </div>
+          {/* <span className="text-xl font-bold tracking-tight text-slate-900">Nissaet</span> */}
         </div>
-        <span className="text-xl font-bold tracking-tight text-slate-900">Nissaet</span>
-      </div>
-
-      <div className="mb-8">
         <h2 className="text-3xl font-bold tracking-tight text-slate-900">Welcome Back</h2>
         <p className="mt-2 text-slate-500">Please enter your details to sign in.</p>
       </div>

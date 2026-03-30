@@ -26,6 +26,17 @@ const normalizeSkillLevel = (skillLevel) => {
     return VALID_SKILL_LEVELS.has(skillLevel) ? skillLevel : 'intermediate';
 };
 
+const validatePasswordStrength = (value) => {
+    const raw = String(value || '');
+    if (raw.length < 8) {
+        return 'Password must be at least 8 characters.';
+    }
+    if (!/[A-Za-z]/.test(raw) || !/\d/.test(raw) || !/[!@#$%]/.test(raw)) {
+        return 'Password must include letters, numbers, and one of ! @ # $ %.';
+    }
+    return '';
+};
+
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
 
 const touchUserActivity = async (userId) => {
@@ -598,6 +609,10 @@ const register = async (req, res) => {
         if (!email || !password || !full_name) {
             return res.status(400).json({ message: 'All fields are required' });
         }
+        const passwordMessage = validatePasswordStrength(password);
+        if (passwordMessage) {
+            return res.status(400).json({ message: passwordMessage });
+        }
 
         const existingUser = await getUserByEmail(email);
         if (existingUser) {
@@ -666,6 +681,10 @@ const registerStudentComplete = async (req, res) => {
 
         if (!email || !password || !full_name) {
             return res.status(400).json({ message: 'Required fields are missing' });
+        }
+        const passwordMessage = validatePasswordStrength(password);
+        if (passwordMessage) {
+            return res.status(400).json({ message: passwordMessage });
         }
 
         const validationMessage = validateStudentRegistration(req.body, { requireSkills: true });
@@ -755,6 +774,10 @@ const registerCompanyComplete = async (req, res) => {
         if (!email || !password || !full_name || !company_name) {
             return res.status(400).json({ message: 'Required fields are missing' });
         }
+        const passwordMessage = validatePasswordStrength(password);
+        if (passwordMessage) {
+            return res.status(400).json({ message: passwordMessage });
+        }
 
         const existingUser = await getUserByEmail(email);
         if (existingUser) {
@@ -811,6 +834,10 @@ const registerAdmin = async (req, res) => {
         if (!email || !password || !full_name || !admin_code) {
             return res.status(400).json({ message: 'All fields are required' });
         }
+        const passwordMessage = validatePasswordStrength(password);
+        if (passwordMessage) {
+            return res.status(400).json({ message: passwordMessage });
+        }
 
         if (!process.env.ADMIN_REGISTRATION_CODE) {
             return res.status(500).json({ message: 'Admin registration is not configured' });
@@ -857,16 +884,16 @@ const login = async (req, res) => {
 
         const user = await getUserByEmail(email);
         if (!user) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: "We couldn't find an account with that email." });
         }
 
         if (!user.password) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: 'Incorrect password. Please try again.' });
         }
 
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: 'Incorrect password. Please try again.' });
         }
 
         try {
@@ -1194,6 +1221,72 @@ const getSkills = async (req, res) => {
     }
 };
 
+const oauthCallback = async (req, res) => {
+    try {
+        const user = req.user;
+        let role = user.role || DEFAULT_ROLE;
+        let extraInfo = {};
+
+        if (req.query.state) {
+            try {
+                extraInfo = JSON.parse(req.query.state);
+                if (extraInfo.role) {
+                    role = normalizeRole(extraInfo.role);
+                }
+            } catch (e) {
+                console.error('Error parsing state in OAuth callback:', e);
+            }
+        }
+
+        // Update user role if it was explicitly provided during registration and user doesn't have a specific role yet
+        if (extraInfo.role && (!user.role || user.role === DEFAULT_ROLE)) {
+            try {
+                await db.query('UPDATE users SET role = ? WHERE id = ?', [role, user.id]);
+                user.role = role;
+            } catch (err) {
+                console.error('Error updating user role in OAuth callback:', err);
+            }
+        }
+
+        // Ensure the profile exists
+        try {
+            await ensureRoleProfile(role, user.id, {
+                ...extraInfo,
+                full_name: user.full_name || user.name || 'Social User'
+            });
+        } catch (err) {
+            console.error('Error ensuring role profile in OAuth callback:', err);
+        }
+
+        await recordUserLogin(user.id);
+
+        const token = createToken({ userId: user.id, email: user.email, role: user.role || role });
+        
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const redirectParams = new URLSearchParams({ token });
+
+        if (extraInfo?.role) {
+            redirectParams.set('register', '1');
+            redirectParams.set('role', role);
+            if (extraInfo.provider) {
+                redirectParams.set('provider', String(extraInfo.provider));
+            }
+            if (extraInfo.company_name) {
+                redirectParams.set('company_name', String(extraInfo.company_name));
+            }
+            if (extraInfo.location) {
+                redirectParams.set('location', String(extraInfo.location));
+            }
+        }
+
+        res.redirect(`${frontendUrl}/login?${redirectParams.toString()}`);
+    } catch (error) {
+        console.error('OAuth callback error:', error);
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        res.redirect(`${frontendUrl}/login?error=auth_failed`);
+    }
+};
+
 module.exports = {
     register,
     registerStudentComplete,
@@ -1201,6 +1294,7 @@ module.exports = {
     registerAdmin,
     login,
     socialLogin,
+    oauthCallback,
     forgotPassword,
     resetPassword,
     getCurrentUser,

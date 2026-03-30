@@ -10,7 +10,8 @@ import { registrationStorage } from '../../utils/registrationStorage';
 
 export function Register() {
   const [role, setRole] = useState<Role>('student');
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -25,8 +26,9 @@ export function Register() {
   const location = useLocation();
 
   const inferredName = useMemo(() => {
-    if (fullName.trim()) {
-      return fullName.trim();
+    const combined = `${firstName} ${lastName}`.trim();
+    if (combined) {
+      return combined;
     }
     const prefix = email.split('@')[0] || '';
     if (!prefix) return 'Social User';
@@ -36,11 +38,14 @@ export function Register() {
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
-  }, [email, fullName]);
+  }, [email, firstName, lastName]);
 
   const validateForm = () => {
-    if (!fullName.trim()) {
-      return 'Full name is required.';
+    if (!firstName.trim()) {
+      return 'First name is required.';
+    }
+    if (!lastName.trim()) {
+      return 'Last name is required.';
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return 'Please enter a valid email address.';
@@ -66,7 +71,7 @@ export function Register() {
     }
 
     const step1Payload = {
-      full_name: fullName.trim(),
+      full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
       email: email.trim(),
       password,
       role,
@@ -206,14 +211,23 @@ export function Register() {
           </>
         ) : null}
 
-        <Input
-          label={role === 'company' ? 'Contact Person Name' : 'Full Name'}
-          placeholder="John Doe"
-          required
-          icon={User}
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-        />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label={role === 'company' ? 'Contact Person First Name' : 'First Name'}
+              placeholder="John"
+              required
+              icon={User}
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+            />
+            <Input
+              label={role === 'company' ? 'Contact Person Last Name' : 'Last Name'}
+              placeholder="Doe"
+              required
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+            />
+          </div>
 
         <Input
           label="Email Address"

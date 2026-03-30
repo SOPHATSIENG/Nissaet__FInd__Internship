@@ -148,10 +148,11 @@ export default function StudentProfile() {
                 {profile.is_available && (
                   <>
                     <div className="absolute inset-0 rounded-3xl border-4 border-emerald-500/50 pointer-events-none"></div>
-                    <div className="absolute -bottom-1 inset-x-0 mx-auto w-[90%] bg-emerald-500 text-white text-[10px] font-black py-1 px-2 rounded-lg shadow-lg flex items-center justify-center gap-1 border border-white uppercase tracking-tighter">
-                      <CheckCircle2 size={10} strokeWidth={3} />
-                      <span>Available</span>
-                    </div>
+                    <span
+                      className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-white shadow-sm"
+                      aria-label="Online"
+                      title="Online"
+                    />
                   </>
                 )}
               </div>

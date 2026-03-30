@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import logoAsset from '../../image/logo.png';
+import logoAsset from '../../image/1.png';
 
 interface HeaderNotificationItem {
   id: number;
@@ -306,24 +306,23 @@ export default function Layout() {
             <div className="flex min-w-0 items-center gap-3 md:gap-4">
               <Link
                 to="/"
-                className="group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-2 py-1.5 transition-all duration-200 hover:border-slate-200 md:px-3"
+                className="group flex min-w-0 items-center gap-4 rounded-2xl border border-transparent px-2 py-1.5 transition-all duration-200 hover:border-slate-200 md:px-3"
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-transparent">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-3xl md:h-23 md:w-23">
                   <img
                     src={navbarLogo}
                     alt={brandName}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                     onError={() => setLogoError(true)}
                   />
                 </div>
-
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="truncate font-display text-lg font-extrabold tracking-tight text-slate-900 md:text-[1.35rem]">
+                    <p className="truncate font-display text-xl font-extrabold tracking-tight text-slate-900 md:text-[1.6rem]">
                       {brandName}
                     </p>
                     <span className="hidden rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white sm:inline-flex">
-                      Student Hub
+                      Student Hope
                     </span>
                   </div>
                   <p className="hidden text-xs font-medium text-slate-500 sm:block">

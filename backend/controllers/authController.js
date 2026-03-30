@@ -68,6 +68,71 @@ const normalizeUserRecord = (rawUser) => {
     };
 };
 
+const getTrimmed = (value) => String(value || '').trim();
+
+const getTableColumns = async (conn, tableName) => {
+    try {
+        const [rows] = await conn.execute(`SHOW COLUMNS FROM ${tableName}`);
+        return new Set(rows.map((row) => row.Field));
+    } catch (error) {
+        return new Set();
+    }
+};
+
+const updateUserProfileExtras = async (conn, userId, payload = {}) => {
+    const columns = await getTableColumns(conn, 'users');
+    if (columns.size === 0) return;
+
+    const updates = {};
+    const assignIfColumn = (column, value) => {
+        if (columns.has(column) && value !== undefined) {
+            updates[column] = value;
+        }
+    };
+
+    const dobValue = getTrimmed(payload.dob || payload.date_of_birth);
+    assignIfColumn('phone', getTrimmed(payload.phone) || null);
+    assignIfColumn('dob', dobValue || null);
+    assignIfColumn('date_of_birth', dobValue || null);
+    assignIfColumn('address', getTrimmed(payload.address) || null);
+    assignIfColumn('bio', getTrimmed(payload.bio) || null);
+    assignIfColumn('education', getTrimmed(payload.education) || null);
+    assignIfColumn('university', getTrimmed(payload.university) || null);
+    assignIfColumn('graduation_year', payload.graduation_year || null);
+    assignIfColumn('cv_url', getTrimmed(payload.cv_url || payload.resume_url) || null);
+
+    const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) return;
+
+    const sql = `UPDATE users SET ${entries.map(([column]) => `${column} = ?`).join(', ')} WHERE id = ?`;
+    await conn.execute(sql, [...entries.map(([, value]) => value), userId]);
+};
+
+const validateStudentRegistration = (payload = {}, options = {}) => {
+    const requireSkills = Boolean(options.requireSkills);
+
+    if (!getTrimmed(payload.phone)) return 'Phone number is required.';
+    const dobValue = getTrimmed(payload.dob || payload.date_of_birth);
+    if (!dobValue) return 'Date of birth is required.';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dobValue)) return 'Date of birth must be a valid date.';
+    if (!getTrimmed(payload.address)) return 'Address is required.';
+    if (!getTrimmed(payload.education)) return 'Education level is required.';
+    const gradYearValue = getTrimmed(payload.graduation_year);
+    if (!gradYearValue) return 'Graduation year is required.';
+    if (!/^\d{4}$/.test(gradYearValue)) return 'Graduation year must be a 4-digit year.';
+    if (!getTrimmed(payload.university)) return 'University / institution name is required.';
+    if (!getTrimmed(payload.bio)) return 'Bio is required.';
+    if (!getTrimmed(payload.cv_url || payload.resume_url)) return 'Resume / CV is required.';
+
+    if (requireSkills) {
+        if (!Array.isArray(payload.skills) || payload.skills.length === 0) {
+            return 'Please add at least one skill.';
+        }
+    }
+
+    return '';
+};
+
 const createToken = (payload) => {
     return jwt.sign(payload, getJwtSecret(), { expiresIn: '24h' });
 };
@@ -555,6 +620,12 @@ const register = async (req, res) => {
         const userId = userResult.insertId;
 
         if (normalizedRole === 'student') {
+            const validationMessage = validateStudentRegistration(req.body, { requireSkills: false });
+            if (validationMessage) {
+                await conn.rollback();
+                return res.status(400).json({ message: validationMessage });
+            }
+            await updateUserProfileExtras(conn, userId, req.body);
             await createStudentProfile(conn, userId, req.body);
             await createStudentVerificationRequest(conn, userId, req.body);
         } else if (normalizedRole === 'company') {
@@ -597,6 +668,11 @@ const registerStudentComplete = async (req, res) => {
             return res.status(400).json({ message: 'Required fields are missing' });
         }
 
+        const validationMessage = validateStudentRegistration(req.body, { requireSkills: true });
+        if (validationMessage) {
+            return res.status(400).json({ message: validationMessage });
+        }
+
         const existingUser = await getUserByEmail(email);
         if (existingUser) {
             return res.status(400).json({ message: 'User already exists' });
@@ -615,6 +691,7 @@ const registerStudentComplete = async (req, res) => {
         });
 
         const userId = userResult.insertId;
+        await updateUserProfileExtras(conn, userId, req.body);
         await createStudentProfile(conn, userId, req.body);
         await createStudentVerificationRequest(conn, userId, req.body);
 

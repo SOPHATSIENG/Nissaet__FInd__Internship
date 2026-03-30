@@ -63,6 +63,12 @@ export function CompanyStep3() {
           description: step2.company_bio,
           logo: step2.logo,
         });
+        await api.companyCreateVerification({
+          documents: Array.isArray(step2.documents) ? step2.documents : [],
+          contact_person: step2.contact_person || step1.full_name || null,
+          contact_email: step1.email || null,
+          notes: 'Submitted via Google registration',
+        });
         registrationStorage.clearAll();
         navigate('/company');
       } else {

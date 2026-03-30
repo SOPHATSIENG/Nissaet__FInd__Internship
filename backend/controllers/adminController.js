@@ -1401,7 +1401,7 @@ const getDashboardOverview = async (req, res) => {
 
         try {
             const internships = await db.query(
-                `SELECT i.title, i.created_at, c.company_name
+                `SELECT i.title, i.created_at, c.name AS company_name
                  FROM internships i
                  LEFT JOIN companies c ON i.company_id = c.id
                  ORDER BY i.created_at DESC

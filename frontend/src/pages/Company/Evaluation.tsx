@@ -117,7 +117,7 @@ export default function Evaluation() {
 
           <div className="flex justify-end gap-4">
             <button className="px-6 py-3 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">Cancel</button>
-            <button className="inline-flex items-center gap-2 rounded-xl bg-primary px-10 py-3 text-sm font-bold text-background-dark shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all">
+            <button className="inline-flex items-center gap-2 rounded-xl bg-primary px-10 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all">
               <Send size={20} />
               Submit Evaluation
             </button>

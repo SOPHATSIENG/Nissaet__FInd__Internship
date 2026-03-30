@@ -22,7 +22,7 @@ interface ProfileContextType {
 }
 
 export const defaultSettings: ProfileSettings = {
-  accentColor: 'emerald',
+  accentColor: 'blue',
   theme: 'light',
   username: 'sophea.admin',
   name: 'Sophea Chan',
@@ -57,7 +57,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Apply accent color as CSS variable
     const colorMap: Record<string, string> = {
       emerald: '#10b981',
-      blue: '#3b82f6',
+      blue: '#137fec',
       indigo: '#6366f1',
       violet: '#8b5cf6',
       rose: '#f43f5e',

@@ -40,7 +40,7 @@ export default function ApplicationNotificationCard({
                 className="w-12 h-12 rounded-full object-cover border-2 border-primary/10"
                 referrerPolicy="no-referrer"
               />
-              <div className="absolute -bottom-1 -right-1 bg-primary text-background-dark p-1 rounded-full border-2 border-white">
+              <div className="absolute -bottom-1 -right-1 bg-primary text-white p-1 rounded-full border-2 border-white">
                 <MessageSquare size={10} />
               </div>
             </div>

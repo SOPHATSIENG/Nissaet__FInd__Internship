@@ -42,7 +42,7 @@ body {
 
 @layer base {
   :root {
-    --accent: #10b981;
+    --accent: #137fec;
     --background: var(--color-background-light);
     --surface: var(--color-surface-light);
     --text-primary: var(--color-text-primary-light);

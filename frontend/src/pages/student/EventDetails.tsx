@@ -50,6 +50,7 @@ interface Event {
   industry: string;
   company_location: string;
   website: string;
+  company_description?: string;
   userRegistration?: {
     id: number;
     registration_date: string;
@@ -74,14 +75,16 @@ export default function EventDetails() {
     if (id) {
       fetchEvent();
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   const fetchEvent = async () => {
     try {
       setLoading(true);
       setLoadError('');
-      const response = await api.get(`/events/${id}`, { auth: false });
-      setEvent(response.data);
+      const response = await api.get(`/events/${id}`, { auth: !!user });
+      const payload = response?.data ?? response;
+      const resolvedEvent = payload?.event ?? payload?.data ?? payload;
+      setEvent(resolvedEvent);
     } catch (error) {
       console.error('Error fetching event:', error);
       setLoadError((error as any)?.message || 'Event not found');
@@ -533,6 +536,9 @@ export default function EventDetails() {
               )}
               <h4 className="font-semibold text-gray-900">{event.company_name}</h4>
               <p className="text-sm text-gray-600">{event.industry}</p>
+              {event.company_description && (
+                <p className="mt-2 text-xs text-gray-500">{event.company_description}</p>
+              )}
             </div>
 
             {event.company_location && (

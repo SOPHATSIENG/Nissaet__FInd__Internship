@@ -1136,9 +1136,11 @@ export default function Applicants() {
                       alt={viewingApplicant.name} 
                     />
                     {viewingApplicant.is_available && (
-                      <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md">
-                        Open to work
-                      </span>
+                      <span
+                        className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-white shadow-sm"
+                        aria-label="Online"
+                        title="Online"
+                      />
                     )}
                   </div>
                   <div className="flex-1">

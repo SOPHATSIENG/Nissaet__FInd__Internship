@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Lock, Mail, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -8,7 +8,7 @@ export const Suspended = () => {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const roleLabel = user?.role === 'company' ? 'Company' : 'Student';
-  const email = user?.email || '';
+  const [supportEmail, setSupportEmail] = useState('support@internship.kh');
 
   useEffect(() => {
     const status = String(user?.status || '').toLowerCase();
@@ -22,6 +22,27 @@ export const Suspended = () => {
       }
     }
   }, [user?.status, user?.role, navigate]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSupportEmail = async () => {
+      try {
+        const response = await api.getBranding();
+        const branding = response?.branding || response?.settings || response || {};
+        const nextEmail = String(branding.supportEmail || branding.support_email || '').trim();
+        if (mounted && nextEmail) {
+          setSupportEmail(nextEmail);
+        }
+      } catch {
+        // keep fallback support email
+      }
+    };
+
+    loadSupportEmail();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleRefresh = async () => {
     try {
@@ -43,10 +64,15 @@ export const Suspended = () => {
         <p className="text-sm text-slate-600 mt-2">
           Your {roleLabel.toLowerCase()} account is currently suspended. Please contact support for more details.
         </p>
-        {email && (
+        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">
+          Suspended by admin
+        </p>
+        {supportEmail && (
           <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
             <Mail className="size-3.5" />
-            {email}
+            <a href={`mailto:${supportEmail}`} className="font-semibold text-blue-600 hover:underline">
+              {supportEmail}
+            </a>
           </div>
         )}
         <button

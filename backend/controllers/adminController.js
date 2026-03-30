@@ -1726,6 +1726,33 @@ const getAdminSettings = async (req, res) => {
     }
 };
 
+// Public branding endpoint for site-wide UI (no admin auth required).
+const getPublicBranding = async (req, res) => {
+    try {
+        const rows = await db.query('SELECT * FROM admin_settings ORDER BY id ASC LIMIT 1');
+        const settings = rows && rows.length > 0 ? normalizeAdminSettingsRow(rows[0]) : defaultAdminSettings;
+        return res.json({
+            branding: {
+                platformName: settings.platformName,
+                brandLogo: settings.brandLogo,
+                brandFavicon: settings.brandFavicon
+            }
+        });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({
+                branding: {
+                    platformName: defaultAdminSettings.platformName,
+                    brandLogo: defaultAdminSettings.brandLogo,
+                    brandFavicon: defaultAdminSettings.brandFavicon
+                }
+            });
+        }
+        console.error('Error fetching public branding:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const updateAdminSettings = async (req, res) => {
     try {
         const rows = await db.query('SELECT * FROM admin_settings ORDER BY id ASC LIMIT 1');
@@ -1984,6 +2011,7 @@ module.exports = {
     updateAdminSettings,
     exportAdminData,
     purgeAdminLogs,
+    getPublicBranding,
     getAdminStudentProfile,
     updateAdminUser
 };

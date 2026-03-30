@@ -274,9 +274,11 @@ export default function StudentDashboard() {
                   <UserRound className="h-8 w-8 text-slate-400" />
                 )}
                 {education.is_available && (
-                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                    Open to work
-                  </span>
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white shadow-sm"
+                    aria-label="Online"
+                    title="Online"
+                  />
                 )}
               </div>
               <div className="flex-1">

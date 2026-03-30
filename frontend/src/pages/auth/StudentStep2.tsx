@@ -44,6 +44,14 @@ export function StudentStep2() {
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!phone.trim()) {
+      setError('Phone number is required.');
+      return;
+    }
+    if (!dob) {
+      setError('Date of birth is required.');
+      return;
+    }
     if (dob) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
         setError('Date of birth must be a valid date.');
@@ -60,6 +68,34 @@ export function StudentStep2() {
         setError('Date of birth cannot be in the future.');
         return;
       }
+    }
+    if (!address.trim()) {
+      setError('Address is required.');
+      return;
+    }
+    if (!education) {
+      setError('Education level is required.');
+      return;
+    }
+    if (!graduationYear.trim()) {
+      setError('Graduation year is required.');
+      return;
+    }
+    if (!/^\d{4}$/.test(graduationYear.trim())) {
+      setError('Graduation year must be a 4-digit year.');
+      return;
+    }
+    if (!university.trim()) {
+      setError('University / institution name is required.');
+      return;
+    }
+    if (!bio.trim()) {
+      setError('Bio is required.');
+      return;
+    }
+    if (!cvUrl) {
+      setError('Resume / CV is required.');
+      return;
     }
 
     setError('');
@@ -101,6 +137,7 @@ export function StudentStep2() {
             type="tel"
             placeholder="+1 (555) 000-0000"
             icon={Phone}
+            required
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
           />
@@ -108,6 +145,7 @@ export function StudentStep2() {
             label="Date of Birth"
             type="date"
             icon={Calendar}
+            required
             value={dob}
             onChange={(event) => setDob(event.target.value)}
           />
@@ -117,6 +155,7 @@ export function StudentStep2() {
           label="Address"
           placeholder="123 Main St, City, Country"
           icon={MapPin}
+          required
           value={address}
           onChange={(event) => setAddress(event.target.value)}
         />
@@ -131,6 +170,7 @@ export function StudentStep2() {
               label="Education Level"
               value={education}
               onChange={(event) => setEducation(event.target.value)}
+              required
               options={[
                 { value: '', label: 'Select Level' },
                 { value: 'high_school', label: 'High School' },
@@ -145,6 +185,7 @@ export function StudentStep2() {
               placeholder="YYYY"
               min="2000"
               max="2100"
+              required
               value={graduationYear}
               onChange={(event) => setGraduationYear(event.target.value)}
             />
@@ -154,6 +195,7 @@ export function StudentStep2() {
             label="University / Institution Name"
             placeholder="e.g. Stanford University"
             icon={Building2}
+            required
             value={university}
             onChange={(event) => setUniversity(event.target.value)}
           />
@@ -166,6 +208,7 @@ export function StudentStep2() {
             placeholder="Tell us a bit about your interests, skills, and what kind of internships you're looking for..."
             value={bio}
             onChange={(event) => setBio(event.target.value)}
+            required
           ></textarea>
         </div>
 
@@ -182,6 +225,7 @@ export function StudentStep2() {
                     name="file-upload"
                     type="file"
                     className="sr-only"
+                    required
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       setCvUrl(file ? file.name : '');

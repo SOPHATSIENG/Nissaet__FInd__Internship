@@ -4,6 +4,8 @@ const db = require('../config/db');
  * Helper to identify database field errors (missing columns/tables)
  */
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
+const isMissingTableError = (error) => error && error.code === 'ER_NO_SUCH_TABLE';
+const isSchemaMismatchError = (error) => isBadFieldError(error) || isMissingTableError(error);
 const companyPostImageSubquery = `
     SELECT p.image_url
     FROM posts p
@@ -145,6 +147,30 @@ const getCompanyIdByUserId = async (userId) => {
     const companyId = rows.length > 0 ? rows[0].id : null;
     console.log('Final company ID:', companyId);
     return companyId;
+};
+
+/**
+ * Helper to get student ID by user ID
+ */
+const getStudentIdByUserId = async (userId) => {
+    const rows = await db.query('SELECT id FROM students WHERE user_id = ? LIMIT 1', [userId]);
+    return rows.length > 0 ? rows[0].id : null;
+};
+
+/**
+ * Helper to resolve company ID by ID or user_id
+ */
+const resolveCompanyId = async (rawId) => {
+    const numericId = Number.parseInt(rawId, 10);
+    if (Number.isNaN(numericId)) return null;
+
+    const direct = await db.query('SELECT id FROM companies WHERE id = ? LIMIT 1', [numericId]);
+    if (direct.length > 0) return direct[0].id;
+
+    const byUser = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [numericId]);
+    if (byUser.length > 0) return byUser[0].id;
+
+    return null;
 };
 
 /**
@@ -463,14 +489,22 @@ const getFeaturedCompanies = async (req, res) => {
                 c.description,
                 c.logo,
                 c.headquarters AS location,
-                COUNT(i.id) AS open_positions
+                COALESCE(op.open_positions, 0) AS open_positions,
+                COALESCE(cr.rating, 0) AS rating,
+                COALESCE(cr.rating_count, 0) AS rating_count
              FROM companies c
-             LEFT JOIN internships i
-                ON i.company_id = c.id
-                AND i.status = 'active'
-                AND i.is_flagged = 0
-             GROUP BY c.id, c.name, c.description, c.logo, c.headquarters
-             ORDER BY open_positions DESC, c.name ASC
+             LEFT JOIN (
+                SELECT company_id, COUNT(*) AS open_positions
+                FROM internships
+                WHERE status = 'active' AND is_flagged = 0
+                GROUP BY company_id
+             ) op ON op.company_id = c.id
+             LEFT JOIN (
+                SELECT company_id, ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count
+                FROM company_ratings
+                GROUP BY company_id
+             ) cr ON cr.company_id = c.id
+             ORDER BY op.open_positions DESC, c.name ASC
              LIMIT ?
         `;
 
@@ -478,23 +512,57 @@ const getFeaturedCompanies = async (req, res) => {
         try {
             companies = await db.query(sql, [limit]);
         } catch (error) {
-            if (!isBadFieldError(error)) throw error;
-            
-            const fallbackSql = `
-                SELECT
-                    c.id,
-                    c.company_name,
-                    c.description,
-                    c.logo,
-                    c.location,
-                    COUNT(i.id) AS open_positions
-                FROM companies c
-                LEFT JOIN internships i ON i.company_id = c.id
-                GROUP BY c.id, c.company_name, c.description, c.logo, c.location
-                ORDER BY open_positions DESC
-                LIMIT ?
-            `;
-            companies = await db.query(fallbackSql, [limit]);
+            if (!isSchemaMismatchError(error)) throw error;
+
+            try {
+                // Fallback when ratings table/columns are missing (keep modern company schema)
+                const noRatingsSql = `
+                    SELECT
+                        c.id,
+                        c.name AS company_name,
+                        c.description,
+                        c.logo,
+                        c.headquarters AS location,
+                        COALESCE(op.open_positions, 0) AS open_positions,
+                        0 AS rating,
+                        0 AS rating_count
+                    FROM companies c
+                    LEFT JOIN (
+                        SELECT company_id, COUNT(*) AS open_positions
+                        FROM internships
+                        WHERE status = 'active' AND is_flagged = 0
+                        GROUP BY company_id
+                    ) op ON op.company_id = c.id
+                    ORDER BY op.open_positions DESC, c.name ASC
+                    LIMIT ?
+                `;
+                companies = await db.query(noRatingsSql, [limit]);
+            } catch (fallbackError) {
+                if (!isSchemaMismatchError(fallbackError)) throw fallbackError;
+
+                // Legacy schema fallback (company_name/location columns) without ratings
+                const legacySql = `
+                    SELECT
+                        c.id,
+                        c.company_name,
+                        c.description,
+                        c.logo,
+                        c.location,
+                        COALESCE(op.open_positions, 0) AS open_positions,
+                        0 AS rating,
+                        0 AS rating_count
+                    FROM companies c
+                    LEFT JOIN (
+                        SELECT company_id, COUNT(*) AS open_positions
+                        FROM internships
+                        WHERE status = 'active'
+                        GROUP BY company_id
+                    ) op ON op.company_id = c.id
+                    ORDER BY open_positions DESC
+                    LIMIT ?
+                `;
+                companies = await db.query(legacySql, [limit]);
+            }
         }
 
         return res.json({ success: true, companies });
@@ -1095,11 +1163,22 @@ const getAllCompanies = async (req, res) => {
                 c.headquarters AS location,
                 c.is_verified,
                 c.company_size,
-                COUNT(i.id) AS open_positions
+                COALESCE(op.open_positions, 0) AS open_positions,
+                COALESCE(cr.rating, 0) AS rating,
+                COALESCE(cr.rating_count, 0) AS rating_count
             FROM companies c
-            LEFT JOIN internships i ON i.company_id = c.id AND i.status = 'active' AND i.is_flagged = 0
+            LEFT JOIN (
+                SELECT company_id, COUNT(*) AS open_positions
+                FROM internships
+                WHERE status = 'active' AND is_flagged = 0
+                GROUP BY company_id
+            ) op ON op.company_id = c.id
+            LEFT JOIN (
+                SELECT company_id, ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count
+                FROM company_ratings
+                GROUP BY company_id
+            ) cr ON cr.company_id = c.id
             ${whereClause}
-            GROUP BY c.id, c.user_id, c.name, c.description, c.logo, c.industry, c.headquarters, c.is_verified, c.company_size
             ORDER BY c.is_verified DESC, c.name ASC 
             LIMIT ? OFFSET ?
         `;
@@ -1144,14 +1223,22 @@ const getCompanyProfileById = async (req, res) => {
                 c.founded_year,
                 c.headquarters AS location,
                 c.is_verified,
-                COUNT(i.id) AS open_positions
+                COALESCE(op.open_positions, 0) AS open_positions,
+                COALESCE(cr.rating, 0) AS rating,
+                COALESCE(cr.rating_count, 0) AS rating_count
              FROM companies c
-             LEFT JOIN internships i
-               ON i.company_id = c.id
-              AND i.status = 'active'
-              AND i.is_flagged = 0
-             WHERE ${preferUserId ? 'c.user_id' : 'c.id'} = ?
-             GROUP BY c.id, c.user_id, c.name, c.description, c.logo, c.industry, c.website, c.company_size, c.founded_year, c.headquarters, c.is_verified`;
+             LEFT JOIN (
+                SELECT company_id, COUNT(*) AS open_positions
+                FROM internships
+                WHERE status = 'active' AND is_flagged = 0
+                GROUP BY company_id
+             ) op ON op.company_id = c.id
+             LEFT JOIN (
+                SELECT company_id, ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count
+                FROM company_ratings
+                GROUP BY company_id
+             ) cr ON cr.company_id = c.id
+             WHERE ${preferUserId ? 'c.user_id' : 'c.id'} = ?`;
 
         const fallbackQuery = `
             SELECT
@@ -1166,13 +1253,22 @@ const getCompanyProfileById = async (req, res) => {
                 c.founded_year,
                 c.headquarters AS location,
                 c.is_verified,
-                COUNT(i.id) AS open_positions
+                COALESCE(op.open_positions, 0) AS open_positions,
+                COALESCE(cr.rating, 0) AS rating,
+                COALESCE(cr.rating_count, 0) AS rating_count
              FROM companies c
-             LEFT JOIN internships i
-               ON i.company_id = c.id
-              AND i.status = 'active'
-             WHERE ${preferUserId ? 'c.user_id' : 'c.id'} = ?
-             GROUP BY c.id, c.user_id, c.name, c.description, c.logo, c.industry, c.website, c.company_size, c.founded_year, c.headquarters, c.is_verified`;
+             LEFT JOIN (
+                SELECT company_id, COUNT(*) AS open_positions
+                FROM internships
+                WHERE status = 'active'
+                GROUP BY company_id
+             ) op ON op.company_id = c.id
+             LEFT JOIN (
+                SELECT company_id, ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count
+                FROM company_ratings
+                GROUP BY company_id
+             ) cr ON cr.company_id = c.id
+             WHERE ${preferUserId ? 'c.user_id' : 'c.id'} = ?`;
 
         let companyRows;
         try {
@@ -1229,7 +1325,9 @@ const getCompanyProfileById = async (req, res) => {
                             founded_year: null,
                             location: userRow.location || '',
                             is_verified: false,
-                            open_positions: 0
+                            open_positions: 0,
+                            rating: 0,
+                            rating_count: 0
                         },
                         internships: []
                     });
@@ -1288,6 +1386,124 @@ const getCompanyProfileById = async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching company profile:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+/**
+ * Create or update a student rating for a company
+ */
+const rateCompany = async (req, res) => {
+    try {
+        const companyId = await resolveCompanyId(req.params.id);
+        if (!companyId) {
+            return res.status(400).json({ message: 'Invalid company ID' });
+        }
+
+        const ratingValue = Number.parseInt(req.body?.rating, 10);
+        if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+            return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+        }
+
+        const userId = req.user?.userId || req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        let studentId = await getStudentIdByUserId(userId);
+        if (!studentId) {
+            // Auto-create minimal student profile if missing
+            try {
+                const insertResult = await db.query(
+                    'INSERT INTO students (user_id) VALUES (?)',
+                    [userId]
+                );
+                studentId = insertResult?.insertId || null;
+            } catch (createError) {
+                console.error('Failed to create student profile:', createError);
+            }
+        }
+        if (!studentId) {
+            return res.status(404).json({ message: 'Student profile not found' });
+        }
+
+        const eligibility = await db.query(
+            `SELECT 1
+             FROM applications a
+             JOIN internships i ON i.id = a.internship_id
+             WHERE a.student_id = ? AND i.company_id = ? AND a.status IN ('accepted','shortlisted')
+             LIMIT 1`,
+            [studentId, companyId]
+        );
+        if (eligibility.length === 0) {
+            return res.status(403).json({ message: 'You can rate a company only after being accepted for an internship.' });
+        }
+
+        const existingRows = await db.query(
+            'SELECT id FROM company_ratings WHERE company_id = ? AND student_id = ? LIMIT 1',
+            [companyId, studentId]
+        );
+
+        if (existingRows.length > 0) {
+            await db.query(
+                'UPDATE company_ratings SET rating = ?, review_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [ratingValue, req.body?.review_text || null, existingRows[0].id]
+            );
+        } else {
+            await db.query(
+                'INSERT INTO company_ratings (company_id, student_id, rating, review_text) VALUES (?, ?, ?, ?)',
+                [companyId, studentId, ratingValue, req.body?.review_text || null]
+            );
+        }
+
+        const summaryRows = await db.query(
+            'SELECT ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count FROM company_ratings WHERE company_id = ?',
+            [companyId]
+        );
+        const summary = summaryRows[0] || { rating: 0, rating_count: 0 };
+
+        return res.json({
+            message: existingRows.length > 0 ? 'Rating updated' : 'Rating submitted',
+            rating: Number(summary.rating) || 0,
+            rating_count: Number(summary.rating_count) || 0,
+            user_rating: ratingValue
+        });
+    } catch (error) {
+        console.error('Error rating company:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+/**
+ * Get company ratings (public)
+ */
+const getCompanyRatings = async (req, res) => {
+    try {
+        const companyId = await resolveCompanyId(req.params.id);
+        if (!companyId) {
+            return res.status(400).json({ message: 'Invalid company ID' });
+        }
+
+        const rows = await db.query(
+            `SELECT
+                cr.id,
+                cr.rating,
+                cr.review_text,
+                cr.created_at,
+                s.id AS student_id,
+                u.full_name,
+                u.profile_image
+             FROM company_ratings cr
+             JOIN students s ON s.id = cr.student_id
+             JOIN users u ON u.id = s.user_id
+             WHERE cr.company_id = ?
+             ORDER BY cr.created_at DESC`,
+            [companyId]
+        );
+
+        return res.json({ ratings: rows || [] });
+    } catch (error) {
+        console.error('Error fetching company ratings:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 };
@@ -1977,6 +2193,8 @@ module.exports = {
     getFeaturedCompanies,
     getAllCompanies,
     getCompanyProfileById,
+    getCompanyRatings,
+    rateCompany,
     getInternshipById,
     getCompanyInternshipById,
     createInternship,

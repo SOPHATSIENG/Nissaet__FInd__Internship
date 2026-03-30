@@ -50,6 +50,8 @@ const eventRoutes = require('./routes/eventRoutes');
 const postRoutes = require('./routes/postRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const brandingRoutes = require('./routes/brandingRoutes');
+const { authenticate, authorize } = require('./middleware/auth');
+const internshipController = require('./controllers/internshipController');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/internships', internshipRoutes);
@@ -62,6 +64,10 @@ app.use('/api/events', eventRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/branding', brandingRoutes);
+
+// Alias routes for company ratings (helps when frontend calls /api/companies/... directly)
+app.get('/api/companies/:id/ratings', internshipController.getCompanyRatings);
+app.post('/api/companies/:id/ratings', authenticate, authorize('student'), internshipController.rateCompany);
 
 const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 5001;
 const PORT_RETRY_COUNT = Number.parseInt(process.env.PORT_RETRY_COUNT, 10) || 10;

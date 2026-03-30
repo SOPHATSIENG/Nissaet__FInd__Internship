@@ -219,6 +219,18 @@ export const api = {
     return request(`/profile/student/${id}`);
   },
 
+  getStudentRatings(id) {
+    return request(`/profile/student/${id}/ratings`, { auth: false });
+  },
+
+  rateStudent(id, rating, reviewText) {
+    return request(`/profile/student/${id}/ratings`, {
+      method: 'POST',
+      auth: true,
+      body: { rating, review_text: reviewText || null }
+    });
+  },
+
   // Skills endpoint
   getSkills(params = {}) {
     const query = new URLSearchParams(
@@ -352,6 +364,18 @@ export const api = {
       console.error('Error in getFeaturedCompanies:', error);
       throw error;
     });
+  },
+
+  rateCompany(companyId, rating, reviewText) {
+    return request(`/internships/companies/${companyId}/ratings`, {
+      method: 'POST',
+      auth: true,
+      body: { rating, review_text: reviewText || null }
+    });
+  },
+
+  getCompanyRatings(companyId) {
+    return request(`/internships/companies/${companyId}/ratings`, { auth: false });
   },
 
   getRecommendedInternships() {

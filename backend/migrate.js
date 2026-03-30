@@ -11,7 +11,9 @@ class MigrationRunner {
             user: process.env.DB_USER || 'root',
             password: process.env.DB_PASSWORD || '',
             database: process.env.DB_NAME || 'nissaet_db',
-            multipleStatements: true
+            multipleStatements: true,
+            waitForConnections: true,
+            connectionLimit: 1
         };
     }
 
@@ -40,16 +42,14 @@ class MigrationRunner {
     }
 
     async createMigrationsTable() {
-        const createTableSQL = `
-            CREATE TABLE IF NOT EXISTS migrations (
+        const createTableSQL = `CREATE TABLE IF NOT EXISTS migrations (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 filename VARCHAR(255) NOT NULL UNIQUE,
                 executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        `;
+            )`;
         
         try {
-            await this.connection.execute(createTableSQL);
+            await this.connection.query(createTableSQL);
             console.log('✅ Migrations table ready');
         } catch (error) {
             console.error('❌ Failed to create migrations table:', error.message);
@@ -59,6 +59,7 @@ class MigrationRunner {
 
     async getExecutedMigrations() {
         try {
+            await this.createMigrationsTable();
             const [rows] = await this.connection.execute('SELECT filename FROM migrations ORDER BY filename');
             return rows.map(row => row.filename);
         } catch (error) {
@@ -80,8 +81,6 @@ class MigrationRunner {
         const sql = fs.readFileSync(filePath, 'utf8');
         
         try {
-            await this.connection.beginTransaction();
-            
             // Execute the migration SQL
             await this.connection.query(sql);
             
@@ -91,10 +90,8 @@ class MigrationRunner {
                 [filename]
             );
             
-            await this.connection.commit();
             console.log(`✅ Executed migration: ${filename}`);
         } catch (error) {
-            await this.connection.rollback();
             console.error(`❌ Failed to execute migration ${filename}:`, error.message);
             throw error;
         }

@@ -208,10 +208,10 @@ export function Login() {
       }
     >
       <div className="mb-10 flex items-center gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#137fec] text-white">
-          <Grid className="h-6 w-6" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold text-sm">
+          NI
         </div>
-        <span className="text-xl font-bold tracking-tight text-slate-900">Nissaet Find Intership</span>
+        <span className="text-xl font-bold tracking-tight text-slate-900">Nissaet</span>
       </div>
 
       <div className="mb-8">

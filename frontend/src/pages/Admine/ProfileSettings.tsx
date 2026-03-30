@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Camera, 
   Mail, 
@@ -17,30 +17,33 @@ import {
   ChevronRight,
   ExternalLink,
   Bell,
-  LogOut,
-  Smartphone,
   X,
-  AlertCircle,
   Pencil
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useProfile, defaultSettings } from '@/context/ProfileContext';
+import { useProfile } from '@/context/ProfileContext';
 import { motion, AnimatePresence } from 'motion/react';
+import api from '../../api/axios';
 
 export const ProfileSettings = () => {
   const { settings, updateSettings } = useProfile();
   const [localSettings, setLocalSettings] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
   
   // New States
   const [notifications, setNotifications] = useState({
-    email: true,
-    push: false,
-    sms: true,
-    marketing: false
+    internshipEmail: false,
+    internshipInApp: false,
+    statusEmail: false,
+    statusInApp: false,
+    tipsEmail: false,
+    tipsInApp: false,
   });
-  const [isTwoFactorEnabled, setIsTwoFactorEnabled] = useState(true);
+  const [isTwoFactorEnabled, setIsTwoFactorEnabled] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     current: '',
@@ -65,11 +68,49 @@ export const ProfileSettings = () => {
     }
   };
 
-  const handleReset = () => {
-    if (window.confirm('Reset profile to example data (Sophea Chan)?')) {
-      setLocalSettings(defaultSettings);
-      updateSettings(defaultSettings);
-      window.location.reload(); // Force reload to clear any stale state if needed
+  const handleReset = async () => {
+    if (!window.confirm('Reload your latest profile data from the server?')) return;
+    setIsLoading(true);
+    setLoadError('');
+    try {
+      const response = await api.getProfileSettings();
+      const payload = response?.settings || response || {};
+      const personal = payload.personal || {};
+      setLocalSettings((prev) => ({
+        ...prev,
+        username: personal.username || prev.username,
+        name: personal.full_name || prev.name,
+        email: personal.email || prev.email,
+        phone: personal.phone || prev.phone,
+        location: personal.address || prev.location,
+        bio: personal.bio || prev.bio,
+        role: personal.role || prev.role,
+        avatar: personal.profile_image || prev.avatar,
+      }));
+      updateSettings({
+        username: personal.username || localSettings.username,
+        name: personal.full_name || localSettings.name,
+        email: personal.email || localSettings.email,
+        phone: personal.phone || localSettings.phone,
+        location: personal.address || localSettings.location,
+        bio: personal.bio || localSettings.bio,
+        role: personal.role || localSettings.role,
+        avatar: personal.profile_image || localSettings.avatar,
+        coverImage: localSettings.coverImage,
+      });
+      setIsTwoFactorEnabled(!!payload?.security?.two_factor_enabled);
+      setNotifications({
+        internshipEmail: !!payload?.notifications?.internship_matches_email,
+        internshipInApp: !!payload?.notifications?.internship_matches_in_app,
+        statusEmail: !!payload?.notifications?.application_status_email,
+        statusInApp: !!payload?.notifications?.application_status_in_app,
+        tipsEmail: !!payload?.notifications?.career_tips_email,
+        tipsInApp: !!payload?.notifications?.career_tips_in_app,
+      });
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Failed to load profile data.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -82,30 +123,102 @@ export const ProfileSettings = () => {
     { name: 'Amber', value: 'amber', bg: 'bg-amber-500', ring: 'ring-amber-500/20' },
   ];
 
-  const activityLog = [
-    { action: 'Logged in from new device', date: 'Just now', device: 'Chrome on Mac OS', icon: Globe, color: 'text-blue-500', bg: 'bg-blue-50' },
-    { action: 'Updated profile picture', date: '2 hours ago', device: 'iPhone 13', icon: Camera, color: 'text-purple-500', bg: 'bg-purple-50' },
-    { action: 'Changed password', date: 'Yesterday', device: 'Chrome on Windows', icon: Lock, color: 'text-amber-500', bg: 'bg-amber-50' },
-    { action: 'Verified 5 new students', date: '3 days ago', device: 'System', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-  ];
+  const [activityLog, setActivityLog] = useState([
+    { action: 'Recent activity will appear here.', date: '—', device: '—', icon: Activity, color: 'text-slate-500', bg: 'bg-slate-50' },
+  ]);
 
-  const handleSave = () => {
+  const timeAgo = (value?: string | null) => {
+    if (!value) return 'Just now';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const handleSave = async () => {
+    setActionError('');
     setIsSaving(true);
-    setTimeout(() => {
-      updateSettings(localSettings);
-      setIsSaving(false);
+    try {
+      const fullName = (localSettings.name || '').trim();
+      const [firstName, ...rest] = fullName.split(/\s+/).filter(Boolean);
+      const lastName = rest.join(' ');
+      const response = await api.updatePersonalSettings({
+        username: localSettings.username || null,
+        full_name: fullName,
+        first_name: firstName || null,
+        last_name: lastName || null,
+        email: localSettings.email || null,
+        phone: localSettings.phone || null,
+        address: localSettings.location || null,
+        bio: localSettings.bio || null,
+        profile_image: localSettings.avatar || null,
+        role: localSettings.role || null,
+      });
+
+      if (response?.settings?.personal) {
+        const personal = response.settings.personal;
+        updateSettings({
+          username: personal.username || localSettings.username,
+          name: personal.full_name || localSettings.name,
+          email: personal.email || localSettings.email,
+          phone: personal.phone || localSettings.phone,
+          location: personal.address || localSettings.location,
+          bio: personal.bio || localSettings.bio,
+          role: personal.role || localSettings.role,
+          avatar: personal.profile_image || localSettings.avatar,
+          coverImage: localSettings.coverImage,
+        });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('profile-settings-updated', {
+              detail: response.settings,
+            })
+          );
+        }
+      } else {
+        updateSettings(localSettings);
+      }
+
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 800);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to save profile.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate password change
-    setIsChangePasswordOpen(false);
-    setPasswordForm({ current: '', new: '', confirm: '' });
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    setActionError('');
+    if (!passwordForm.current || !passwordForm.new || !passwordForm.confirm) {
+      setActionError('Please complete all password fields.');
+      return;
+    }
+    if (passwordForm.new !== passwordForm.confirm) {
+      setActionError('New password and confirm password do not match.');
+      return;
+    }
+    api.updatePassword({
+      currentPassword: passwordForm.current,
+      newPassword: passwordForm.new,
+    })
+      .then(() => {
+        setIsChangePasswordOpen(false);
+        setPasswordForm({ current: '', new: '', confirm: '' });
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
+      })
+      .catch((error) => {
+        setActionError(error instanceof Error ? error.message : 'Failed to update password.');
+      });
   };
 
   const accentColor = localSettings.accentColor;
@@ -117,8 +230,139 @@ export const ProfileSettings = () => {
     { label: 'Avg Response', value: '2.4h', icon: Clock, color: 'text-amber-500' },
   ];
 
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProfile = async () => {
+      setIsLoading(true);
+      setLoadError('');
+      try {
+        const response = await api.getProfileSettings();
+        const payload = response?.settings || response || {};
+        const personal = payload.personal || {};
+        if (!mounted) return;
+        setLocalSettings((prev) => ({
+          ...prev,
+          username: personal.username || prev.username,
+          name: personal.full_name || prev.name,
+          email: personal.email || prev.email,
+          phone: personal.phone || prev.phone,
+          location: personal.address || prev.location,
+          bio: personal.bio || prev.bio,
+          role: personal.role || prev.role,
+          avatar: personal.profile_image || prev.avatar,
+        }));
+        setIsTwoFactorEnabled(!!payload?.security?.two_factor_enabled);
+        setNotifications({
+          internshipEmail: !!payload?.notifications?.internship_matches_email,
+          internshipInApp: !!payload?.notifications?.internship_matches_in_app,
+          statusEmail: !!payload?.notifications?.application_status_email,
+          statusInApp: !!payload?.notifications?.application_status_in_app,
+          tipsEmail: !!payload?.notifications?.career_tips_email,
+          tipsInApp: !!payload?.notifications?.career_tips_in_app,
+        });
+      } catch (error) {
+        if (mounted) {
+          setLoadError(error instanceof Error ? error.message : 'Failed to load profile data.');
+        }
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+
+    loadProfile();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadActivity = async () => {
+      try {
+        const data = await api.adminGetDashboardOverview();
+        const items = Array.isArray(data?.activity) ? data.activity : [];
+        if (!mounted || items.length === 0) return;
+        const mapped = items.slice(0, 6).map((item: any, index: number) => ({
+          action: item?.title || `Activity ${index + 1}`,
+          date: timeAgo(item?.time),
+          device: item?.desc || 'System',
+          icon: Activity,
+          color: 'text-blue-500',
+          bg: 'bg-blue-50',
+        }));
+        setActivityLog(mapped);
+      } catch (error) {
+        // Keep fallback activity log
+      }
+    };
+    loadActivity();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const notificationItems = useMemo(() => ([
+    { id: 'internshipEmail', label: 'Internship Matches (Email)', desc: 'Email alerts for new matches', icon: Mail },
+    { id: 'internshipInApp', label: 'Internship Matches (In-App)', desc: 'In-app alerts for new matches', icon: Bell },
+    { id: 'statusEmail', label: 'Application Status (Email)', desc: 'Email alerts for application updates', icon: Mail },
+    { id: 'statusInApp', label: 'Application Status (In-App)', desc: 'In-app alerts for application updates', icon: Bell },
+    { id: 'tipsEmail', label: 'Career Tips (Email)', desc: 'Email digests with platform insights', icon: Mail },
+    { id: 'tipsInApp', label: 'Career Tips (In-App)', desc: 'In-app tips and announcements', icon: Bell },
+  ]), []);
+
+  const handleNotificationToggle = async (key: keyof typeof notifications) => {
+    setActionError('');
+    const next = { ...notifications, [key]: !notifications[key] };
+    setNotifications(next);
+    try {
+      await api.updateNotificationSettings({
+        internship_matches_email: next.internshipEmail,
+        internship_matches_in_app: next.internshipInApp,
+        application_status_email: next.statusEmail,
+        application_status_in_app: next.statusInApp,
+        career_tips_email: next.tipsEmail,
+        career_tips_in_app: next.tipsInApp,
+      });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to update notifications.');
+      setNotifications(notifications);
+    }
+  };
+
+  const handleToggleTwoFactor = async () => {
+    setActionError('');
+    const nextValue = !isTwoFactorEnabled;
+    setIsTwoFactorEnabled(nextValue);
+    try {
+      await api.updateTwoFactorSettings({ enabled: nextValue });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to update two-factor settings.');
+      setIsTwoFactorEnabled(!nextValue);
+    }
+  };
+
   return (
-    <div className="flex flex-1 flex-col gap-8 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
+    <div className="admin-page">
+      {isLoading && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          Loading profile...
+        </div>
+      )}
+      {loadError && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">
+          {loadError}
+        </div>
+      )}
+      {actionError && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">
+          {actionError}
+        </div>
+      )}
       {/* Header Section with Cover Photo */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Cover Photo */}
@@ -184,7 +428,7 @@ export const ProfileSettings = () => {
                 onClick={handleReset}
                 className="px-3 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
               >
-                Reset
+                Reload
               </button>
               <button className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all shadow-sm">
                 View Profile
@@ -368,7 +612,7 @@ export const ProfileSettings = () => {
                   className="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm text-text-primary text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center justify-between group h-[46px]"
                 >
                   <span className="flex items-center gap-2 text-slate-400">
-                    <span className="text-xl leading-none mt-1">••••••••</span>
+                    <span className="text-xl leading-none mt-1">********</span>
                   </span>
                   <span className="text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">Change</span>
                 </button>
@@ -465,11 +709,7 @@ export const ProfileSettings = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4">
-              {[
-                { id: 'email', label: 'Email Notifications', desc: 'Receive updates via email', icon: Mail },
-                { id: 'push', label: 'Push Notifications', desc: 'Receive updates on your device', icon: Smartphone },
-                { id: 'sms', label: 'SMS Notifications', desc: 'Receive updates via SMS', icon: Phone },
-              ].map((item) => (
+              {notificationItems.map((item) => (
                 <div key={item.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-border">
                   <div className="flex items-center gap-4">
                     <div className="size-10 rounded-xl bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center text-slate-400">
@@ -481,7 +721,7 @@ export const ProfileSettings = () => {
                     </div>
                   </div>
                   <button 
-                    onClick={() => setNotifications(prev => ({ ...prev, [item.id]: !prev[item.id as keyof typeof notifications] }))}
+                    onClick={() => handleNotificationToggle(item.id as keyof typeof notifications)}
                     className={cn(
                       "w-12 h-6 rounded-full relative transition-colors duration-300",
                       notifications[item.id as keyof typeof notifications] ? "bg-primary" : "bg-slate-200 dark:bg-slate-700"
@@ -512,7 +752,7 @@ export const ProfileSettings = () => {
                   </div>
                 </div>
                 <button 
-                  onClick={() => setIsTwoFactorEnabled(!isTwoFactorEnabled)}
+                  onClick={handleToggleTwoFactor}
                   className={cn(
                     "w-12 h-6 rounded-full relative transition-colors duration-300",
                     isTwoFactorEnabled ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-700"
@@ -560,7 +800,7 @@ export const ProfileSettings = () => {
                     <p className="text-sm font-bold text-text-primary truncate">{log.action}</p>
                     <div className="flex items-center gap-2 text-xs font-medium text-text-secondary">
                       <span>{log.date}</span>
-                      <span>•</span>
+                      <span>*</span>
                       <span>{log.device}</span>
                     </div>
                   </div>

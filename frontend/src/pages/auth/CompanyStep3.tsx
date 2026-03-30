@@ -5,6 +5,7 @@ import { SplitLayout } from '../../components/SplitLayout';
 import { Button } from '../../components/Button';
 import { useAuth } from '../../context/AuthContext';
 import { registrationStorage } from '../../utils/registrationStorage';
+import api from '../../api/axios';
 
 export function CompanyStep3() {
   const navigate = useNavigate();
@@ -53,13 +54,32 @@ export function CompanyStep3() {
     try {
       setIsLoading(true);
       setError('');
-      await register({
-        ...step1,
-        ...step2,
-        role: 'company',
-        company_name: step2.company_name || step1.company_name,
-      });
-      navigate('/company');
+      if (step1.is_social) {
+        await api.updateCompanySettings({
+          company_name: step2.company_name || step1.company_name,
+          industry: step2.industry,
+          website: step2.website,
+          location: step2.location || step1.location,
+          description: step2.company_bio,
+          logo: step2.logo,
+        });
+        await api.companyCreateVerification({
+          documents: Array.isArray(step2.documents) ? step2.documents : [],
+          contact_person: step2.contact_person || step1.full_name || null,
+          contact_email: step1.email || null,
+          notes: 'Submitted via Google registration',
+        });
+        registrationStorage.clearAll();
+        navigate('/company');
+      } else {
+        await register({
+          ...step1,
+          ...step2,
+          role: 'company',
+          company_name: step2.company_name || step1.company_name,
+        });
+        navigate('/company');
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Registration failed.');
     } finally {

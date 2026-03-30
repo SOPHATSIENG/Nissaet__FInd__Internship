@@ -10,6 +10,7 @@ import {SectionHeader} from '../shared/SectionHeader';
 interface PersonalTabProps {
   data: ProfilePersonalSettings;
   onSaved: (settings: ProfileSettingsPayload) => void;
+  isAvailable?: boolean;
 }
 
 const EMPTY_PERSONAL: ProfilePersonalSettings = {
@@ -32,7 +33,7 @@ const splitFullName = (fullName: string) => {
   return {firstName: tokens[0], lastName: tokens.slice(1).join(' ')};
 };
 
-export function PersonalTab({data, onSaved}: PersonalTabProps) {
+export function PersonalTab({data, onSaved, isAvailable}: PersonalTabProps) {
   // FIX MARK: personal tab now reads real values from DB instead of static placeholders.
   const {updateUser} = useAuth();
   const profile = data || EMPTY_PERSONAL;
@@ -171,7 +172,7 @@ export function PersonalTab({data, onSaved}: PersonalTabProps) {
               <button
                 type="button"
                 onClick={selectPhoto}
-                className="w-32 h-32 rounded-full bg-slate-900 text-white flex items-center justify-center overflow-hidden border-4 border-white shadow-lg"
+                className={`w-32 h-32 rounded-full bg-slate-900 text-white flex items-center justify-center overflow-hidden border-4 border-white shadow-lg ${isAvailable ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-white' : ''}`}
               >
                 {profileImage ? (
                   <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
@@ -181,6 +182,14 @@ export function PersonalTab({data, onSaved}: PersonalTabProps) {
                 <span className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <Camera className="text-white" size={24} />
                 </span>
+                {isAvailable && (
+                  <span
+                    className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md"
+                    aria-label="Open to work"
+                  >
+                    Open to work
+                  </span>
+                )}
               </button>
             </div>
 

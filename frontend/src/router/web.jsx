@@ -11,12 +11,16 @@ import { CompanyStep3 } from '../pages/auth/CompanyStep3';
 import { AdminStep2 } from '../pages/auth/AdminStep2';
 import Layout from '../components/Layout';
 import Home from '../pages/student/Home';
+import StudentDashboard from '../pages/student/Dashboard';
 import Internships from '../pages/student/Internships';
 import InternshipDetails from '../pages/student/InternshipDetails';
 import Companies from '../pages/student/Companies';
+import CompanyProfile from '../pages/student/CompanyProfile';
 import CareerAdvice from '../pages/student/CareerAdvice';
 import BlogList from '../pages/student/BlogList';
 import BlogDetail from '../pages/student/BlogDetail';
+import Events from '../pages/student/Events';
+import EventDetails from '../pages/student/EventDetails';
 import AccountSettings from '../pages/account/AccountSettings';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -43,7 +47,6 @@ import { Sidebar as AdminSidebar } from '../components/Admin_components/Sidebar'
 import { Header as AdminHeader } from '../components/Admin_components/Header';
 import { Dashboard as AdminDashboard } from '../pages/Admine/Dashboard';
 import { UserManagement } from '../pages/Admine/UserManagement';
-import { TeamManagement } from '../pages/Admine/TeamManagement';
 import { CategoryManagement } from '../pages/Admine/CategoryManagement';
 import { CategoryDetailsList } from '../pages/Admine/CategoryDetailsList';
 import { Reports } from '../pages/Admine/Reports';
@@ -204,10 +207,16 @@ const PageWrapper = ({ children }) => {
 
 const AdminLayout = () => {
   const location = useLocation();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem('adminSidebarCollapsed');
+    if (saved === 'true') setIsSidebarCollapsed(true);
+  }, []);
 
   const getTitle = (path) => {
     if (path.includes('/admin/users')) return 'User Management';
-    if (path.includes('/admin/team')) return 'Team Management';
     if (path.includes('/admin/categories/details_list')) return 'Category Details';
     if (path.includes('/admin/categories')) return 'Category Management';
     if (path.includes('/admin/reports')) return 'Platform Reports';
@@ -220,8 +229,19 @@ const AdminLayout = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background-light">
-      <AdminSidebar />
-      <main className="flex flex-1 flex-col ml-72 overflow-hidden">
+      <AdminSidebar
+        collapsed={isSidebarCollapsed}
+        onToggle={() =>
+          setIsSidebarCollapsed((prev) => {
+            const next = !prev;
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem('adminSidebarCollapsed', String(next));
+            }
+            return next;
+          })
+        }
+      />
+      <main className={`flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
         <AdminHeader title={getTitle(location.pathname)} />
         <div className="flex-1 overflow-y-auto no-scrollbar">
           <PageWrapper>
@@ -262,13 +282,23 @@ export default function WebRouter() {
           }
         >
           <Route index element={<Home />} />
+          <Route
+            path="dashboard"
+            element={
+              <RequireAuth>
+                <StudentDashboard />
+              </RequireAuth>
+            }
+          />
           <Route path="internships" element={<Internships />} />
           <Route path="internships/:id" element={<InternshipDetails />} />
           <Route path="companies" element={<Companies />} />
-          <Route path="companies/:id" element={<Companies />} />
+          <Route path="companies/:id" element={<CompanyProfile />} />
           <Route path="career-advice" element={<CareerAdvice />} />
           <Route path="blog" element={<BlogList />} />
           <Route path="blog/:id" element={<BlogDetail />} />
+          <Route path="events" element={<Events />} />
+          <Route path="events/:id" element={<EventDetails />} />
           <Route path="student/:id" element={<StudentProfile />} />
           <Route
             path="account-settings"
@@ -320,7 +350,6 @@ export default function WebRouter() {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<UserManagement />} />
-          <Route path="team" element={<TeamManagement />} />
           <Route path="categories" element={<CategoryManagement />} />
           <Route path="categories/details_list" element={<CategoryDetailsList />} />
           <Route path="reports" element={<Reports />} />

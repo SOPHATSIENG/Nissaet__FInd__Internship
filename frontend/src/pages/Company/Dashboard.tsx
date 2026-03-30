@@ -22,6 +22,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -30,6 +39,7 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [trendsLoading, setTrendsLoading] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
@@ -47,6 +57,9 @@ export default function Dashboard() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const actionButtonRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
+  const [trendGranularity, setTrendGranularity] = useState<'month' | 'year'>('month');
+  const [trendYear] = useState(() => new Date().getFullYear());
+  type TrendPoint = { key: string; label: string; posts: number; applications: number };
 
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
@@ -76,6 +89,56 @@ export default function Dashboard() {
     if (Number.isNaN(parsed.getTime())) return 'No deadline';
     return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
+
+  const chartTrends = React.useMemo<TrendPoint[]>(() => {
+    const rows = Array.isArray(trends) ? trends : [];
+
+    if (trendGranularity === 'year') {
+      const yearsWindow = 5;
+      const nowYear = new Date().getFullYear();
+      const yearKeys = Array.from({ length: yearsWindow }, (_, index) => String(nowYear - (yearsWindow - 1) + index));
+
+      const byYear = new Map(
+        rows
+          .filter((row: any) => row && (row.year || row.month))
+          .map((row: any) => [String(row.year ?? row.month), row])
+      );
+
+      return yearKeys.map((year) => {
+        const row: any = byYear.get(year);
+        return {
+          key: year,
+          label: year,
+          posts: row ? Number(row.posts) || 0 : 0,
+          applications: row ? Number(row.applications) || 0 : 0
+        };
+      });
+    }
+
+    const monthKeys = Array.from({ length: 12 }, (_, index) => `${trendYear}-${String(index + 1).padStart(2, '0')}`);
+    const byMonth = new Map(
+      rows
+        .filter((row: any) => row && row.month)
+        .map((row: any) => [String(row.month), row])
+    );
+
+    return monthKeys.map((month) => {
+      const row: any = byMonth.get(month);
+      const monthDate = new Date(`${month}-01T00:00:00`);
+      const monthName = monthDate.toLocaleString('en-US', { month: 'short' });
+      return {
+        key: month,
+        label: monthName,
+        posts: row ? Number(row.posts) || 0 : 0,
+        applications: row ? Number(row.applications) || 0 : 0
+      };
+    });
+  }, [trends, trendGranularity, trendYear]);
+
+  const trendsTitle = trendGranularity === 'year' ? 'Yearly Application Trends' : 'Monthly Application Trends';
+  const trendsSubtitle = trendGranularity === 'year'
+    ? 'Tracking application volume over the last 5 years'
+    : `Tracking application volume from Jan to Dec (${trendYear})`;
 
   const isJobActive = (job: any, now: Date) => {
     const isActiveStatus = String(job.status || '').toLowerCase() === 'active';
@@ -116,6 +179,10 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    fetchTrends();
+  }, [trendGranularity]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (!target.closest('[data-filter-menu]')) {
@@ -127,27 +194,40 @@ export default function Dashboard() {
   }, []);
 
 
+  const fetchTrends = async () => {
+    try {
+      setTrendsLoading(true);
+      const params = trendGranularity === 'year'
+        ? { granularity: 'year', years: 5 }
+        : { granularity: 'month', year: trendYear };
+
+      const response = await api.getApplicationTrends(params);
+      setTrends(response?.trends || []);
+    } catch (trendError) {
+      console.error('Error fetching trends:', trendError);
+      setTrends([]);
+    } finally {
+      setTrendsLoading(false);
+    }
+  };
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       
-      const [internshipsResult, statsResult, trendsResult] = await Promise.allSettled([
+      const [internshipsResult, statsResult] = await Promise.allSettled([
         api.getCompanyInternships(),
-        api.getDashboardStats(),
-        api.getApplicationTrends()
+        api.getDashboardStats()
       ]);
 
       const internshipsResponse =
         internshipsResult.status === 'fulfilled' ? internshipsResult.value : null;
       const statsResponse =
         statsResult.status === 'fulfilled' ? statsResult.value : null;
-      const trendsResponse =
-        trendsResult.status === 'fulfilled' ? trendsResult.value : null;
 
       const errors = [
         internshipsResult.status === 'rejected' ? 'Failed to load internships.' : null,
         statsResult.status === 'rejected' ? 'Failed to load dashboard stats.' : null,
-        trendsResult.status === 'rejected' ? 'Failed to load trends.' : null
       ].filter(Boolean);
 
       setError(errors.length ? errors.join(' ') : null);
@@ -261,7 +341,6 @@ export default function Dashboard() {
       }
 
       setRecentApplications(normalizedRecent);
-      setTrends(trendsResponse?.trends || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load dashboard data.');
@@ -404,39 +483,94 @@ export default function Dashboard() {
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Monthly Application Trends</h3>
-              <p className="text-xs text-slate-500">Tracking application volume over the last 6 months</p>
+              <h3 className="text-lg font-bold text-slate-900">{trendsTitle}</h3>
+              <p className="text-xs text-slate-500">{trendsSubtitle}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {trendsLoading && (
+                <div className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading
+                </div>
+              )}
+              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setTrendGranularity('month')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    trendGranularity === 'month' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendGranularity('year')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    trendGranularity === 'year' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Year
+                </button>
+              </div>
             </div>
           </div>
-          <div className="relative h-64 w-full flex items-end justify-between gap-2 sm:gap-4 pt-4 px-2">
-            {trends.length > 0 ? (
-              trends.map((trend, i) => {
-                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                const monthName = months[new Date(trend.month + '-01').getMonth()] || 'Month';
-                const isCurrentMonth = i === trends.length - 1;
-                
-                return (
-                  <div key={trend.month} className="relative z-10 flex flex-col items-center flex-1 h-full justify-end group">
-                    <div 
-                      className={`w-full max-w-[40px] transition-all duration-300 rounded-t-md relative ${
-                        isCurrentMonth ? 'bg-blue-600 shadow-lg shadow-blue-600/20' : 'bg-blue-600/20 hover:bg-blue-600'
-                      }`}
-                      style={{ height: `${Math.max(10, Math.min((trend.applications || 1) * 10, 100))}%` }}
-                    >
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                        {trend.applications} Applicants
-                      </div>
-                    </div>
-                    <span className={`text-xs mt-2 ${isCurrentMonth ? 'font-bold text-blue-600' : 'text-slate-500'}`}>
-                      {monthName}
-                    </span>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-sm italic">
-                No trend data available yet
+          <div className="h-64 w-full">
+            {trendsLoading ? (
+              <div className="h-full w-full flex items-center justify-center text-slate-400 text-sm italic">
+                Loading trends...
               </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartTrends} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="applicationsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: '#64748b', fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                  height={32}
+                />
+                <YAxis
+                  tick={{ fill: '#64748b', fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={28}
+                  allowDecimals={false}
+                />
+
+                <Tooltip
+                  cursor={{ stroke: '#2563eb', strokeWidth: 1, opacity: 0.2 }}
+                  contentStyle={{
+                    borderRadius: 10,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#0f172a',
+                    color: '#fff',
+                    fontSize: 12,
+                  }}
+                  labelStyle={{ color: '#cbd5e1' }}
+                  formatter={(value: any) => [`${Number(value) || 0} Applicants`, '']}
+                />
+
+                <Area
+                  type="monotone"
+                  dataKey="applications"
+                  stroke="#2563eb"
+                  strokeWidth={2.5}
+                  fill="url(#applicationsGradient)"
+                  dot={false}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: '#2563eb', fill: '#fff' }}
+                />
+                </AreaChart>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
@@ -707,7 +841,7 @@ export default function Dashboard() {
               {recentApplications.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-4">No recent applicants.</p>
               ) : (
-                recentApplications.map((app, i) => (
+                recentApplications.slice(0, 5).map((app, i) => (
                   <div key={app.id} className="flex items-start gap-3">
                     <img 
                       className="h-10 w-10 rounded-full object-cover" 
@@ -723,7 +857,9 @@ export default function Dashboard() {
                       </Link>
                       <p className="text-xs text-slate-500 truncate">Applied for {app.internship_title}</p>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        {new Date(app.created_at).toLocaleDateString()}
+                        {Number.isNaN(new Date(app.created_at).getTime())
+                          ? ''
+                          : new Date(app.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>

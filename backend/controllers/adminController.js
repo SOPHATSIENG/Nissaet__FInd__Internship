@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { createNotification } = require('./notificationController');
 const { getProfileSettingsByUserId } = require('./profileController');
 
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
@@ -58,7 +59,14 @@ const getAllUsers = async (req, res) => {
             COALESCE(status, 'active') as status,
             DATE_FORMAT(created_at, '%b %d, %Y') as date,
             LEFT(full_name, 1) as initial,
-            'bg-blue-100' as color
+            'bg-blue-100' as color,
+            last_login_at,
+            last_active_at,
+            CASE
+                WHEN last_active_at IS NOT NULL
+                 AND last_active_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                THEN 1 ELSE 0
+            END as is_active_session
             FROM users
             ORDER BY created_at DESC
         `);
@@ -70,7 +78,10 @@ const getAllUsers = async (req, res) => {
                 'active' as status,
                 DATE_FORMAT(created_at, '%b %d, %Y') as date,
                 LEFT(full_name, 1) as initial,
-                'bg-blue-100' as color
+                'bg-blue-100' as color,
+                NULL as last_login_at,
+                NULL as last_active_at,
+                0 as is_active_session
                 FROM users
                 ORDER BY created_at DESC
             `);
@@ -480,6 +491,8 @@ const updateCompanyVerificationStatus = async (req, res) => {
         );
 
         const companyId = verificationRows?.[0]?.company_id;
+        const userId = verificationRows?.[0]?.user_id;
+        
         if (companyId) {
             await db.queryRaw(
                 'UPDATE companies SET is_verified = ? WHERE id = ?',
@@ -516,6 +529,23 @@ const updateCompanyVerificationStatus = async (req, res) => {
             } catch (notifyError) {
                 console.error('Notification insert failed:', notifyError.message);
             }
+        }
+
+        if (userId) {
+            const title = status === 'approved' ? 'Company Verified' : 'Verification Update';
+            const message = status === 'approved' 
+                ? 'Congratulations! Your company has been verified. You can now post internships.'
+                : `Your company verification was not approved. Reason: ${rejection_reason || 'Please contact support for more details.'}`;
+            
+            await createNotification(
+                userId,
+                title,
+                message,
+                'system',
+                'company_verification',
+                verificationId,
+                '/company/settings'
+            );
         }
 
         return res.json({ message: 'Verification updated', status });
@@ -587,6 +617,30 @@ const updateStudentVerificationStatus = async (req, res) => {
             return res.status(404).json({ message: 'Verification request not found' });
         }
 
+        // Notify the student
+        const [verificationRows] = await db.queryRaw(
+            'SELECT user_id FROM student_verifications WHERE id = ? LIMIT 1',
+            [verificationId]
+        );
+
+        const userId = verificationRows?.[0]?.user_id;
+        if (userId) {
+            const title = status === 'approved' ? 'Profile Verified' : 'Verification Update';
+            const message = status === 'approved' 
+                ? 'Great news! Your student profile has been verified. You now have a verified badge.'
+                : `Your student verification was not approved. Reason: ${rejection_reason || 'Please contact support for more details.'}`;
+            
+            await createNotification(
+                userId,
+                title,
+                message,
+                'system',
+                'student_verification',
+                verificationId,
+                '/account-settings'
+            );
+        }
+
         return res.json({ message: 'Verification updated', status });
     } catch (error) {
         console.error('Error updating student verification:', error);
@@ -613,8 +667,42 @@ const deleteUser = async (req, res) => {
     }
 };
 
+const normalizeCategoryName = (value) => {
+    if (!value) return '';
+    return String(value).trim().replace(/\s+/g, ' ');
+};
+
+const syncCategoriesFromData = async () => {
+    try {
+        const industries = await db.query(`
+            SELECT DISTINCT industry AS name
+            FROM companies
+            WHERE industry IS NOT NULL AND TRIM(industry) <> ''
+        `);
+        const skillCategories = await db.query(`
+            SELECT DISTINCT category AS name
+            FROM skills
+            WHERE category IS NOT NULL AND TRIM(category) <> ''
+        `);
+
+        const candidates = [...industries, ...skillCategories]
+            .map((row) => normalizeCategoryName(row.name))
+            .filter(Boolean);
+
+        for (const name of candidates) {
+            await db.query(
+                `INSERT IGNORE INTO categories (name, is_active) VALUES (?, 1)`,
+                [name]
+            );
+        }
+    } catch (error) {
+        console.error('Error syncing categories:', error);
+    }
+};
+
 const getCategories = async (req, res) => {
     try {
+        await syncCategoriesFromData();
         const rows = await db.query(`
             SELECT
                 c.id,
@@ -625,10 +713,21 @@ const getCategories = async (req, res) => {
                 c.is_active,
                 c.created_at,
                 c.updated_at,
-                COUNT(i.id) AS listings_count
+                CASE
+                    WHEN LOWER(TRIM(c.name)) = 'general' THEN (
+                        SELECT COUNT(*) FROM internships i2
+                    )
+                    ELSE COUNT(DISTINCT CASE
+                        WHEN (LOWER(TRIM(co.industry)) = LOWER(TRIM(c.name))
+                           OR LOWER(TRIM(s.category)) = LOWER(TRIM(c.name)))
+                        THEN i.id
+                    END)
+                END AS listings_count
             FROM categories c
-            LEFT JOIN companies co ON co.industry = c.name
-            LEFT JOIN internships i ON i.company_id = co.id AND i.status = 'active'
+            LEFT JOIN internships i ON i.status = 'active'
+            LEFT JOIN companies co ON co.id = i.company_id
+            LEFT JOIN internship_skills isk ON isk.internship_id = i.id
+            LEFT JOIN skills s ON s.id = isk.skill_id
             GROUP BY c.id, c.name, c.description, c.icon, c.color, c.is_active, c.created_at, c.updated_at
             ORDER BY c.name ASC
         `);
@@ -751,8 +850,26 @@ const getCategoryInternships = async (req, res) => {
             return res.status(404).json({ message: 'Category not found' });
         }
 
+        const normalizedCategory = normalizeCategoryName(category.name);
+          if (normalizedCategory.toLowerCase() === 'general') {
+              const internships = await db.query(`
+                  SELECT
+                      i.*,
+                      c.name AS company_name,
+                      c.logo AS company_logo,
+                      c.industry AS company_industry,
+                      c.headquarters AS company_location,
+                      c.website AS company_website
+                  FROM internships i
+                  JOIN companies c ON i.company_id = c.id
+                  WHERE i.status = 'active'
+                  ORDER BY i.created_at DESC
+              `);
+              return res.json({ success: true, category: category.name, internships });
+          }
+
         const internships = await db.query(`
-            SELECT
+            SELECT DISTINCT
                 i.*,
                 c.name AS company_name,
                 c.logo AS company_logo,
@@ -761,9 +878,15 @@ const getCategoryInternships = async (req, res) => {
                 c.website AS company_website
             FROM internships i
             JOIN companies c ON i.company_id = c.id
-            WHERE c.industry = ? AND i.status = 'active'
+            LEFT JOIN internship_skills isk ON isk.internship_id = i.id
+            LEFT JOIN skills s ON s.id = isk.skill_id
+            WHERE i.status = 'active'
+              AND (
+                LOWER(TRIM(c.industry)) = LOWER(TRIM(?))
+                OR LOWER(TRIM(s.category)) = LOWER(TRIM(?))
+              )
             ORDER BY i.created_at DESC
-        `, [category.name]);
+        `, [normalizedCategory, normalizedCategory]);
 
         return res.json({ success: true, category: category.name, internships });
     } catch (error) {
@@ -1059,6 +1182,8 @@ const updateInternshipForAdmin = async (req, res) => {
                 }
             }
 
+            await ensureCategoriesForInternshipAdmin(id, skills);
+
             await connection.commit();
             return res.json({ message: 'Internship updated successfully' });
         } catch (error) {
@@ -1318,6 +1443,23 @@ const getDashboardOverview = async (req, res) => {
             }
         }
 
+        if (!skillsRows || skillsRows.length === 0) {
+            try {
+                skillsRows = await db.query(
+                    `SELECT s.name, COUNT(us.user_id) AS value
+                     FROM skills s
+                     LEFT JOIN user_skills us ON us.skill_id = s.id
+                     GROUP BY s.id, s.name
+                     ORDER BY value DESC, s.name ASC
+                     LIMIT 6`
+                );
+            } catch (error) {
+                if (!isBadFieldError(error) && error?.code !== 'ER_NO_SUCH_TABLE') {
+                    console.error('Dashboard skills fallback query failed:', error);
+                }
+            }
+        }
+
         const skills = skillsRows.map(row => ({
             name: row.name,
             value: Number(row.value || 0)
@@ -1347,7 +1489,7 @@ const getDashboardOverview = async (req, res) => {
 
         try {
             const internships = await db.query(
-                `SELECT i.title, i.created_at, c.company_name
+                `SELECT i.title, i.created_at, c.name AS company_name
                  FROM internships i
                  LEFT JOIN companies c ON i.company_id = c.id
                  ORDER BY i.created_at DESC
@@ -1410,6 +1552,51 @@ const normalizeUserStatus = (value) => {
     return 'active';
 };
 
+const ensureCompanyProfileVerified = async (userId, payload = {}) => {
+    if (!userId) return;
+    const companyNameRaw = payload.name || payload.full_name || 'Company';
+    const companyName = String(companyNameRaw || '').trim().replace(/\s+/g, ' ') || 'Company';
+
+    let existing = [];
+    try {
+        existing = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+        existing = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+    }
+
+    if (existing.length > 0) {
+        try {
+            await db.query('UPDATE companies SET is_verified = 1 WHERE id = ?', [existing[0].id]);
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+        }
+        return;
+    }
+
+    try {
+        await db.query(
+            `INSERT INTO companies
+             (user_id, name, description, industry, website, logo, company_size, founded_year, headquarters, is_verified)
+             VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1)`,
+            [userId, companyName]
+        );
+    } catch (error) {
+        if (!isBadFieldError(error)) throw error;
+        await db.query(
+            `INSERT INTO companies
+             (user_id, company_name, logo, description, industry, location, website, contact_person, contact_phone)
+             VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL)`,
+            [userId, companyName, payload.name || payload.full_name || null]
+        );
+        try {
+            await db.query('UPDATE companies SET is_verified = 1 WHERE user_id = ?', [userId]);
+        } catch (fallbackError) {
+            if (!isBadFieldError(fallbackError)) throw fallbackError;
+        }
+    }
+};
+
 const updateAdminUser = async (req, res) => {
     const userId = Number(req.params.id);
     if (!userId) {
@@ -1419,6 +1606,19 @@ const updateAdminUser = async (req, res) => {
     const { name, email, role, status } = req.body || {};
     const updates = [];
     const params = [];
+    let previousUser = null;
+
+    try {
+        const rows = await db.query('SELECT role, full_name, email FROM users WHERE id = ? LIMIT 1', [userId]);
+        previousUser = rows?.[0] || null;
+    } catch (error) {
+        console.error('Error fetching user for update:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+
+    if (!previousUser) {
+        return res.status(404).json({ message: 'User not found' });
+    }
 
     if (name !== undefined) {
         updates.push('full_name = ?');
@@ -1454,7 +1654,14 @@ const updateAdminUser = async (req, res) => {
             `SELECT id, full_name as name, email, role, COALESCE(status, 'active') as status,
              DATE_FORMAT(created_at, '%b %d, %Y') as date,
              LEFT(full_name, 1) as initial,
-             'bg-blue-100' as color
+             'bg-blue-100' as color,
+             last_login_at,
+             last_active_at,
+             CASE
+                 WHEN last_active_at IS NOT NULL
+                  AND last_active_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                 THEN 1 ELSE 0
+             END as is_active_session
              FROM users WHERE id = ? LIMIT 1`,
             [userId]
         );
@@ -1463,7 +1670,17 @@ const updateAdminUser = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        return res.json({ user: rows[0] });
+        const updatedUser = rows[0];
+        const normalizedRole = String(role || '').trim().toLowerCase();
+        const previousRole = String(previousUser.role || '').trim().toLowerCase();
+        if (normalizedRole === 'company' && previousRole !== 'company') {
+            await ensureCompanyProfileVerified(userId, {
+                name: updatedUser.name || previousUser.full_name,
+                full_name: updatedUser.name || previousUser.full_name
+            });
+        }
+
+        return res.json({ user: updatedUser });
     } catch (error) {
         if (isBadFieldError(error)) {
             return res.status(400).json({ message: 'User status column missing. Run migrations.' });
@@ -1522,6 +1739,33 @@ const getAdminSettings = async (req, res) => {
             return res.status(500).json({ message: 'Admin settings table not found. Run migrations first.' });
         }
         console.error('Error fetching admin settings:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Public branding endpoint for site-wide UI (no admin auth required).
+const getPublicBranding = async (req, res) => {
+    try {
+        const rows = await db.query('SELECT * FROM admin_settings ORDER BY id ASC LIMIT 1');
+        const settings = rows && rows.length > 0 ? normalizeAdminSettingsRow(rows[0]) : defaultAdminSettings;
+        return res.json({
+            branding: {
+                platformName: settings.platformName,
+                brandLogo: settings.brandLogo,
+                brandFavicon: settings.brandFavicon
+            }
+        });
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({
+                branding: {
+                    platformName: defaultAdminSettings.platformName,
+                    brandLogo: defaultAdminSettings.brandLogo,
+                    brandFavicon: defaultAdminSettings.brandFavicon
+                }
+            });
+        }
+        console.error('Error fetching public branding:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 };
@@ -1607,14 +1851,130 @@ const updateAdminSettings = async (req, res) => {
 const exportAdminData = async (req, res) => {
     try {
         const now = new Date();
+        const [
+            users,
+            companies,
+            students,
+            internships,
+            applications,
+            categories,
+            skills,
+            companyVerifications
+        ] = await Promise.all([
+            db.query('SELECT * FROM users ORDER BY id ASC'),
+            db.query('SELECT * FROM companies ORDER BY id ASC'),
+            db.query('SELECT * FROM students ORDER BY id ASC'),
+            db.query('SELECT * FROM internships ORDER BY id ASC'),
+            db.query('SELECT * FROM applications ORDER BY id ASC'),
+            db.query('SELECT * FROM categories ORDER BY id ASC'),
+            db.query('SELECT * FROM skills ORDER BY id ASC'),
+            db.query('SELECT * FROM company_verifications ORDER BY id ASC')
+        ]);
+
         await db.query(
             'UPDATE admin_settings SET last_backup_at = ? WHERE id = 1',
             [toMysqlDateTime(now)]
         );
-        return res.json({ success: true, lastBackupAt: now.toISOString() });
+
+        const exportPayload = {
+            exportedAt: now.toISOString(),
+            counts: {
+                users: users.length,
+                companies: companies.length,
+                students: students.length,
+                internships: internships.length,
+                applications: applications.length,
+                categories: categories.length,
+                skills: skills.length,
+                companyVerifications: companyVerifications.length
+            },
+            data: {
+                users,
+                companies,
+                students,
+                internships,
+                applications,
+                categories,
+                skills,
+                companyVerifications
+            }
+        };
+
+        const safeDate = now.toISOString().replace(/[:.]/g, '-');
+        const filename = `nissaet-export-${safeDate}.json`;
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('X-Exported-At', now.toISOString());
+        return res.status(200).send(JSON.stringify(exportPayload, null, 2));
     } catch (error) {
         console.error('Error exporting admin data:', error);
         return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const deleteInternshipForAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        try {
+            await db.query(
+                `UPDATE internships
+                 SET status = 'archived', is_flagged = 1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [id]
+            );
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            await db.query(
+                `UPDATE internships
+                 SET status = 'archived', updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`,
+                [id]
+            );
+        }
+
+        return res.json({ success: true, message: 'Internship archived' });
+    } catch (error) {
+        console.error('Error deleting internship (admin):', error);
+        return res.status(500).json({ message: 'Server error: ' + error.message });
+    }
+};
+
+const ensureCategoriesForInternshipAdmin = async (internshipId, skills) => {
+    try {
+        const [row] = await db.query('SELECT company_id FROM internships WHERE id = ? LIMIT 1', [internshipId]);
+        const companyId = row?.company_id;
+        if (companyId) {
+            const [company] = await db.query('SELECT industry FROM companies WHERE id = ? LIMIT 1', [companyId]);
+            const industryName = normalizeCategoryName(company?.industry);
+            if (industryName) {
+                await db.query('INSERT IGNORE INTO categories (name, is_active) VALUES (?, 1)', [industryName]);
+            }
+        }
+
+        if (Array.isArray(skills) && skills.length > 0) {
+            const skillNames = skills
+                .map((skill) => (typeof skill === 'string' ? skill : skill?.name))
+                .filter((value) => typeof value === 'string' && String(value).trim().length > 0)
+                .map((value) => String(value).trim());
+
+            if (skillNames.length > 0) {
+                const placeholders = skillNames.map(() => '?').join(', ');
+                const categories = await db.query(
+                    `SELECT DISTINCT category AS name FROM skills WHERE name IN (${placeholders})`,
+                    skillNames
+                );
+                for (const row of categories) {
+                    const name = normalizeCategoryName(row.name);
+                    if (name) {
+                        await db.query('INSERT IGNORE INTO categories (name, is_active) VALUES (?, 1)', [name]);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error ensuring categories for admin internship update:', error);
     }
 };
 
@@ -1661,12 +2021,14 @@ module.exports = {
     updateInternshipForAdmin,
     flagInternshipForAdmin,
     unflagInternshipForAdmin,
+    deleteInternshipForAdmin,
     getJobTypes,
     getReports,
     getAdminSettings,
     updateAdminSettings,
     exportAdminData,
     purgeAdminLogs,
+    getPublicBranding,
     getAdminStudentProfile,
     updateAdminUser
 };

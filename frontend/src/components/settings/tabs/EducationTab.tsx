@@ -68,6 +68,17 @@ export function EducationTab({data, onSaved}: EducationTabProps) {
 
       if (response?.settings) {
         onSaved(response.settings);
+        try {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('profile-settings-updated', {
+                detail: response.settings,
+              })
+            );
+          }
+        } catch {
+          // Event dispatch failure should not block save success.
+        }
       }
       setStatus('Education settings saved.');
     } catch (err) {

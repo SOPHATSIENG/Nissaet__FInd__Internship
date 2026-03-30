@@ -7,10 +7,12 @@ import {
   CheckCircle2,
   ArrowRight,
   Loader2,
+  Star,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
+import { useAuth } from "../../context/AuthContext";
 
 interface FeaturedCompany {
   id: number;
@@ -18,6 +20,7 @@ interface FeaturedCompany {
   description: string | null;
   open_positions: number;
   rating: number | null;
+  rating_count: number | null;
   logo: string | null;
 }
 
@@ -39,6 +42,7 @@ interface Internship {
 
 export default function Home() {
   const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
   const [featuredCompanies, setFeaturedCompanies] = useState<FeaturedCompany[]>([]);
   const [latestInternships, setLatestInternships] = useState<Internship[]>([]);
   const [matchingInternships, setMatchingInternships] = useState<Internship[]>([]);
@@ -81,44 +85,49 @@ export default function Home() {
           throw new Error(`Failed to load internships: ${err.message}`);
         }
 
-        try {
-          console.log('Fetching profile settings...');
-          const profileRes = await api.getProfileSettings().catch(() => null);
-          console.log('Profile response:', profileRes);
-          setProfileSkills(
-            Array.isArray(profileRes?.settings?.skills)
-              ? profileRes.settings.skills
-                  .map((skill: { name?: string }) => (skill?.name || "").trim().toLowerCase())
-                  .filter(Boolean)
-              : []
-          );
+        if (isAuthenticated) {
+          try {
+            console.log('Fetching profile settings...');
+            const profileRes = await api.getProfileSettings().catch(() => null);
+            console.log('Profile response:', profileRes);
+            setProfileSkills(
+              Array.isArray(profileRes?.settings?.skills)
+                ? profileRes.settings.skills
+                    .map((skill: { name?: string }) => (skill?.name || "").trim().toLowerCase())
+                    .filter(Boolean)
+                : []
+            );
 
-          if (profileRes?.settings) {
-            setIsAvailable(!!profileRes.settings.education?.is_available);
-            setUserName(profileRes.settings.personal?.full_name || "");
+            if (profileRes?.settings) {
+              setIsAvailable(!!profileRes.settings.education?.is_available);
+              setUserName(profileRes.settings.personal?.full_name || "");
 
-            try {
-              const studentRes = await api.getApplicants().catch(() => null);
-              if (studentRes?.applications?.length > 0) {
-                setStudentId(studentRes.applications[0].student_id);
+              try {
+                const studentRes = await api.getApplicants().catch(() => null);
+                if (studentRes?.applications?.length > 0) {
+                  setStudentId(studentRes.applications[0].student_id);
+                }
+              } catch {
+                // Ignore if student ID lookup fails
               }
-            } catch {
-              // Ignore if student ID lookup fails
             }
+          } catch (err) {
+            console.error('Profile settings failed:', err);
+            // Don't throw error for profile, it's optional
           }
-        } catch (err) {
-          console.error('Profile settings failed:', err);
-          // Don't throw error for profile, it's optional
-        }
 
-        try {
-          console.log('Fetching matching internships...');
-          const matchingRes = await api.getMatchingInternships().catch(() => null);
-          console.log('Matching internships response:', matchingRes);
-          setMatchingInternships(matchingRes?.internships || []);
-        } catch (err) {
-          console.error('Matching internships failed:', err);
-          // Don't throw error for matching, it's optional
+          try {
+            console.log('Fetching matching internships...');
+            const matchingRes = await api.getMatchingInternships().catch(() => null);
+            console.log('Matching internships response:', matchingRes);
+            setMatchingInternships(matchingRes?.internships || []);
+          } catch (err) {
+            console.error('Matching internships failed:', err);
+            // Don't throw error for matching, it's optional
+          }
+        } else {
+          setProfileSkills([]);
+          setMatchingInternships([]);
         }
 
       } catch (requestError) {
@@ -142,7 +151,7 @@ export default function Home() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,6 +215,8 @@ export default function Home() {
     return "Paid";
   };
 
+  // Rating submission intentionally removed from Home page per request.
+
   return (
     <div className="flex flex-col">
       <section className="bg-white py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-100">
@@ -241,7 +252,7 @@ export default function Home() {
                 onChange={(e) => setLocationTerm(e.target.value)}
               />
             </div>
-            <button type="submit" className="bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] font-bold px-8 py-3 rounded-full transition-colors w-full md:w-auto">
+            <button type="submit" className="bg-[#3b82f6] hover:bg-[#2563eb] text-white font-bold px-8 py-3 rounded-full transition-colors w-full md:w-auto">
               Search
             </button>
           </form>
@@ -319,9 +330,10 @@ export default function Home() {
           ) : (
             <div className="grid md:grid-cols-4 gap-6">
               {featuredCompanies.map((company) => (
-                <div
+                <Link
                   key={company.id}
-                  className="bg-[#f6f8f7] p-6 rounded-2xl border border-gray-100 hover:shadow-md transition-shadow"
+                  to={`/companies/${company.id}`}
+                  className="bg-[#f6f8f7] p-6 rounded-2xl border border-gray-100 hover:shadow-md transition-shadow block"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <img
@@ -329,8 +341,12 @@ export default function Home() {
                       alt={company.company_name}
                       className="w-12 h-12 rounded-lg object-cover"
                     />
-                    <div className="flex items-center bg-white px-2 py-1 rounded text-sm font-bold text-yellow-600 shadow-sm">
-                      Rating: {company.rating || 0}
+                    <div className="flex items-center gap-1 bg-white px-2 py-1 rounded text-sm font-bold text-yellow-600 shadow-sm">
+                      <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                      <span>{Number(company.rating || 0).toFixed(1)}</span>
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        ({Number(company.rating_count || 0)})
+                      </span>
                     </div>
                   </div>
                   <h3 className="font-bold text-lg mb-1">{company.company_name}</h3>
@@ -340,7 +356,9 @@ export default function Home() {
                   <div className="inline-block bg-[#3b82f6]/10 text-[#2563eb] text-xs font-bold px-3 py-1.5 rounded-full">
                     {company.open_positions} Open Internships
                   </div>
-                </div>
+
+                  {/* Rating input removed on Home page */}
+                </Link>
               ))}
             </div>
           )}
@@ -354,7 +372,7 @@ export default function Home() {
         <div className="max-w-[1440px] mx-auto">
           <div className="flex justify-between items-center mb-10">
             <h2 className="text-3xl font-bold">
-              {profileSkills.length > 0 ? "Internships Matching Your Skills" : "Register Skills to Find Matching Internships"}
+              {profileSkills.length > 0 ? "Internships Matching Your Skills" : "Latest Internships"}
             </h2>
             <Link
               to="/internships"
@@ -368,9 +386,9 @@ export default function Home() {
             <div className="flex justify-center py-10">
               <Loader2 className="w-10 h-10 animate-spin text-[#3b82f6]" />
             </div>
-          ) : internshipsForDisplay.length > 0 ? (
+          ) : (profileSkills.length > 0 ? internshipsForDisplay : latestInternships.slice(0, 4)).length > 0 ? (
             <div className="grid md:grid-cols-2 gap-6">
-              {internshipsForDisplay.map((job) => (
+              {(profileSkills.length > 0 ? internshipsForDisplay : latestInternships.slice(0, 4)).map((job) => (
                 <Link
                   to={`/internships/${job.id}`}
                   key={job.id}
@@ -405,17 +423,15 @@ export default function Home() {
             </div>
           ) : (
             <p className="text-sm text-gray-500 mt-4">
-              {profileSkills.length 
-                ? "No internships match your registered skills. Try adding more skills or check back later!"
-                : "Please register your skills in your profile to see matching internships."}
+              No internships available at the moment. Check back later!
             </p>
           )}
         </div>
       </section>
 
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
-        <div className="max-w-5xl mx-auto bg-[#3b82f6] rounded-3xl p-10 md:p-16 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="text-[#111816] max-w-xl">
+        <div className="max-w-5xl mx-auto bg-[#3b82f6] rounded-3xl p-10 md:p-16 flex flex-col md:flex-row items-center justify-between gap-8 shadow-xl">
+          <div className="text-white max-w-xl">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               Ready to start your career?
             </h2>
@@ -424,12 +440,14 @@ export default function Home() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-            <Link
-              to="/register"
-              className="bg-white text-[#111816] font-bold px-8 py-4 rounded-xl hover:bg-gray-50 transition-colors whitespace-nowrap text-center"
-            >
-              Create Student Profile
-            </Link>
+            {!isAuthenticated && (
+              <Link
+                to="/register"
+                className="bg-white text-[#3b82f6] font-bold px-8 py-4 rounded-xl hover:bg-gray-50 transition-colors whitespace-nowrap text-center"
+              >
+                Create Student Profile
+              </Link>
+            )}
             <Link
               to="/internships"
               className="bg-transparent border-2 border-white text-white font-bold px-8 py-4 rounded-xl hover:bg-white/10 transition-colors whitespace-nowrap text-center"

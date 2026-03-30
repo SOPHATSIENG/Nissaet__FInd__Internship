@@ -1,6 +1,15 @@
 import {ExternalLink} from 'lucide-react';
 import {Link} from 'react-router-dom';
 
+const normalizeResumeUrl = (url?: string) => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  return `https://${trimmed}`;
+};
+
 export function ApplicationsTab({ applications }: { applications: any[] }) {
   if (!applications.length) {
     return (
@@ -9,6 +18,22 @@ export function ApplicationsTab({ applications }: { applications: any[] }) {
       </div>
     );
   }
+
+  const getStatusLabel = (status?: string) => {
+    const value = String(status || 'pending').toLowerCase();
+    if (value === 'shortlisted' || value === 'accepted') return 'Shortlisted';
+    if (value === 'unshortlisted' || value === 'rejected') return 'Unshortlisted';
+    if (value === 'reviewing') return 'Under Review';
+    return 'Pending';
+  };
+
+  const getStatusClass = (status?: string) => {
+    const value = String(status || 'pending').toLowerCase();
+    if (value === 'shortlisted' || value === 'accepted') return 'text-green-600';
+    if (value === 'unshortlisted' || value === 'rejected') return 'text-red-600';
+    if (value === 'reviewing') return 'text-amber-600';
+    return 'text-indigo-600';
+  };
 
   return (
     <div className="space-y-4">
@@ -23,15 +48,9 @@ export function ApplicationsTab({ applications }: { applications: any[] }) {
               <div className="text-sm text-gray-500">
                 Status:{' '}
                 <span
-                  className={`font-semibold ${
-                    app.status === 'accepted'
-                      ? 'text-green-600'
-                      : app.status === 'rejected'
-                        ? 'text-red-600'
-                        : 'text-indigo-600'
-                  }`}
+                  className={`font-semibold ${getStatusClass(app.status)}`}
                 >
-                  {app.status}
+                  {getStatusLabel(app.status)}
                 </span>
               </div>
               <div className="text-sm text-gray-500">
@@ -53,15 +72,22 @@ export function ApplicationsTab({ applications }: { applications: any[] }) {
               >
                 <ExternalLink className="w-4 h-4" /> View Internship
               </Link>
-              {app.resume_url && (
-                <a
-                  href={app.resume_url}
-                  target="_blank"
-                  rel="noreferrer"
+              {app.company_id ? (
+                <Link
+                  to={`/companies/${app.company_id}`}
                   className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
                 >
-                  View Resume
-                </a>
+                  View Company Profile
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  title="Company not available"
+                  className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg border border-emerald-100 text-emerald-300 bg-emerald-50 cursor-not-allowed"
+                >
+                  View Company Profile
+                </button>
               )}
             </div>
           </div>

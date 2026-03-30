@@ -189,10 +189,19 @@ export const SettingsPage = () => {
     try {
       setIsExporting(true);
       setShowExportModal(false);
-      const response = await api.adminExportData();
+      const response = await api.adminExportDataFile();
+      const fileUrl = URL.createObjectURL(response.blob);
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = response.filename || `nissaet-export-${new Date().toISOString().slice(0, 19)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(fileUrl);
+
       setSettings(prev => ({
         ...prev,
-        lastBackupAt: response?.lastBackupAt || new Date().toISOString(),
+        lastBackupAt: response?.exportedAt || new Date().toISOString(),
       }));
       setActionSuccess({ type: 'export', message: 'System data exported successfully!' });
       setTimeout(() => setActionSuccess(null), 4000);
@@ -770,7 +779,7 @@ export const SettingsPage = () => {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
+    <div className="admin-page">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-black text-text-primary-light tracking-tight">System Settings</h1>
         <p className="text-text-secondary-light text-base">Configure global platform parameters and security protocols.</p>

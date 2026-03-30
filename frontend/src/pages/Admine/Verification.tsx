@@ -53,10 +53,35 @@ const formatTime = (value?: string) => {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 };
 
+const isUrl = (value?: string) => {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const getDocLabel = (value: string) => {
+  if (!value) return '';
+  if (isUrl(value)) {
+    try {
+      const url = new URL(value);
+      const parts = url.pathname.split('/');
+      return decodeURIComponent(parts[parts.length - 1] || value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+};
+
 export const Verification = () => {
   const { user } = useAuth();
   const { settings } = useProfile();
   const isCompanyUser = user?.role === 'company';
+  const PAGE_SIZE = 6;
   const [companyQueue, setCompanyQueue] = useState<any[]>([]);
   const [isQueueLoading, setIsQueueLoading] = useState(true);
   const [queueError, setQueueError] = useState('');
@@ -76,6 +101,7 @@ export const Verification = () => {
   const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const fetchVerifications = async () => {
@@ -269,8 +295,31 @@ export const Verification = () => {
     return result;
   }, [visibleQueue, searchQuery, selectedIndustries, selectedStatuses, selectedCompanies, sortBy]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedIndustries, selectedStatuses, selectedCompanies, sortBy, visibleQueue.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedQueue.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const pagedQueue = filteredAndSortedQueue.slice(startIndex, startIndex + PAGE_SIZE);
+
+  const pageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    let start = Math.max(1, safePage - Math.floor(maxButtons / 2));
+    let end = start + maxButtons - 1;
+    if (end > totalPages) {
+      end = totalPages;
+      start = Math.max(1, end - maxButtons + 1);
+    }
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [safePage, totalPages]);
+
   return (
-    <div className="flex flex-col h-full max-w-7xl mx-auto w-full p-8 gap-8 overflow-y-auto no-scrollbar">
+    <div className="admin-page">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex flex-col gap-1">
@@ -560,7 +609,7 @@ export const Verification = () => {
                       </td>
                     </tr>
                   ) : filteredAndSortedQueue.length > 0 ? (
-                    filteredAndSortedQueue.map((item) => (
+                    pagedQueue.map((item) => (
                       <tr 
                         key={item.id} 
                         className={cn(
@@ -644,7 +693,15 @@ export const Verification = () => {
             <div className="flex items-center justify-between border-t border-border bg-background/30 p-5">
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">
-                  Showing <span className="text-text-primary">{filteredAndSortedQueue.length}</span> of <span className="text-text-primary">{visibleQueue.length}</span> entities
+                  {filteredAndSortedQueue.length === 0 ? (
+                    <>Showing <span className="text-text-primary">0</span> of <span className="text-text-primary">{visibleQueue.length}</span> entities</>
+                  ) : (
+                    <>
+                      Showing <span className="text-text-primary">{startIndex + 1}</span>-
+                      <span className="text-text-primary">{Math.min(startIndex + PAGE_SIZE, filteredAndSortedQueue.length)}</span> of{' '}
+                      <span className="text-text-primary">{filteredAndSortedQueue.length}</span> entities
+                    </>
+                  )}
                 </span>
                 {(selectedIndustries.length > 0 || selectedStatuses.length > 0 || selectedCompanies.length > 0) && (
                   <button 
@@ -659,12 +716,60 @@ export const Verification = () => {
                   </button>
                 )}
               </div>
-              <div className="flex gap-2">
-                <button className="h-8 px-3 rounded-lg border border-border bg-surface text-[10px] font-black uppercase tracking-widest text-text-secondary hover:text-primary transition-all disabled:opacity-50" disabled>Prev</button>
-                <button className="size-8 rounded-lg bg-primary text-white text-[10px] font-black">1</button>
-                <button className="size-8 rounded-lg border border-border bg-surface text-[10px] font-black text-text-secondary hover:text-primary transition-all">2</button>
-                <button className="h-8 px-3 rounded-lg border border-border bg-surface text-[10px] font-black uppercase tracking-widest text-text-secondary hover:text-primary transition-all">Next</button>
-              </div>
+              {filteredAndSortedQueue.length > PAGE_SIZE && (
+                <div className="flex gap-2">
+                  <button 
+                    className="h-8 px-3 rounded-lg border border-border bg-surface text-[10px] font-black uppercase tracking-widest text-text-secondary hover:text-primary transition-all disabled:opacity-50"
+                    disabled={safePage === 1}
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  >
+                    Prev
+                  </button>
+                  {pageNumbers[0] > 1 && (
+                    <>
+                      <button
+                        className="size-8 rounded-lg border border-border bg-surface text-[10px] font-black text-text-secondary hover:text-primary transition-all"
+                        onClick={() => setCurrentPage(1)}
+                      >
+                        1
+                      </button>
+                      <span className="size-8 flex items-center justify-center text-[10px] font-black text-text-secondary">...</span>
+                    </>
+                  )}
+                  {pageNumbers.map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={cn(
+                        "size-8 rounded-lg text-[10px] font-black transition-all",
+                        safePage === page
+                          ? "bg-primary text-white"
+                          : "border border-border bg-surface text-text-secondary hover:text-primary"
+                      )}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  {pageNumbers[pageNumbers.length - 1] < totalPages && (
+                    <>
+                      <span className="size-8 flex items-center justify-center text-[10px] font-black text-text-secondary">...</span>
+                      <button
+                        className="size-8 rounded-lg border border-border bg-surface text-[10px] font-black text-text-secondary hover:text-primary transition-all"
+                        onClick={() => setCurrentPage(totalPages)}
+                      >
+                        {totalPages}
+                      </button>
+                    </>
+                  )}
+                  <button 
+                    className="h-8 px-3 rounded-lg border border-border bg-surface text-[10px] font-black uppercase tracking-widest text-text-secondary hover:text-primary transition-all disabled:opacity-50"
+                    disabled={safePage === totalPages}
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -749,17 +854,26 @@ export const Verification = () => {
                     <h3 className="text-xs font-black text-text-secondary uppercase tracking-widest">Submitted Documents</h3>
                     <div className="flex flex-col gap-2">
                       {selectedItem.docs.length > 0 ? selectedItem.docs.map(doc => (
-                        <div key={doc} className="flex items-center justify-between p-3 rounded-xl border border-border hover:border-primary/30 transition-all group cursor-pointer">
+                        <a
+                          key={doc}
+                          href={isUrl(doc) ? doc : '#'}
+                          target={isUrl(doc) ? '_blank' : undefined}
+                          rel={isUrl(doc) ? 'noreferrer' : undefined}
+                          onClick={(event) => {
+                            if (!isUrl(doc)) event.preventDefault();
+                          }}
+                          className="flex items-center justify-between p-3 rounded-xl border border-border hover:border-primary/30 transition-all group"
+                        >
                           <div className="flex items-center gap-3">
                             <FileText className="size-4 text-primary" />
-                            <span className="text-sm font-bold text-text-primary">{doc}</span>
+                            <span className="text-sm font-bold text-text-primary">{getDocLabel(doc)}</span>
                           </div>
                           <ExternalLink className="size-4 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
+                        </a>
                       )) : (
                         <div className="p-4 rounded-xl border border-dashed border-rose-200 bg-rose-50 flex flex-col items-center gap-2 text-center">
                           <AlertCircle className="size-6 text-rose-500" />
-                          <p className="text-xs font-bold text-rose-600">No verification documents have been uploaded yet.</p>
+                          <p className="text-xs font-bold text-rose-600">Please upload verification documents.</p>
                         </div>
                       )}
                     </div>

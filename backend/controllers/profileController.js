@@ -144,6 +144,15 @@ const getTableColumns = async (tableName, conn = null) => {
     return new Set(rows.map((row) => row.Field));
 };
 
+const tableExists = async (tableName) => {
+    try {
+        const rows = await db.query('SHOW TABLES LIKE ?', [tableName]);
+        return Array.isArray(rows) && rows.length > 0;
+    } catch (error) {
+        return false;
+    }
+};
+
 const buildUpdateStatement = (tableName, updates, whereColumn, whereValue) => {
     const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
     if (entries.length === 0) return null;
@@ -586,20 +595,95 @@ const updateNotificationSettings = async (req, res) => {
     }
 };
 
+const getCompanyBilling = async (req, res) => {
+    try {
+        const userId = getAuthenticatedUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+        const users = await db.query('SELECT id, role FROM users WHERE id = ? LIMIT 1', [userId]);
+        if (!users.length) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        if (users[0].role !== 'company') {
+            return res.status(403).json({ message: 'Company access required' });
+        }
+
+        const companies = await db.query('SELECT * FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+        const company = companies[0] || null;
+        const companyColumns = await getTableColumns('companies');
+
+        const pickValue = (obj, keys) => {
+            for (const key of keys) {
+                if (obj && Object.prototype.hasOwnProperty.call(obj, key)) {
+                    const value = obj[key];
+                    if (value !== undefined && value !== null && String(value).trim() !== '') {
+                        return value;
+                    }
+                }
+            }
+            return null;
+        };
+
+        const plan = {
+            name: pickValue(company, ['plan_name', 'subscription_plan', 'plan']),
+            status: pickValue(company, ['plan_status', 'subscription_status']),
+            billing_cycle: pickValue(company, ['billing_cycle', 'plan_cycle']),
+            next_payment_date: pickValue(company, ['next_payment_date', 'next_billing_date']),
+            amount: pickValue(company, ['billing_amount', 'plan_amount']),
+            currency: pickValue(company, ['billing_currency', 'currency'])
+        };
+
+        const paymentMethod = {
+            brand: pickValue(company, ['payment_brand', 'card_brand']),
+            last4: pickValue(company, ['payment_last4', 'card_last4']),
+            exp_month: pickValue(company, ['payment_exp_month', 'card_exp_month']),
+            exp_year: pickValue(company, ['payment_exp_year', 'card_exp_year'])
+        };
+
+        const history = [];
+        if (await tableExists('billing_history')) {
+            const historyColumns = await getTableColumns('billing_history');
+            const companyKey = historyColumns.has('company_id') ? 'company_id' : historyColumns.has('user_id') ? 'user_id' : null;
+            if (companyKey) {
+                const rows = await db.query(
+                    `SELECT * FROM billing_history WHERE ${companyKey} = ? ORDER BY created_at DESC LIMIT 20`,
+                    [company && company.id ? company.id : userId]
+                );
+                for (const row of rows) {
+                    history.push({
+                        date: row.paid_at || row.created_at || row.date || null,
+                        description: row.description || row.title || row.plan_name || 'Billing',
+                        amount: row.amount || row.total || null,
+                        status: row.status || 'Paid',
+                        invoice_url: row.invoice_url || row.invoice || null
+                    });
+                }
+            }
+        }
+
+        return res.json({
+            company: {
+                name: pickValue(company, ['company_name', 'name']) || null,
+                is_verified: companyColumns.has('is_verified') ? toBoolean(company?.is_verified, false) : false
+            },
+            plan,
+            payment_method: paymentMethod,
+            history
+        });
+    } catch (error) {
+        console.error('Get company billing error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const getNotificationCard = async (req, res) => {
     try {
         const userId = getAuthenticatedUserId(req);
         if (!userId) {
             return res.status(401).json({ message: 'Authentication required' });
         }
-
-        try {
-            await db.query('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND (is_read = 0 OR is_read IS NULL)', [userId]);
-        } catch (error) {
-            if (error && error.code !== 'ER_BAD_FIELD_ERROR') {
-                throw error;
-            }
-        }
+        // Do not auto-mark notifications as read on fetch.
 
         let rows = [];
         try {
@@ -609,7 +693,7 @@ const getNotificationCard = async (req, res) => {
                     title,
                     message,
                     type,
-                    is_read,
+                    COALESCE(is_read, 0) AS is_read,
                     action_url,
                     created_at
                  FROM notifications
@@ -625,7 +709,7 @@ const getNotificationCard = async (req, res) => {
                     id,
                     title,
                     message,
-                    is_read,
+                    COALESCE(is_read, 0) AS is_read,
                     created_at
                  FROM notifications
                  WHERE user_id = ?
@@ -646,7 +730,7 @@ const getNotificationCard = async (req, res) => {
             unreadCount = Number(countRows?.[0]?.total || 0);
         } catch (error) {
             if (error && error.code === 'ER_BAD_FIELD_ERROR') {
-                unreadCount = rows.length;
+                unreadCount = rows.filter((row) => !toBoolean(row.is_read, false)).length;
             } else {
                 throw error;
             }
@@ -921,14 +1005,122 @@ const getPublicStudentProfile = async (req, res) => {
         // Get student skills
         const skills = await getUserSkills(student.user_id);
 
+        const ratingSummaryRows = await db.query(
+            'SELECT ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count FROM student_ratings WHERE student_id = ?',
+            [studentId]
+        );
+        const summary = ratingSummaryRows[0] || { rating: 0, rating_count: 0 };
+
         return res.json({
             profile: {
                 ...student,
-                skills
+                skills,
+                rating: Number(summary.rating) || 0,
+                rating_count: Number(summary.rating_count) || 0
             }
         });
     } catch (error) {
         console.error('Get public student profile error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getStudentRatings = async (req, res) => {
+    try {
+        const studentId = Number.parseInt(req.params.id, 10);
+        if (Number.isNaN(studentId)) {
+            return res.status(400).json({ message: 'Invalid student ID' });
+        }
+
+        const rows = await db.query(
+            `SELECT
+                sr.id,
+                sr.rating,
+                sr.review_text,
+                sr.created_at,
+                c.id AS company_id,
+                c.name AS company_name,
+                c.logo AS company_logo
+             FROM student_ratings sr
+             JOIN companies c ON c.id = sr.company_id
+             WHERE sr.student_id = ?
+             ORDER BY sr.created_at DESC`,
+            [studentId]
+        );
+
+        return res.json({ ratings: rows || [] });
+    } catch (error) {
+        console.error('Get student ratings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const rateStudent = async (req, res) => {
+    try {
+        const studentId = Number.parseInt(req.params.id, 10);
+        if (Number.isNaN(studentId)) {
+            return res.status(400).json({ message: 'Invalid student ID' });
+        }
+
+        const ratingValue = Number.parseInt(req.body?.rating, 10);
+        if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+            return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+        }
+
+        const userId = req.user?.userId || req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const companyRows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+        if (companyRows.length === 0) {
+            return res.status(404).json({ message: 'Company profile not found' });
+        }
+        const companyId = companyRows[0].id;
+
+        const eligibility = await db.query(
+            `SELECT 1
+             FROM applications a
+             JOIN internships i ON i.id = a.internship_id
+             WHERE a.student_id = ? AND i.company_id = ? AND a.status IN ('accepted','shortlisted')
+             LIMIT 1`,
+            [studentId, companyId]
+        );
+        if (eligibility.length === 0) {
+            return res.status(403).json({ message: 'You can rate a student only after accepting their internship application.' });
+        }
+
+        const existingRows = await db.query(
+            'SELECT id FROM student_ratings WHERE student_id = ? AND company_id = ? LIMIT 1',
+            [studentId, companyId]
+        );
+
+        if (existingRows.length > 0) {
+            await db.query(
+                'UPDATE student_ratings SET rating = ?, review_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [ratingValue, req.body?.review_text || null, existingRows[0].id]
+            );
+        } else {
+            await db.query(
+                'INSERT INTO student_ratings (student_id, company_id, rating, review_text) VALUES (?, ?, ?, ?)',
+                [studentId, companyId, ratingValue, req.body?.review_text || null]
+            );
+        }
+
+        const summaryRows = await db.query(
+            'SELECT ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count FROM student_ratings WHERE student_id = ?',
+            [studentId]
+        );
+        const summary = summaryRows[0] || { rating: 0, rating_count: 0 };
+
+        return res.json({
+            message: existingRows.length > 0 ? 'Rating updated' : 'Rating submitted',
+            rating: Number(summary.rating) || 0,
+            rating_count: Number(summary.rating_count) || 0,
+            user_rating: ratingValue
+        });
+    } catch (error) {
+        console.error('Rate student error:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 };
@@ -944,8 +1136,11 @@ module.exports = {
     deleteNotification,
     clearNotifications,
     updateNotificationSettings,
+    getCompanyBilling,
     updateTwoFactorSettings,
     updatePassword,
     getPublicStudentProfile,
+    getStudentRatings,
+    rateStudent,
     getProfileSettingsByUserId
 };

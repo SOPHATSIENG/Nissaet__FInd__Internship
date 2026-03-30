@@ -26,6 +26,7 @@ import api from '../../api/axios';
 interface Event {
   id: number;
   company_id: number;
+  company_profile_id?: number | null;
   title: string;
   description: string;
   type: string;
@@ -35,6 +36,7 @@ interface Event {
   location: string;
   is_virtual: boolean;
   meeting_url: string;
+  registration_url: string;
   max_participants: number;
   current_participants: number;
   registration_deadline: string;
@@ -48,6 +50,7 @@ interface Event {
   industry: string;
   company_location: string;
   website: string;
+  company_description?: string;
   userRegistration?: {
     id: number;
     registration_date: string;
@@ -56,29 +59,35 @@ interface Event {
 }
 
 export default function EventDetails() {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+  const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
-  const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
     if (id) {
       fetchEvent();
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   const fetchEvent = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/events/${id}`);
-      setEvent(response.data);
+      setLoadError('');
+      const response = await api.get(`/events/${id}`, { auth: !!user });
+      const payload = response?.data ?? response;
+      const resolvedEvent = payload?.event ?? payload?.data ?? payload;
+      setEvent(resolvedEvent);
     } catch (error) {
       console.error('Error fetching event:', error);
-      setError('Event not found');
+      setLoadError((error as any)?.message || 'Event not found');
     } finally {
       setLoading(false);
     }
@@ -94,10 +103,10 @@ export default function EventDetails() {
 
     try {
       setRegistering(true);
-      setError('');
+      setActionError('');
       setSuccess('');
 
-      await api.post(`/events/${event.id}/register`);
+      await api.post(`/events/${event.id}/register`, {});
       
       setSuccess('Successfully registered for the event!');
       setEvent({
@@ -113,8 +122,13 @@ export default function EventDetails() {
       setTimeout(() => setSuccess(''), 5000);
     } catch (error: any) {
       console.error('Error registering for event:', error);
-      setError(error?.message || 'Failed to register for event');
-      setTimeout(() => setError(''), 5000);
+      const message =
+        error?.message ||
+        error?.error ||
+        (typeof error === 'string' ? error : '') ||
+        'Failed to register for event';
+      setActionError(message);
+      setTimeout(() => setActionError(''), 5000);
     } finally {
       setRegistering(false);
     }
@@ -125,7 +139,7 @@ export default function EventDetails() {
 
     try {
       setRegistering(true);
-      setError('');
+      setActionError('');
       setSuccess('');
 
       await api.delete(`/events/${event.id}/register`);
@@ -140,8 +154,13 @@ export default function EventDetails() {
       setTimeout(() => setSuccess(''), 5000);
     } catch (error: any) {
       console.error('Error unregistering from event:', error);
-      setError(error?.message || 'Failed to unregister from event');
-      setTimeout(() => setError(''), 5000);
+      const message =
+        error?.message ||
+        error?.error ||
+        (typeof error === 'string' ? error : '') ||
+        'Failed to unregister from event';
+      setActionError(message);
+      setTimeout(() => setActionError(''), 5000);
     } finally {
       setRegistering(false);
     }
@@ -184,6 +203,15 @@ export default function EventDetails() {
     return max && current >= max;
   };
 
+  const resolveImageUrl = (value?: string) => {
+    if (!value) return '';
+    const trimmed = String(value).trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('data:')) return trimmed;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    return `${API_ORIGIN}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -192,13 +220,15 @@ export default function EventDetails() {
     );
   }
 
-  if (!event || error) {
+  if (!event || loadError) {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Event Not Found</h2>
-          <p className="text-gray-600 mb-4">The event you're looking for doesn't exist or has been removed.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to Load Event</h2>
+          <p className="text-gray-600 mb-4">
+            {loadError || "The event you're looking for doesn't exist or has been removed."}
+          </p>
           <button
             onClick={() => navigate('/events')}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#137fec] text-white rounded-lg hover:bg-[#0e6bb8] transition-colors"
@@ -214,10 +244,10 @@ export default function EventDetails() {
   return (
     <div className="max-w-6xl mx-auto p-6">
       {/* Alerts */}
-      {error && (
+      {actionError && (
         <div className="mb-6 flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
           <AlertCircle className="w-5 h-5" />
-          {error}
+          {actionError}
         </div>
       )}
 
@@ -233,10 +263,10 @@ export default function EventDetails() {
         <div className="lg:col-span-2 space-y-6">
           {/* Header */}
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            {event.image_url && (
+            {resolveImageUrl(event.image_url || event.company_logo) && (
               <div className="relative h-64 overflow-hidden">
                 <img 
-                  src={event.image_url} 
+                  src={resolveImageUrl(event.image_url || event.company_logo)} 
                   alt={event.title}
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -381,6 +411,26 @@ export default function EventDetails() {
                   </div>
                 </div>
               )}
+
+              {event.registration_url && (
+                <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-indigo-900">Registration Link</p>
+                      <p className="text-sm text-indigo-700">Open the company registration form for this event.</p>
+                    </div>
+                    <a
+                      href={event.registration_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Open Link
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -422,6 +472,17 @@ export default function EventDetails() {
               </div>
             ) : (
               <div className="space-y-4">
+                {event.registration_url && (
+                  <a
+                    href={event.registration_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open Registration Link
+                  </a>
+                )}
                 {user && user.role === 'student' ? (
                   <button
                     onClick={handleRegister}
@@ -459,9 +520,9 @@ export default function EventDetails() {
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">About the Organizer</h3>
             <div className="text-center mb-4">
-              {event.company_logo ? (
+              {resolveImageUrl(event.company_logo) ? (
                 <img 
-                  src={event.company_logo} 
+                  src={resolveImageUrl(event.company_logo)} 
                   alt={event.company_name}
                   className="w-20 h-20 rounded-full mx-auto mb-3 object-cover"
                   onError={(e) => {
@@ -475,6 +536,9 @@ export default function EventDetails() {
               )}
               <h4 className="font-semibold text-gray-900">{event.company_name}</h4>
               <p className="text-sm text-gray-600">{event.industry}</p>
+              {event.company_description && (
+                <p className="mt-2 text-xs text-gray-500">{event.company_description}</p>
+              )}
             </div>
 
             {event.company_location && (
@@ -497,7 +561,22 @@ export default function EventDetails() {
             )}
 
             <button
-              onClick={() => navigate(`/companies/${event.company_id}`)}
+              onClick={() => {
+                const targetId = event.company_profile_id || event.company_id;
+                const query = event.company_profile_id ? '' : '?by=user';
+                navigate(`/companies/${targetId}${query}`, {
+                  state: {
+                    eventId: event.id,
+                    companyFallback: {
+                      company_name: event.company_name,
+                      logo: event.company_logo,
+                      industry: event.industry,
+                      location: event.company_location,
+                      website: event.website,
+                    },
+                  },
+                });
+              }}
               className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
             >
               View Company Profile

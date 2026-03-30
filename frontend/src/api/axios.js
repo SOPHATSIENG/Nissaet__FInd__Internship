@@ -47,14 +47,15 @@ async function request(path, options = {}) {
     console.log('Response status:', response.status, response.statusText);
   } catch (error) {
     console.error('Network Error:', error);
-    throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Please ensure the backend server is running and accessible at this address.`);
+    throw new Error(`Cannot connect to backend API at ${API_BASE_URL}. Please ensure the backend server is running on port 5001 and accessible. If you see "Port 5001 is in use" in the backend logs, try stopping other node processes.`);
   }
 
   const data = await response.json().catch(() => ({}));
 
   if (response.status === 401) {
+    const token = getStoredToken();
     clearStoredToken();
-    if (typeof window !== 'undefined') {
+    if (token && typeof window !== 'undefined') {
       const path = window.location?.pathname || '';
       const target = path.startsWith('/admin') ? '/admin/login' : '/login';
       if (window.location && window.location.pathname !== target) {
@@ -190,6 +191,10 @@ export const api = {
     return request('/profile/notifications/card', { auth: true });
   },
 
+  getCompanyBilling() {
+    return request('/profile/billing', { auth: true });
+  },
+
   markNotificationsRead(payload) {
     return request('/profile/notifications/read', { method: 'PUT', auth: true, body: payload });
   },
@@ -212,6 +217,18 @@ export const api = {
 
   getStudentProfile(id) {
     return request(`/profile/student/${id}`);
+  },
+
+  getStudentRatings(id) {
+    return request(`/profile/student/${id}/ratings`, { auth: false });
+  },
+
+  rateStudent(id, rating, reviewText) {
+    return request(`/profile/student/${id}/ratings`, {
+      method: 'POST',
+      auth: true,
+      body: { rating, review_text: reviewText || null }
+    });
   },
 
   // Skills endpoint
@@ -297,11 +314,11 @@ export const api = {
         .map(([key, value]) => [key, String(value)])
     ).toString();
 
-    return request(`/posts${query ? `?${query}` : ''}`, { auth: true });
+    return request(`/posts${query ? `?${query}` : ''}`, { auth: false });
   },
 
   getPostById(id) {
-    return request(`/posts/${id}`, { auth: true });
+    return request(`/posts/${id}`, { auth: false });
   },
 
   unsaveInternship(internshipId) {
@@ -349,6 +366,18 @@ export const api = {
     });
   },
 
+  rateCompany(companyId, rating, reviewText) {
+    return request(`/internships/companies/${companyId}/ratings`, {
+      method: 'POST',
+      auth: true,
+      body: { rating, review_text: reviewText || null }
+    });
+  },
+
+  getCompanyRatings(companyId) {
+    return request(`/internships/companies/${companyId}/ratings`, { auth: false });
+  },
+
   getRecommendedInternships() {
     return request('/internships/student/recommended', { auth: true }).then((data) => {
       if (Array.isArray(data)) {
@@ -382,13 +411,23 @@ export const api = {
     return request(`/internships/${id}/restore`, { method: 'PUT', auth: true });
   },
 
+  permanentlyDeleteInternship(id) {
+    return request(`/internships/${id}/permanent`, { method: 'DELETE', auth: true });
+  },
+
   // Dashboard endpoints
   getDashboardStats() {
     return request('/internships/dashboard/stats', { auth: true });
   },
 
-  getApplicationTrends() {
-    return request('/internships/dashboard/trends', { auth: true });
+  getApplicationTrends(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/internships/dashboard/trends${query ? `?${query}` : ''}`, { auth: true });
   },
 
   // Application endpoints
@@ -431,6 +470,18 @@ export const api = {
   applyForInternship(internshipId, coverLetter) {
     return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter } });
   },
+  applyForInternshipWithResume(internshipId, coverLetter, resumeUrl) {
+    return request('/applications/apply', { method: 'POST', auth: true, body: { internship_id: internshipId, cover_letter: coverLetter, resume_url: resumeUrl } });
+  },
+  updateMyApplication(applicationId, coverLetter, resumeUrl) {
+    return request(`/applications/${applicationId}`, { method: 'PUT', auth: true, body: { cover_letter: coverLetter, resume_url: resumeUrl } });
+  },
+  deleteMyApplication(applicationId) {
+    return request(`/applications/${applicationId}`, { method: 'DELETE', auth: true });
+  },
+  deleteMyApplicationByInternship(internshipId) {
+    return request(`/applications/by-internship/${internshipId}`, { method: 'DELETE', auth: true });
+  },
 
   // Admin methods
   adminGetAllUsers() {
@@ -464,6 +515,28 @@ export const api = {
 
   adminExportData() {
     return request('/admin/settings/export', { method: 'POST', auth: true });
+  },
+
+  async adminExportDataFile() {
+    const token = getStoredToken();
+    const response = await fetch(`${API_BASE_URL}/admin/settings/export`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData?.message || errorData?.error || `Request failed with status ${response.status}`;
+      throw new Error(message);
+    }
+
+    const contentDisposition = response.headers.get('content-disposition') || '';
+    const filenameMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+    const filename = filenameMatch?.[1];
+    const exportedAt = response.headers.get('x-exported-at') || undefined;
+    const blob = await response.blob();
+
+    return { blob, filename, exportedAt };
   },
 
   adminPurgeLogs() {
@@ -514,8 +587,13 @@ export const api = {
     return request(`/admin/categories/${id}`, { method: 'DELETE', auth: true });
   },
 
-  adminGetCategoryInternships(id) {
-    return request(`/admin/categories/${id}/internships`, { auth: true });
+  adminGetCategoryInternships(id, params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+    return request(`/admin/categories/${id}/internships${query ? `?${query}` : ''}`, { auth: true });
   },
 
   adminGetSkills() {
@@ -534,8 +612,13 @@ export const api = {
     return request(`/admin/skills/${id}`, { method: 'DELETE', auth: true });
   },
 
-  adminGetSkillInternships(id) {
-    return request(`/admin/skills/${id}/internships`, { auth: true });
+  adminGetSkillInternships(id, params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+    return request(`/admin/skills/${id}/internships${query ? `?${query}` : ''}`, { auth: true });
   },
 
   adminGetInternship(id) {
@@ -544,6 +627,10 @@ export const api = {
 
   adminUpdateInternship(id, payload) {
     return request(`/admin/internships/${id}`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  adminDeleteInternship(id) {
+    return request(`/admin/internships/${id}`, { method: 'DELETE', auth: true });
   },
 
   adminFlagInternship(id, payload = {}) {
@@ -558,12 +645,89 @@ export const api = {
     return request('/admin/job-types', { auth: true });
   },
 
+  // Public branding endpoint (logo/platform name)
+  getBranding() {
+    return request('/branding', { auth: false });
+  },
+
   companyCreateVerification(payload) {
     return request('/verification/company', { method: 'POST', auth: true, body: payload });
   },
 
   companyGetVerificationRequests() {
     return request('/verification/company/mine', { auth: true });
+  },
+
+  companyUpdateVerificationDocuments(id, payload) {
+    return request(`/verification/company/${id}/documents`, { method: 'PUT', auth: true, body: payload });
+  },
+
+  // Notification endpoints
+  getNotifications(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    return request(`/notifications${query ? `?${query}` : ''}`, { auth: true });
+  },
+
+  markNotificationAsRead(id) {
+    return request(`/notifications/${id}/read`, { method: 'PUT', auth: true });
+  },
+
+  markAllNotificationsAsRead() {
+    return request('/notifications/mark-all-read', { method: 'PUT', auth: true });
+  },
+
+  deleteNotification(id) {
+    return request(`/notifications/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  async getCompanyById(id) {
+    try {
+      return await request(`/internships/companies/${id}`);
+    } catch (err) {
+      // If direct ID lookup fails, try user ID lookup as fallback
+      return await request(`/internships/companies/${id}?by=user`);
+    }
+  },
+
+  getCompanyByUserId(id) {
+    return request(`/internships/companies/${id}?by=user`);
+  },
+
+  // Events endpoints
+  getUpcomingEvents() {
+    return request('/events/upcoming', { auth: false });
+  },
+
+  getStudentRegisteredEvents() {
+    return request('/events/student/registered', { auth: true });
+  },
+
+  getRecommendedEvents() {
+    return request('/events/student/recommended', { auth: true });
+  },
+
+  async uploadResume(file) {
+    const token = getStoredToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/uploads/resume`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data?.message || data?.error || `Upload failed with status ${response.status}`;
+      throw new Error(message);
+    }
+    return data;
   },
 };
 

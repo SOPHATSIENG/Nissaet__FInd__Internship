@@ -54,6 +54,21 @@ interface EventStats {
   upcoming_events: number;
 }
 
+interface Registration {
+  id: number;
+  registration_date: string;
+  status: string;
+  notes?: string | null;
+  student_id: number;
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  university?: string | null;
+  education?: string | null;
+  graduation_year?: number | null;
+  cv_url?: string | null;
+}
+
 export default function Events() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
@@ -66,6 +81,11 @@ export default function Events() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [detailEvent, setDetailEvent] = useState<Event | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [showDraftOnly, setShowDraftOnly] = useState(false);
+  const [registrationsEvent, setRegistrationsEvent] = useState<Event | null>(null);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [registrationsLoading, setRegistrationsLoading] = useState(false);
+  const [registrationsError, setRegistrationsError] = useState('');
 
   const eventTypes = [
     { value: 'workshop', label: 'Workshop' },
@@ -73,6 +93,7 @@ export default function Events() {
     { value: 'webinar', label: 'Webinar' },
     { value: 'competition', label: 'Competition' },
     { value: 'networking', label: 'Networking' },
+    { value: 'career_fair', label: 'Career Fair' },
     { value: 'other', label: 'Other' }
   ];
 
@@ -92,10 +113,12 @@ export default function Events() {
   const fetchEvents = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await api.get('/events/company/mine');
       setEvents(response.data);
     } catch (error) {
       console.error('Error fetching events:', error);
+      setError('Unable to load your event list right now.');
     } finally {
       setLoading(false);
     }
@@ -123,6 +146,8 @@ export default function Events() {
       console.error('Error deleting event:', error);
     }
   };
+
+  const [error, setError] = useState('');
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -175,14 +200,58 @@ export default function Events() {
     });
   };
 
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return dateString;
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+
+  const fetchRegistrations = async (eventItem: Event) => {
+    try {
+      setRegistrationsLoading(true);
+      setRegistrationsError('');
+      setRegistrationsEvent(eventItem);
+      const response = await api.get(`/events/${eventItem.id}/registrations`);
+      setRegistrations(Array.isArray(response.data) ? response.data : []);
+    } catch (error: any) {
+      setRegistrations([]);
+      setRegistrationsError(error?.message || 'Failed to load registrations');
+    } finally {
+      setRegistrationsLoading(false);
+    }
+  };
+
+  const isPastDeadline = (deadline?: string | null) => {
+    if (!deadline) return false;
+    const deadlineDate = new Date(deadline);
+    if (Number.isNaN(deadlineDate.getTime())) return false;
+    deadlineDate.setHours(23, 59, 59, 999);
+    return Date.now() > deadlineDate.getTime();
+  };
+
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          event.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
+    const matchesStatus = showDraftOnly
+      ? event.status === 'draft'
+      : (
+          statusFilter === 'all'
+            ? event.status !== 'draft'
+            : statusFilter === 'draft'
+              ? false
+              : event.status === statusFilter
+        );
     const matchesType = typeFilter === 'all' || event.type === typeFilter;
     
     return matchesSearch && matchesStatus && matchesType;
   });
+  const draftEventsCount = events.filter(event => event.status === 'draft').length;
 
   if (loading) {
     return (
@@ -230,7 +299,6 @@ export default function Events() {
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
           </div>
-
           <div className="bg-white p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -253,6 +321,13 @@ export default function Events() {
         </div>
       )}
 
+      {error && (
+        <div className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          <AlertCircle className="w-5 h-5" />
+          {error}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
@@ -269,10 +344,33 @@ export default function Events() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDraftOnly((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setStatusFilter('all');
+                  }
+                  return next;
+                });
+              }}
+              className={`px-4 py-2 rounded-lg border transition-colors ${
+                showDraftOnly
+                  ? 'border-[#137fec] bg-[#137fec] text-white'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Draft ({draftEventsCount})
+            </button>
+
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setShowDraftOnly(false);
+              }}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#137fec] focus:border-transparent"
             >
               {statusOptions.map(option => (
@@ -299,17 +397,17 @@ export default function Events() {
       </div>
 
       {/* Events List */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filteredEvents.length === 0 ? (
-          <div className="bg-white p-8 rounded-lg border border-gray-200 text-center">
+          <div className="col-span-full bg-white p-8 rounded-lg border border-gray-200 text-center">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
+              {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' || showDraftOnly
                 ? 'Try adjusting your filters or search terms'
                 : 'Get started by creating your first event'}
             </p>
-            {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && (
+            {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && !showDraftOnly && (
               <button
                 onClick={() => navigate('/company/events/post')}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-[#137fec] text-white rounded-lg hover:bg-[#0e6bb8] transition-colors"
@@ -321,8 +419,8 @@ export default function Events() {
           </div>
         ) : (
           filteredEvents.map(event => (
-            <div key={event.id} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
+            <div key={event.id} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-md transition-shadow min-h-[280px]">
+              <div className="flex h-full flex-col justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
@@ -330,12 +428,17 @@ export default function Events() {
                       {getStatusIcon(event.status)}
                       {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
                     </span>
+                    {isPastDeadline(event.registration_deadline) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Expired
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
                       {getTypeLabel(event.type)}
                     </span>
                   </div>
 
-                  <p className="text-gray-600 mb-4 line-clamp-2">{event.description}</p>
+                  <p className="text-gray-600 mb-4 line-clamp-3">{event.description}</p>
 
                   <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                     <div className="flex items-center gap-1">
@@ -352,9 +455,9 @@ export default function Events() {
                         Virtual Event
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 min-w-0">
                         <MapPin className="w-4 h-4" />
-                        {event.location}
+                        <span className="line-clamp-1">{event.location}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-1">
@@ -375,7 +478,7 @@ export default function Events() {
                   )}
                 </div>
 
-                <div className="relative ml-4">
+                <div className="relative mt-4 flex justify-end gap-1">
                   <button
                     onClick={() => setDetailEvent(event)}
                     className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -444,16 +547,16 @@ export default function Events() {
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="relative">
               {detailEvent.image_url ? (
                 <img
                   src={detailEvent.image_url}
                   alt={detailEvent.title}
-                  className="h-56 w-full object-cover"
+                  className="h-40 w-full object-cover"
                 />
               ) : (
-                <div className="h-56 w-full bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center text-indigo-400">
+                <div className="flex h-40 w-full items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 text-indigo-400">
                   <Calendar className="w-12 h-12" />
                 </div>
               )}
@@ -464,26 +567,31 @@ export default function Events() {
               >
                 <X className="h-4 w-4" />
               </button>
-              <div className="absolute left-6 bottom-4 flex flex-wrap items-center gap-2">
+              <div className="absolute bottom-3 left-4 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(detailEvent.status)}`}>
                   {getStatusIcon(detailEvent.status)}
                   {detailEvent.status.charAt(0).toUpperCase() + detailEvent.status.slice(1)}
                 </span>
+                {isPastDeadline(detailEvent.registration_deadline) && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
+                    Expired
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
                   {getTypeLabel(detailEvent.type)}
                 </span>
               </div>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="space-y-4 overflow-y-auto p-5">
               <div>
-                <h3 className="text-2xl font-bold text-slate-900">{detailEvent.title}</h3>
-                <p className="text-sm text-slate-500 mt-1">Created on {formatDate(detailEvent.created_at)}</p>
+                <h3 className="text-xl font-bold text-slate-900">{detailEvent.title}</h3>
+                <p className="mt-1 text-sm text-slate-500">Created on {formatDate(detailEvent.created_at)}</p>
               </div>
 
-              <p className="text-slate-600 whitespace-pre-wrap">{detailEvent.description}</p>
+              <p className="whitespace-pre-wrap text-slate-600">{detailEvent.description}</p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
+              <div className="grid grid-cols-1 gap-4 text-sm text-slate-600 sm:grid-cols-2">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-slate-400" />
                   <span>{formatDate(detailEvent.event_date)}</span>
@@ -513,15 +621,15 @@ export default function Events() {
               </div>
 
               {detailEvent.registration_deadline && (
-                <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
                   Registration closes on {formatDate(detailEvent.registration_deadline)}.
                 </div>
               )}
 
               {detailEvent.requirements && (
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Requirements</h4>
-                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{detailEvent.requirements}</p>
+                  <h4 className="mb-2 text-sm font-semibold text-slate-900">Requirements</h4>
+                  <p className="whitespace-pre-wrap text-sm text-slate-600">{detailEvent.requirements}</p>
                 </div>
               )}
 
@@ -535,12 +643,22 @@ export default function Events() {
                 </div>
               )}
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-wrap justify-end gap-3 pt-1">
                 <button
                   onClick={() => setDetailEvent(null)}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
                 >
                   Close
+                </button>
+                <button
+                  onClick={() => {
+                    if (!detailEvent) return;
+                    setDetailEvent(null);
+                    fetchRegistrations(detailEvent);
+                  }}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  View Registrations
                 </button>
                 <button
                   onClick={() => {
@@ -552,6 +670,89 @@ export default function Events() {
                   Edit Event
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {registrationsEvent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Registrations</h3>
+                <p className="text-sm text-slate-500">{registrationsEvent.title}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setRegistrationsEvent(null);
+                  setRegistrations([]);
+                  setRegistrationsError('');
+                }}
+                className="inline-flex items-center justify-center rounded-full bg-slate-100 p-2 text-slate-600 hover:bg-slate-200"
+                aria-label="Close registrations"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {registrationsError && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  {registrationsError}
+                </div>
+              )}
+
+              {registrationsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#137fec]"></div>
+                </div>
+              ) : registrations.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+                  No registrations yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="text-left text-slate-500">
+                      <tr>
+                        <th className="py-2 pr-4 font-semibold">Student</th>
+                        <th className="py-2 pr-4 font-semibold">Email</th>
+                        <th className="py-2 pr-4 font-semibold">University</th>
+                        <th className="py-2 pr-4 font-semibold">Graduation</th>
+                        <th className="py-2 pr-4 font-semibold">Registered</th>
+                        <th className="py-2 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-700">
+                      {registrations.map((registration) => (
+                        <tr key={registration.id} className="border-t border-slate-100">
+                          <td className="py-3 pr-4">
+                            <div className="font-semibold text-slate-900">{registration.full_name}</div>
+                            {registration.phone && (
+                              <div className="text-xs text-slate-500">{registration.phone}</div>
+                            )}
+                          </td>
+                          <td className="py-3 pr-4">{registration.email}</td>
+                          <td className="py-3 pr-4">{registration.university || '—'}</td>
+                          <td className="py-3 pr-4">{registration.graduation_year || '—'}</td>
+                          <td className="py-3 pr-4">{formatDateTime(registration.registration_date)}</td>
+                          <td className="py-3">
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
+                              {registration.status || 'registered'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

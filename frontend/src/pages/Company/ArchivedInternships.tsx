@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { History, MoreVertical, AlertTriangle, Search } from 'lucide-react';
+import { History, MoreVertical, AlertTriangle, Search, RotateCcw, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../api/axios';
+import ConfirmationModal from '../../components/company-components/ConfirmationModal';
 
 const formatDeadlineDate = (value?: string | null) => {
   if (!value) return 'No deadline';
@@ -25,6 +26,8 @@ export default function ArchivedInternships() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const actionButtonRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
 
   useEffect(() => {
@@ -107,6 +110,21 @@ export default function ArchivedInternships() {
     }
   };
 
+  const handlePermanentDelete = async (id: number) => {
+    try {
+      setDeletingId(id);
+      await api.permanentlyDeleteInternship(id);
+      setInternships(prev => prev.filter(item => item.id !== id));
+      setActiveDropdown(null);
+      setDeleteTargetId(null);
+    } catch (err) {
+      console.error('Failed to permanently delete internship:', err);
+      alert('Failed to delete internship. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-6">
       <div className="flex items-center gap-3">
@@ -116,6 +134,7 @@ export default function ArchivedInternships() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Archived Internships</h1>
           <p className="text-slate-500 text-sm">Restore posts that were archived instead of deleted.</p>
+          <p className="text-slate-400 text-xs mt-1">Archived internships are permanently deleted automatically after 1 month.</p>
         </div>
       </div>
 
@@ -252,13 +271,42 @@ export default function ArchivedInternships() {
                   onClick={() => handleRestore(activeDropdown)}
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 transition-colors"
                 >
+                  <RotateCcw size={14} />
                   Restore
+                </button>
+                <button
+                  onClick={() => {
+                    setDeleteTargetId(activeDropdown);
+                    setActiveDropdown(null);
+                  }}
+                  disabled={deletingId === activeDropdown}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 size={14} />
+                  {deletingId === activeDropdown ? 'Deleting...' : 'Delete'}
                 </button>
               </motion.div>
             </AnimatePresence>,
             document.body
           )
         : null}
+
+      <ConfirmationModal
+        isOpen={deleteTargetId !== null}
+        onClose={() => {
+          if (deletingId !== null) return;
+          setDeleteTargetId(null);
+        }}
+        onConfirm={() => {
+          if (deleteTargetId === null) return;
+          handlePermanentDelete(deleteTargetId);
+        }}
+        title="Delete Archived Internship"
+        message="Delete this archived internship permanently? This cannot be undone."
+        confirmText={deletingId !== null ? 'Deleting...' : 'Delete'}
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 }

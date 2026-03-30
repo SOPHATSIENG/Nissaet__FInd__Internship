@@ -86,7 +86,11 @@ export const Reports = () => {
   };
   
   const accentHex = colorMap[settings.accentColor] || colorMap.emerald;
-  const COLORS = [accentHex, '#3b82f6', '#8b5cf6', '#f59e0b'];
+  const BASE_COLORS = ['#2563eb', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#10b981', '#e11d48'];
+  const COLORS = useMemo(() => {
+    const filtered = BASE_COLORS.filter((color) => color.toLowerCase() !== accentHex.toLowerCase());
+    return [accentHex, ...filtered];
+  }, [accentHex]);
 
   useEffect(() => {
     let isActive = true;
@@ -146,9 +150,27 @@ export const Reports = () => {
     ? reportData.growth
     : [{ name: 'No data', students: 0, companies: 0, placements: 0 }];
 
-  const placementData = reportData?.industry?.length
-    ? reportData.industry
-    : [];
+  const placementData = useMemo(() => {
+    const raw = reportData?.industry || [];
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+
+    const aggregated = new Map<string, { name: string; value: number }>();
+
+    raw.forEach((item: any) => {
+      const rawName = String(item?.name || item?.industry || '').trim();
+      if (!rawName) return;
+      const key = rawName.toLowerCase();
+      const value = Number(item?.value || item?.count || 0);
+      const existing = aggregated.get(key);
+      if (existing) {
+        existing.value += value;
+      } else {
+        aggregated.set(key, { name: rawName, value });
+      }
+    });
+
+    return Array.from(aggregated.values()).sort((a, b) => b.value - a.value);
+  }, [reportData?.industry]);
   const placementTotal = useMemo(
     () => placementData.reduce((sum, row) => sum + (row.value || 0), 0),
     [placementData]
@@ -171,9 +193,14 @@ export const Reports = () => {
     if (isExporting || !reportRef.current) return;
     setIsExporting(true);
     setIsExportMode(true);
+    setError('');
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (document?.fonts?.ready) {
+        await document.fonts.ready;
+      }
       const [{ default: html2canvas }, jspdfModule] = await Promise.all([
         import('html2canvas'),
         import('jspdf')
@@ -181,32 +208,96 @@ export const Reports = () => {
       const PdfCtor = (jspdfModule as any).jsPDF || (jspdfModule as any).default;
 
       const element = reportRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        scrollX: 0,
-        scrollY: -window.scrollY
-      });
+      const exportWidth = Math.max(1280, Math.ceil(window.innerWidth || 0));
+      const scale = Math.min(window.devicePixelRatio || 1, 2);
+
+      const runCapture = (options: Record<string, any>) =>
+        html2canvas(element, {
+          scale,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+          scrollX: 0,
+          scrollY: -window.scrollY,
+          onclone: (doc: Document) => {
+            const clone = doc.getElementById('report-export-root') as HTMLElement | null;
+            if (clone) {
+              clone.style.width = `${exportWidth}px`;
+              clone.style.maxWidth = 'none';
+              clone.style.minWidth = `${exportWidth}px`;
+              clone.style.margin = '0';
+            }
+            doc.body.style.margin = '0';
+            doc.body.style.background = '#ffffff';
+          },
+          ...options,
+        });
+
+      let canvas: HTMLCanvasElement | null = null;
+
+      try {
+        canvas = await runCapture({});
+      } catch {
+        canvas = await runCapture({
+          foreignObjectRendering: true,
+          ignoreElements: (el: Element) => el.tagName === 'IMG',
+        });
+      }
+
+      if (!canvas) {
+        throw new Error('Unable to capture report.');
+      }
 
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new PdfCtor('p', 'mm', 'a4');
-      const pageWidth = 210;
-      const pageHeight = 297;
-      const imgWidth = pageWidth;
+      const elementWidth = Math.ceil(element.scrollWidth);
+      const elementHeight = Math.ceil(element.scrollHeight);
+      const orientation = elementWidth > elementHeight ? 'l' : 'p';
+      const pdf = new PdfCtor(orientation, 'mm', 'a4');
+      const pageWidth = orientation === 'l' ? 297 : 210;
+      const pageHeight = orientation === 'l' ? 210 : 297;
+      const margin = 10;
+      const printableWidth = pageWidth - margin * 2;
+      const printableHeight = pageHeight - margin * 2;
+      const imgWidth = printableWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
+      const pxPerMm = canvas.width / imgWidth;
+      const pageHeightPx = Math.floor(printableHeight * pxPerMm);
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      let yOffset = 0;
+      let pageIndex = 0;
 
-      while (heightLeft > 0) {
-        position -= pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      while (yOffset < canvas.height) {
+        const sliceHeight = Math.min(pageHeightPx, canvas.height - yOffset);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+
+        const pageCtx = pageCanvas.getContext('2d');
+        if (!pageCtx) {
+          throw new Error('Unable to render PDF page.');
+        }
+
+        pageCtx.drawImage(
+          canvas,
+          0,
+          yOffset,
+          canvas.width,
+          sliceHeight,
+          0,
+          0,
+          canvas.width,
+          sliceHeight
+        );
+
+        const pageImgData = pageCanvas.toDataURL('image/png');
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+        const pageImgHeightMm = (sliceHeight * imgWidth) / canvas.width;
+        pdf.addImage(pageImgData, 'PNG', margin, margin, imgWidth, pageImgHeightMm);
+
+        yOffset += sliceHeight;
+        pageIndex += 1;
       }
 
       const stamp = new Date().toISOString().slice(0, 10);
@@ -225,11 +316,22 @@ export const Reports = () => {
       margin: { top: 10, right: 10, left: -20, bottom: 0 },
     };
 
+    const xAxisProps = {
+      dataKey: 'name',
+      axisLine: false,
+      tickLine: false,
+      tick: { fontSize: 12, fill: 'var(--text-secondary)' },
+      padding: { left: 10, right: 10 },
+      minTickGap: 16,
+      interval: 'preserveStartEnd' as const,
+      tickMargin: 8,
+    };
+
     if (chartType === 'bar') {
       return (
         <BarChart {...commonProps}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
+          <XAxis {...xAxisProps} />
           <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
           <Tooltip 
             contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
@@ -244,7 +346,7 @@ export const Reports = () => {
       return (
         <LineChart {...commonProps}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
+          <XAxis {...xAxisProps} />
           <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
           <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }} />
           <Line type="monotone" dataKey={activeMetric} stroke={accentHex} strokeWidth={3} dot={{ r: 4, fill: accentHex, strokeWidth: 2, stroke: 'var(--surface)' }} activeDot={{ r: 6 }} />
@@ -261,7 +363,7 @@ export const Reports = () => {
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
+        <XAxis {...xAxisProps} />
         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
         <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }} />
         <Area type="monotone" dataKey={activeMetric} stroke={accentHex} strokeWidth={3} fillOpacity={1} fill="url(#colorMetric)" />
@@ -272,9 +374,10 @@ export const Reports = () => {
   return (
     <div 
       ref={reportRef} 
+      id="report-export-root"
       className={cn(
-        "flex flex-1 flex-col gap-8 p-8 no-scrollbar mx-auto w-full",
-        isExportMode ? "overflow-visible max-w-[1200px]" : "overflow-y-auto max-w-7xl"
+        "admin-page",
+        isExportMode ? "overflow-visible" : ""
       )}
     >
       {/* Header Section */}

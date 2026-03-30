@@ -10,6 +10,7 @@ import {
   Video,
   UserPlus,
   UserCheck,
+  Bell,
   X,
   Tag,
   ExternalLink,
@@ -19,11 +20,13 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import api from '../../api/axios';
 
 interface Event {
   id: number;
   company_id: number;
+  company_profile_id?: number | null;
   title: string;
   description: string;
   type: string;
@@ -33,6 +36,7 @@ interface Event {
   location: string;
   is_virtual: boolean;
   meeting_url: string;
+  registration_url: string;
   max_participants: number;
   current_participants: number;
   registration_deadline: string;
@@ -52,10 +56,11 @@ interface Event {
 }
 
 export default function Events() {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+  const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
-  const [featuredEvents, setFeaturedEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -64,6 +69,8 @@ export default function Events() {
   const [registeringId, setRegisteringId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const { unreadCount } = useNotifications();
+  const notificationCount = Math.max(0, unreadCount || 0);
 
   const eventTypes = [
     { value: 'workshop', label: 'Workshop' },
@@ -71,32 +78,38 @@ export default function Events() {
     { value: 'webinar', label: 'Webinar' },
     { value: 'competition', label: 'Competition' },
     { value: 'networking', label: 'Networking' },
+    { value: 'career_fair', label: 'Career Fair' },
     { value: 'other', label: 'Other' }
   ];
 
+  const resolveImageUrl = (value?: string) => {
+    if (!value) return '';
+    const trimmed = String(value).trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('data:')) return trimmed;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    return `${API_ORIGIN}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+  };
+
   useEffect(() => {
     fetchEvents();
-    fetchFeaturedEvents();
   }, []);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/events/upcoming');
-      setEvents(response.data);
+      const response = await api.getUpcomingEvents();
+      const list = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+          ? response.data
+          : [];
+      setEvents(list);
     } catch (error) {
       console.error('Error fetching events:', error);
+      setEvents([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchFeaturedEvents = async () => {
-    try {
-      const response = await api.get('/events/featured');
-      setFeaturedEvents(response.data);
-    } catch (error) {
-      console.error('Error fetching featured events:', error);
     }
   };
 
@@ -111,26 +124,12 @@ export default function Events() {
       setError('');
       setSuccess('');
 
-      await api.post(`/events/${eventId}/register`);
+      await api.post(`/events/${eventId}/register`, {});
       
       setSuccess('Successfully registered for the event!');
       
       // Update the events list to reflect registration
-      setEvents(events.map(event => 
-        event.id === eventId 
-          ? { 
-              ...event, 
-              current_participants: (event.current_participants || 0) + 1,
-              userRegistration: {
-                id: 0,
-                registration_date: new Date().toISOString(),
-                status: 'registered'
-              }
-            }
-          : event
-      ));
-      
-      setFeaturedEvents(featuredEvents.map(event => 
+      setEvents((previous) => previous.map(event => 
         event.id === eventId 
           ? { 
               ...event, 
@@ -147,7 +146,12 @@ export default function Events() {
       setTimeout(() => setSuccess(''), 5000);
     } catch (error: any) {
       console.error('Error registering for event:', error);
-      setError(error?.message || 'Failed to register for event');
+      const message =
+        error?.message ||
+        error?.error ||
+        (typeof error === 'string' ? error : '') ||
+        'Failed to register for event';
+      setError(message);
       setTimeout(() => setError(''), 5000);
     } finally {
       setRegisteringId(null);
@@ -165,17 +169,7 @@ export default function Events() {
       setSuccess('Successfully unregistered from the event!');
       
       // Update the events list to reflect unregistration
-      setEvents(events.map(event => 
-        event.id === eventId 
-          ? { 
-              ...event, 
-              current_participants: Math.max(0, (event.current_participants || 0) - 1),
-              userRegistration: undefined
-            }
-          : event
-      ));
-      
-      setFeaturedEvents(featuredEvents.map(event => 
+      setEvents((previous) => previous.map(event => 
         event.id === eventId 
           ? { 
               ...event, 
@@ -188,7 +182,12 @@ export default function Events() {
       setTimeout(() => setSuccess(''), 5000);
     } catch (error: any) {
       console.error('Error unregistering from event:', error);
-      setError(error?.message || 'Failed to unregister from event');
+      const message =
+        error?.message ||
+        error?.error ||
+        (typeof error === 'string' ? error : '') ||
+        'Failed to unregister from event';
+      setError(message);
       setTimeout(() => setError(''), 5000);
     } finally {
       setRegisteringId(null);
@@ -236,12 +235,14 @@ export default function Events() {
     return matchesSearch && matchesType && matchesLocation;
   });
 
-  const EventCard = ({ event, isFeatured = false }: { event: Event; isFeatured?: boolean }) => (
+  const EventCard = ({ event, isFeatured = false }: { event: Event; isFeatured?: boolean }) => {
+    const imageUrl = resolveImageUrl(event.image_url || event.company_logo);
+    return (
     <div className={`bg-white rounded-lg border ${isFeatured ? 'border-blue-200 shadow-md' : 'border-gray-200'} hover:shadow-lg transition-shadow`}>
-      {event.image_url && (
+      {imageUrl && (
         <div className="relative h-48 overflow-hidden rounded-t-lg">
           <img 
-            src={event.image_url} 
+            src={imageUrl} 
             alt={event.title}
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -270,7 +271,7 @@ export default function Events() {
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-600 mb-3">{event.company_name} • {event.industry}</p>
+            <p className="text-sm text-gray-600 mb-3">{event.company_name} - {event.industry}</p>
           </div>
         </div>
 
@@ -280,7 +281,7 @@ export default function Events() {
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Calendar className="w-4 h-4" />
             <span>{formatDate(event.event_date)}</span>
-            <span className="text-gray-400">•</span>
+            <span className="text-gray-400">-</span>
             <Clock className="w-4 h-4" />
             <span>{formatTime(event.start_time)} - {formatTime(event.end_time)}</span>
           </div>
@@ -303,7 +304,7 @@ export default function Events() {
             <Users className="w-4 h-4" />
             <span>{event.current_participants || 0} participants</span>
             {event.max_participants && (
-              <span className="text-gray-400">• {event.max_participants} max</span>
+              <span className="text-gray-400">- {event.max_participants} max</span>
             )}
           </div>
 
@@ -334,9 +335,21 @@ export default function Events() {
             onClick={() => navigate(`/events/${event.id}`)}
             className="flex items-center gap-1 px-4 py-2 text-[#137fec] hover:bg-blue-50 rounded-lg transition-colors text-sm font-medium"
           >
-            View Details
+            Read More
             <ChevronRight className="w-4 h-4" />
           </button>
+
+          {event.registration_url && (
+            <a
+              href={event.registration_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors text-sm font-medium"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Registration Link
+            </a>
+          )}
 
           {user && user.role === 'student' && (
             <>
@@ -383,6 +396,7 @@ export default function Events() {
       </div>
     </div>
   );
+  };
 
   if (loading) {
     return (
@@ -395,7 +409,19 @@ export default function Events() {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-8 relative">
+        <button
+          type="button"
+          className="absolute right-0 top-0 inline-flex items-center justify-center h-10 w-10 rounded-full border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 bg-white shadow-sm"
+          aria-label="Notifications"
+        >
+          <Bell className="w-5 h-5" />
+          {notificationCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] leading-[18px] text-center px-1">
+              {notificationCount > 99 ? '99+' : notificationCount}
+            </span>
+          )}
+        </button>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Events & Workshops</h1>
         <p className="text-gray-600 max-w-2xl mx-auto">
           Discover and register for workshops, seminars, and networking events hosted by top companies
@@ -414,18 +440,6 @@ export default function Events() {
         <div className="mb-6 flex items-center gap-2 p-4 bg-green-50 text-green-700 rounded-lg max-w-2xl mx-auto">
           <CheckCircle className="w-5 h-5" />
           {success}
-        </div>
-      )}
-
-      {/* Featured Events */}
-      {featuredEvents.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Featured Events</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredEvents.map(event => (
-              <EventCard key={event.id} event={event} isFeatured />
-            ))}
-          </div>
         </div>
       )}
 

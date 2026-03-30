@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS internships (
     type ENUM('full-time', 'part-time', 'contract') DEFAULT 'full-time',
     duration_months INT,
     stipend DECIMAL(10,2),
+    stipend_max DECIMAL(10,2),
     stipend_currency VARCHAR(3) DEFAULT 'USD',
     application_deadline DATE,
     start_date DATE,

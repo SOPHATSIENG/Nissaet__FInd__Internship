@@ -35,90 +35,14 @@ export default function AllApplicants() {
         // Load all applications from database directly (bypass company filter)
         console.log('Attempting to load all applications...');
         
-        // Create a direct API call to get all applications
-        const allResponse = await fetch('http://localhost:5002/api/applications/test-db');
-        const testData = await allResponse.json();
+        // Use the shared api utility instead of hardcoded URL
+        const testData = await api.getAllApplications();
         console.log('Test DB Response:', testData);
         
-        if (testData.databaseConnected) {
-          // If we can connect to database, show sample real data
-          const realData = [
-            {
-              id: 4,
-              full_name: 'SREYPOV HUT',
-              email: 'sreypov.hut@student.passerellesnumeriques.org',
-              internship_title: 'Soft Ware',
-              applied_at: '2026-03-16T03:13:46.000Z',
-              status: 'pending',
-              phone: '+855 12 345 678',
-              university: 'Passerelles Numériques Cambodia',
-              major: 'Software Development',
-              company_name: 'Ah Pov Cutie'
-            },
-            {
-              id: 5,
-              full_name: 'Pinn Makara',
-              email: 'pinn.makara@example.com',
-              internship_title: 'QA tester',
-              applied_at: '2026-03-09T13:49:46.000Z',
-              status: 'pending',
-              phone: '+855 23 456 789',
-              university: 'Royal University of Phnom Penh',
-              major: 'Computer Science',
-              company_name: 'Ah Pov Cutie'
-            },
-            {
-              id: 12,
-              full_name: 'SREYPOV HUT',
-              email: 'sreypov.hut@student.passerellesnumeriques.org',
-              internship_title: 'UX/UI Designer',
-              applied_at: '2026-03-10T08:36:22.000Z',
-              status: 'pending',
-              phone: '+855 12 345 678',
-              university: 'Passerelles Numériques Cambodia',
-              major: 'Software Development',
-              company_name: 'Ah Pov Cutie'
-            },
-            {
-              id: 13,
-              full_name: 'SREYPOV HUT',
-              email: 'sreypov.hut@student.passerellesnumeriques.org',
-              internship_title: 'Databases Administrator Junior',
-              applied_at: '2026-03-11T01:49:52.000Z',
-              status: 'pending',
-              phone: '+855 12 345 678',
-              university: 'Passerelles Numériques Cambodia',
-              major: 'Software Development',
-              company_name: 'Ah Pov Cutie'
-            },
-            {
-              id: 14,
-              full_name: 'SREYPOV HUT',
-              email: 'sreypov.hut@student.passerellesnumeriques.org',
-              internship_title: 'Backend Developer',
-              applied_at: '2026-03-09T13:45:45.000Z',
-              status: 'pending',
-              phone: '+855 12 345 678',
-              university: 'Passerelles Numériques Cambodia',
-              major: 'Software Development',
-              company_name: 'Ah Pov Cutie'
-            },
-            {
-              id: 15,
-              full_name: 'Another Student',
-              email: 'another@example.com',
-              internship_title: 'QA tester',
-              applied_at: '2026-03-09T13:49:46.000Z',
-              status: 'pending',
-              phone: '+855 98 765 432',
-              university: 'National University of Cambodia',
-              major: 'Information Technology',
-              company_name: 'Ah Pov Cutie'
-            }
-          ];
-          
-          console.log('Loading real data from database:', realData);
-          setApplicants(realData);
+        if (testData && testData.applications) {
+          // If we have applications, we'll use them as the source of truth
+          console.log('Using real applications from DB:', testData.applications);
+          setApplicants(testData.applications);
         } else {
           console.log('Database connection failed');
         }

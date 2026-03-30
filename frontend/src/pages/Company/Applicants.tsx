@@ -49,6 +49,17 @@ export default function Applicants() {
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const toBoolean = (value: any, fallback = false) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+      if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    }
+    return fallback;
+  };
+
   const getAvatarUrl = (profileImage?: string, name?: string, size = 40) => {
     if (profileImage) return profileImage;
     const fallbackName = encodeURIComponent(name || 'User');
@@ -59,9 +70,11 @@ export default function Applicants() {
     if (!status) return 'Pending Review';
     const value = status.toLowerCase();
     if (value === 'accepted') return 'Shortlisted';
+    if (value === 'shortlisted') return 'Shortlisted';
     if (value === 'reviewing') return 'Pending Review';
     if (value === 'pending') return 'Pending Review';
-    if (value === 'rejected') return 'Rejected';
+    if (value === 'unshortlisted') return 'Unshortlisted';
+    if (value === 'rejected') return 'Unshortlisted';
     if (value === 'withdrawn') return 'Withdrawn';
     return status;
   };
@@ -69,6 +82,7 @@ export default function Applicants() {
   const toApiStatus = (status: string) => {
     if (status === 'Shortlisted') return 'accepted';
     if (status === 'Pending Review') return 'pending';
+    if (status === 'Unshortlisted') return 'unshortlisted';
     if (status === 'Rejected') return 'rejected';
     return status.toLowerCase();
   };
@@ -142,7 +156,8 @@ export default function Applicants() {
           education,
           experience,
           resumeUrl: app.resume_url || '',
-          profileImage: app.profile_image || ''
+          profileImage: app.profile_image || '',
+          is_available: toBoolean(app.is_available, true)
         };
       });
 
@@ -199,40 +214,146 @@ export default function Applicants() {
       return;
     }
 
-    const lowerUrl = resumeUrl.toLowerCase();
-    const isPdf = lowerUrl.split('?')[0].endsWith('.pdf');
-    const isGoogleDrive = lowerUrl.includes('drive.google.com');
-    if (!isPdf) {
+    const apiOrigin = (() => {
+      const raw = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+      try {
+        return new URL(raw).origin;
+      } catch {
+        return '';
+      }
+    })();
+
+    const fileBase = String(name || 'Applicant')
+      .trim()
+      .replace(/\s+/g, '_')
+      .replace(/[^\w.-]/g, '');
+
+    const triggerBlobDownload = (blob: Blob, filename: string) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    const normalizeResumeUrl = (url: string) => {
+      const trimmed = url.trim();
+      if (!trimmed) return trimmed;
+
+      if (apiOrigin) {
+        if (trimmed.startsWith('/uploads/')) return `${apiOrigin}${trimmed}`;
+        if (trimmed.startsWith('uploads/')) return `${apiOrigin}/${trimmed}`;
+      }
+
+      try {
+        const parsed = new URL(trimmed);
+        if (
+          apiOrigin &&
+          parsed.hostname === 'localhost' &&
+          new URL(apiOrigin).hostname === 'localhost' &&
+          parsed.pathname.startsWith('/uploads/')
+        ) {
+          return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+      } catch {
+        // Ignore URL parse failure and keep as-is
+      }
+
+      return trimmed;
+    };
+
+    const getGoogleDriveDirectDownloadUrl = (url: string) => {
+      try {
+        const parsed = new URL(url);
+        const idFromQuery = parsed.searchParams.get('id');
+        if (idFromQuery) {
+          return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(idFromQuery)}`;
+        }
+        const match = parsed.pathname.match(/\/d\/([^/]+)/);
+        if (match?.[1]) {
+          return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(match[1])}`;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
+    const downloadPdf = async () => {
+      const resolvedUrl = normalizeResumeUrl(resumeUrl);
+      const lowerUrl = resolvedUrl.toLowerCase();
+      const isGoogleDrive = lowerUrl.includes('drive.google.com');
       if (isGoogleDrive) {
-        const link = document.createElement('a');
-        link.href = resumeUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.download = `${name}-CV`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        const directUrl = getGoogleDriveDirectDownloadUrl(resolvedUrl);
+        window.open(directUrl || resolvedUrl, '_blank', 'noopener,noreferrer');
         return;
       }
-      setModalConfig({
-        isOpen: true,
-        type: 'info',
-        title: 'Download CV',
-        message: `Only PDF files are allowed. The CV for ${name} is not a PDF.`,
-        confirmText: 'Got it',
-        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
-      });
-      return;
-    }
 
-    const link = document.createElement('a');
-    link.href = resumeUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.download = `${name}-CV`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+      try {
+        const token = localStorage.getItem('nissaet_auth_token');
+        const response = await fetch(resolvedUrl, {
+          method: 'GET',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!response.ok) {
+          const reason =
+            response.status === 404
+              ? 'File not found (404).'
+              : response.status === 401 || response.status === 403
+                ? 'Access denied. Please log in again.'
+                : `Download failed (${response.status}).`;
+
+          setModalConfig({
+            isOpen: true,
+            type: 'info',
+            title: 'Download CV',
+            message: `Unable to download ${name}'s CV. ${reason}`,
+            confirmText: 'Got it',
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+          });
+          return;
+        }
+
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        const blob = await response.blob();
+
+        const isPdfHeader = await blob
+          .slice(0, 5)
+          .text()
+          .then((text) => text.startsWith('%PDF-'))
+          .catch(() => false);
+
+        if (!contentType.includes('application/pdf') && !isPdfHeader) {
+          setModalConfig({
+            isOpen: true,
+            type: 'info',
+            title: 'Download CV',
+            message: `The CV link for ${name} did not return a valid PDF (it may be expired or broken).`,
+            confirmText: 'Got it',
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+          });
+          return;
+        }
+
+        triggerBlobDownload(blob, `${fileBase || 'CV'}-CV.pdf`);
+      } catch (error) {
+        console.warn('PDF download failed:', error);
+        setModalConfig({
+          isOpen: true,
+          type: 'info',
+          title: 'Download CV',
+          message: `Unable to download ${name}'s CV. Please try again, or ask the applicant to re-upload their CV.`,
+          confirmText: 'Got it',
+          onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+        });
+      }
+    };
+
+    void downloadPdf();
   };
 
   const handleExportList = () => {
@@ -253,6 +374,7 @@ export default function Applicants() {
   };
 
   const handleUpdateStatus = async (id: number, newStatus: string) => {
+    const previousApplicants = applicants;
     try {
       console.log(`[UPDATE] Updating application ${id} to status: ${newStatus}`);
 
@@ -267,21 +389,15 @@ export default function Applicants() {
       // Convert status for database
       const apiStatus = toApiStatus(newStatus);
 
-      // Try to save to database
-      try {
-        await api.updateApplicationStatus(id, apiStatus);
-        console.log('[OK] Saved to database successfully');
-        showNotification(`Applicant status updated to ${newStatus}`, 'success');
-      } catch (dbError) {
-        console.log('[WARN] Database error, but UI updated:', dbError);
-        showNotification(`Applicant status updated to ${newStatus} (Local only)`, 'warning');
-      }
-
-      console.log(`[OK] Applicant ${id} status changed to ${newStatus}`);
-
+      // Save to database
+      await api.updateApplicationStatus(id, apiStatus);
+      console.log('[OK] Saved to database successfully');
+      await fetchApplicants();
+      showNotification(`Applicant status updated to ${newStatus}`, 'success');
     } catch (error) {
-      console.error('[ERROR] Error:', error);
-      showNotification('Failed to update status', 'error');
+      console.error('[ERROR] Error updating status:', error);
+      setApplicants(previousApplicants);
+      showNotification('Failed to update status in database. Please run migrations and check server logs.', 'error');
     }
   };
 
@@ -353,9 +469,9 @@ export default function Applicants() {
     const stats = applicants.reduce((acc, app) => {
       if (app.status === 'Pending Review') acc.pending++;
       else if (app.status === 'Shortlisted') acc.shortlisted++;
-      else if (app.status === 'Rejected') acc.rejected++;
+      else if (app.status === 'Unshortlisted') acc.unshortlisted++;
       return acc;
-    }, { pending: 0, shortlisted: 0, rejected: 0 });
+    }, { pending: 0, shortlisted: 0, unshortlisted: 0 });
     
     console.log('[STATS] Dynamic Dashboard Stats:', stats);
     
@@ -365,7 +481,7 @@ export default function Applicants() {
     return stats;
   };
 
-  const openConfirmation = (id: number, name: string, action: 'approve' | 'reject' | 'reconsider') => {
+  const openConfirmation = (id: number, name: string, action: 'approve' | 'Unshortlist' | 'reconsider') => {
     if (action === 'approve') {
       setModalConfig({
         isOpen: true,
@@ -375,14 +491,14 @@ export default function Applicants() {
         confirmText: 'Approve',
         onConfirm: () => handleUpdateStatus(id, 'Shortlisted'),
       });
-    } else if (action === 'reject') {
+    } else if (action === 'Unshortlist') {
       setModalConfig({
         isOpen: true,
         type: 'danger',
-        title: 'Reject Applicant',
-        message: `Are you sure you want to reject ${name}? This action will move them to the rejected list.`,
-        confirmText: 'Reject',
-        onConfirm: () => handleUpdateStatus(id, 'Rejected'),
+        title: 'Unshortlist Applicant',
+        message: `Are you sure you want to Unshortlist ${name}? This action will move them to the Unshortlisted list.`,
+        confirmText: 'Unshortlist',
+        onConfirm: () => handleUpdateStatus(id, 'Unshortlisted'),
       });
     } else if (action === 'reconsider') {
       setModalConfig({
@@ -396,7 +512,7 @@ export default function Applicants() {
     }
   };
 
-  const handleBulkAction = (action: 'approve' | 'reject' | 'download' | 'reconsider' | 'delete') => {
+  const handleBulkAction = (action: 'approve' | 'Unshortlist' | 'download' | 'reconsider' | 'delete') => {
     const selectedCount = selectedApplicants.length;
     if (selectedCount === 0) return;
 
@@ -415,16 +531,16 @@ export default function Applicants() {
           setModalConfig(prev => ({ ...prev, isOpen: false }));
         },
       });
-    } else if (action === 'reject') {
+    } else if (action === 'Unshortlist') {
       setModalConfig({
         isOpen: true,
         type: 'danger',
-        title: 'Bulk Reject',
-        message: `Are you sure you want to reject ${selectedCount} selected applicants?`,
-        confirmText: 'Reject All',
+        title: 'Bulk Unshortlist',
+        message: `Are you sure you want to Unshortlist ${selectedCount} selected applicants?`,
+        confirmText: 'Unshortlist All',
         onConfirm: () => {
           setApplicants(prev => prev.map(app => 
-            selectedApplicants.includes(app.id) ? { ...app, status: 'Rejected' } : app
+            selectedApplicants.includes(app.id) ? { ...app, status: 'Unshortlisted' } : app
           ));
           setSelectedApplicants([]);
           setModalConfig(prev => ({ ...prev, isOpen: false }));
@@ -525,7 +641,7 @@ export default function Applicants() {
     { label: 'Total Applicants', value: applicants.length.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', trend: '+12 Today' },
     { label: 'Pending Review', value: applicants.filter(a => a.status === 'Pending Review' || a.status === 'pending').length.toString(), icon: Hourglass, color: 'text-yellow-600', bg: 'bg-yellow-50' },
     { label: 'Shortlisted', value: applicants.filter(a => a.status === 'Shortlisted').length.toString(), icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Rejected', value: applicants.filter(a => a.status === 'Rejected').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
+    { label: 'Unshortlisted', value: applicants.filter(a => a.status === 'Unshortlisted').length.toString(), icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
   ];
 
   return (
@@ -544,7 +660,7 @@ export default function Applicants() {
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${
                   statusFilter === 'Shortlisted' ? 'bg-emerald-500' :
-                  statusFilter === 'Rejected' ? 'bg-red-500' :
+                  statusFilter === 'Unshortlisted' ? 'bg-red-500' :
                   statusFilter === 'Pending Review' ? 'bg-yellow-500' :
                   'bg-slate-300'
                 }`} />
@@ -571,7 +687,7 @@ export default function Applicants() {
                         { label: 'All Statuses', value: '', color: 'bg-slate-300' },
                         { label: 'Pending Review', value: 'Pending Review', color: 'bg-yellow-500' },
                         { label: 'Shortlisted', value: 'Shortlisted', color: 'bg-emerald-500' },
-                        { label: 'Rejected', value: 'Rejected', color: 'bg-red-500' },
+                        { label: 'Unshortlisted', value: 'Unshortlisted', color: 'bg-red-500' },
                       ].map((option) => (
                         <button
                           key={option.label}
@@ -738,12 +854,12 @@ export default function Applicants() {
                   Approve
                 </button>
                 <button 
-                  onClick={() => handleBulkAction('reject')}
+                  onClick={() => handleBulkAction('Unshortlist')}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors"
-                  title="Reject selected"
+                  title="Unshortlist selected"
                 >
                   <XCircle size={16} />
-                  Reject
+                  Unshortlist
                 </button>
                 <button 
                   onClick={() => handleBulkAction('reconsider')}
@@ -812,7 +928,12 @@ export default function Applicants() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <img className="h-10 w-10 rounded-full object-cover" src={getAvatarUrl(app.profileImage, app.name, 40)} alt={app.name} />
+                        <div className="relative">
+                          <img className="h-10 w-10 rounded-full object-cover" src={getAvatarUrl(app.profileImage, app.name, 40)} alt={app.name} />
+                          {app.is_available && (
+                            <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-label="Available for internships" />
+                          )}
+                        </div>
                         <div>
                           <button 
                             onClick={() => setViewingApplicant(app)}
@@ -820,7 +941,18 @@ export default function Applicants() {
                           >
                             {app.name}
                           </button>
-                          <p className="text-xs text-slate-500">{app.email}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-slate-500">{app.email}</p>
+                            {app.is_available ? (
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                Open to work
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                                Not available
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -834,7 +966,7 @@ export default function Applicants() {
                     <td className="py-4 px-6">
                       <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
                         app.status === 'Shortlisted' ? 'bg-green-50 text-green-700 ring-green-600/20' :
-                        app.status === 'Rejected' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                        app.status === 'Unshortlisted' ? 'bg-red-50 text-red-700 ring-red-600/20' :
                         'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
                       }`}>
                         {app.status}
@@ -857,7 +989,7 @@ export default function Applicants() {
                           <Eye size={20} />
                         </button>
                         <div className="h-4 w-px bg-slate-200 mx-1"></div>
-                        {app.status === 'Rejected' ? (
+                        {app.status === 'Unshortlisted' ? (
                           <button 
                             onClick={() => openConfirmation(app.id, app.name, 'reconsider')}
                             className="p-1.5 text-slate-400 hover:text-green-600 transition-colors" 
@@ -885,9 +1017,9 @@ export default function Applicants() {
                               </button>
                             )}
                             <button 
-                              onClick={() => openConfirmation(app.id, app.name, 'reject')}
+                              onClick={() => openConfirmation(app.id, app.name, 'Unshortlist')}
                               className="p-1.5 text-slate-400 hover:text-red-600 transition-colors" 
-                              title="Reject"
+                              title="Unshortlist"
                             >
                               <XCircle size={20} />
                             </button>
@@ -997,21 +1129,35 @@ export default function Applicants() {
               <div className="p-8 space-y-8">
                 {/* Header Info */}
                 <div className="flex items-start gap-6">
-                  <img 
-                    className="h-24 w-24 rounded-2xl object-cover shadow-md" 
-                    src={getAvatarUrl(viewingApplicant.profileImage, viewingApplicant.name, 200)} 
-                    alt={viewingApplicant.name} 
-                  />
+                  <div className="relative">
+                    <img 
+                      className={`h-24 w-24 rounded-2xl object-cover shadow-md ${viewingApplicant.is_available ? 'ring-2 ring-emerald-400' : ''}`} 
+                      src={getAvatarUrl(viewingApplicant.profileImage, viewingApplicant.name, 200)} 
+                      alt={viewingApplicant.name} 
+                    />
+                    {viewingApplicant.is_available && (
+                      <span
+                        className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-white shadow-sm"
+                        aria-label="Online"
+                        title="Online"
+                      />
+                    )}
+                  </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-slate-900">{viewingApplicant.name}</h3>
                     <p className="text-slate-500 font-medium">{viewingApplicant.role}</p>
                     <div className="flex flex-wrap gap-2 mt-3">
                       <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
                         viewingApplicant.status === 'Shortlisted' ? 'bg-green-50 text-green-700 ring-green-600/20' :
-                        viewingApplicant.status === 'Rejected' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                        viewingApplicant.status === 'Unshortlisted' ? 'bg-red-50 text-red-700 ring-red-600/20' :
                         'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
                       }`}>
                         {viewingApplicant.status}
+                      </span>
+                      <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
+                        viewingApplicant.is_available ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-slate-50 text-slate-600 ring-slate-200'
+                      }`}>
+                        {viewingApplicant.is_available ? 'Open to work' : 'Not available'}
                       </span>
                       <span className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold bg-slate-50 text-slate-600 ring-1 ring-inset ring-slate-200">
                         Applied {viewingApplicant.date}
@@ -1113,7 +1259,7 @@ export default function Applicants() {
                       Download Resume
                     </button>
                     <Link 
-                      to={`/student/${viewingApplicant.id}`}
+                      to={`/company/student/${viewingApplicant.student_id || viewingApplicant.id}`}
                       className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all"
                     >
                       <ExternalLink size={18} />
@@ -1129,6 +1275,10 @@ export default function Applicants() {
     </div>
   );
 }
+
+
+
+
 
 
 

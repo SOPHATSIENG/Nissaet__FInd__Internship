@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
@@ -23,14 +24,31 @@ console.log('ADMIN_REGISTRATION_CODE loaded:', process.env.ADMIN_REGISTRATION_CO
 
 const app = express();
 
+const session = require('express-session');
+const passport = require('./config/passport');
+
 // Middleware
 app.use(cors({
   origin: '*', // Allow all origins for development to fix connection issues
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
+
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'nissaet_secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
 // FIX MARK: increase JSON payload limit so profile image (base64) can be saved.
 app.use(express.json({ limit: '10mb' })); // Body parser
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Basic Route
 app.get('/', (req, res) => {
@@ -43,8 +61,13 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const postRoutes = require('./routes/postRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const brandingRoutes = require('./routes/brandingRoutes');
+const { authenticate, authorize } = require('./middleware/auth');
+const internshipController = require('./controllers/internshipController');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/internships', internshipRoutes);
@@ -52,8 +75,15 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/verification', verificationRoutes);
+app.use('/api/uploads', uploadRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/branding', brandingRoutes);
+
+// Alias routes for company ratings (helps when frontend calls /api/companies/... directly)
+app.get('/api/companies/:id/ratings', internshipController.getCompanyRatings);
+app.post('/api/companies/:id/ratings', authenticate, authorize('student'), internshipController.rateCompany);
 
 const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 5001;
 const PORT_RETRY_COUNT = Number.parseInt(process.env.PORT_RETRY_COUNT, 10) || 10;

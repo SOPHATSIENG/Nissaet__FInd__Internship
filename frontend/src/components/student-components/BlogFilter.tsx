@@ -7,15 +7,13 @@ interface BlogFilterProps {
 
 const BlogFilter: React.FC<BlogFilterProps> = ({ activeFilter, onFilterChange }) => {
     const filters = [
-        { label: 'All Content', value: 'all' },
-        { label: 'Internships', value: 'internship' },
+        { label: 'Events', value: 'events' },
         { label: 'Workshops', value: 'workshop' },
         { label: 'Career Fairs', value: 'career_fair' },
-        { label: 'Articles', value: 'article' },
     ];
 
     return (
-        <div className="flex flex-wrap gap-2 mb-8">
+        <div className="flex flex-wrap justify-center gap-2 mb-8">
             {filters.map((filter) => (
                 <button
                     key={filter.value}

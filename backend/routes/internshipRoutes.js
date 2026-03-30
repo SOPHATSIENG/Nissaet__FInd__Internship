@@ -9,6 +9,9 @@ const { authenticate, authorize } = require('../middleware/auth');
 router.get('/', internshipController.getAllInternships);
 router.get('/featured-companies', internshipController.getFeaturedCompanies);
 router.get('/companies', internshipController.getAllCompanies);
+router.get('/companies/:id', internshipController.getCompanyProfileById);
+router.get('/companies/:id/ratings', internshipController.getCompanyRatings);
+router.post('/companies/:id/ratings', authenticate, authorize('student'), internshipController.rateCompany);
 
 // Company routes (must be before /:id to avoid conflicts)
 router.get('/company', authenticate, authorize('company'), internshipController.getCompanyInternships);
@@ -36,6 +39,7 @@ router.delete('/:id/save', authenticate, authorize('student'), internshipControl
 router.post('/', authenticate, authorize('company', 'admin'), internshipController.createInternship);
 router.put('/:id', authenticate, authorize('company', 'admin'), internshipController.updateInternship);
 router.put('/:id/restore', authenticate, authorize('company', 'admin'), internshipController.restoreInternship);
+router.delete('/:id/permanent', authenticate, authorize('company', 'admin'), internshipController.permanentlyDeleteInternship);
 router.delete('/:id', authenticate, authorize('company', 'admin'), internshipController.deleteInternship);
 
 module.exports = router;

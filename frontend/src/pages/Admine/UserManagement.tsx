@@ -39,6 +39,34 @@ const INITIAL_ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 const toTitleCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+const formatDateTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const formatInactiveLabel = (value?: string) => {
+  const formatted = formatDateTime(value);
+  return formatted ? `Inactive • ${formatted}` : 'Inactive';
+};
+
+const isActiveSession = (user: any) => {
+  const raw = user?.is_active_session ?? user?.active_session ?? user?.is_active ?? user?.active;
+  if (raw === undefined || raw === null) return false;
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'active';
+  }
+  return Boolean(raw);
+};
 
 export const UserManagement = () => {
   const navigate = useNavigate();
@@ -81,27 +109,44 @@ export const UserManagement = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    const fetchUsers = async () => {
+    let isMounted = true;
+    const fetchUsers = async (showLoader = true) => {
       try {
-        setIsLoading(true);
+        if (showLoader) setIsLoading(true);
         const data = await api.adminGetAllUsers();
         // Capitalize role for display compatibility
-        const normalized = data.map((u: any) => ({
+        const normalized = data.map((u: any) => {
+          const lastLoginValue = formatDateTime(u.last_login_at || u.last_login || u.lastLoginAt);
+          const lastActiveValue = formatDateTime(u.last_active_at || u.last_active || u.lastActiveAt);
+          const active = isActiveSession(u);
+          return {
           ...u,
           role: toTitleCase(u.role || ''),
           status: toTitleCase(u.status || 'active'),
           registrationDate: u.date,
-          lastLogin: 'Active session'
-        }));
-        setUserList(normalized);
+          isActiveSession: active,
+          lastLogin: active
+            ? 'Active session'
+            : (lastLoginValue || 'Inactive'),
+          inactiveLabel: active
+            ? ''
+            : formatInactiveLabel(u.last_active_at || u.last_active || u.lastActiveAt)
+          };
+        });
+        if (isMounted) setUserList(normalized);
       } catch (err) {
-        setError('Failed to fetch users');
+        if (isMounted) setError('Failed to fetch users');
         console.error(err);
       } finally {
-        setIsLoading(false);
+        if (showLoader && isMounted) setIsLoading(false);
       }
     };
-    fetchUsers();
+    fetchUsers(true);
+    const intervalId = window.setInterval(() => fetchUsers(false), 30000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const handleCreateUser = (e: React.FormEvent) => {
@@ -115,7 +160,9 @@ export const UserManagement = () => {
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
       initial: createName.charAt(0).toUpperCase(),
       color: 'bg-emerald-100',
-      lastLogin: 'Never',
+      lastLogin: 'Inactive',
+      isActiveSession: false,
+      inactiveLabel: 'Inactive',
       registrationDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
     };
     setUserList([newUser, ...userList]);
@@ -279,6 +326,11 @@ export const UserManagement = () => {
     return result;
   }, [userList, searchQuery, selectedRoles, selectedStatuses, sortBy]);
 
+  const onlineCount = useMemo(
+    () => filteredAndSortedUsers.filter(user => user.isActiveSession).length,
+    [filteredAndSortedUsers]
+  );
+
   const paginatedUsers = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return filteredAndSortedUsers.slice(startIndex, startIndex + itemsPerPage);
@@ -322,10 +374,16 @@ export const UserManagement = () => {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-8 overflow-y-auto no-scrollbar">
+    <div className="admin-page">
       <div className="flex justify-between items-end">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-black text-text-primary-light tracking-tight">All Users</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-3xl font-black text-text-primary-light tracking-tight">All Users</h1>
+            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 text-xs font-bold uppercase tracking-widest">
+              <span className="size-2 rounded-full bg-emerald-500" />
+              {onlineCount} Online
+            </span>
+          </div>
           <p className="text-text-secondary-light text-base">Manage student and company accounts, roles, and permissions.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -797,6 +855,12 @@ export const UserManagement = () => {
                             <div className="flex items-center gap-1.5">
                               <p className="font-bold text-text-primary-light">{user.name}</p>
                               {user.role === 'Admin' && <Shield className="size-3 text-slate-900" />}
+                              {user.isActiveSession && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+                                  <span className="size-1.5 rounded-full bg-emerald-500" />
+                                  Online
+                                </span>
+                              )}
                             </div>
                             <p className="text-xs text-text-secondary-light flex items-center gap-1">
                               <Lock className="size-2.5 opacity-40" />
@@ -905,7 +969,18 @@ export const UserManagement = () => {
                                   <div className="flex items-center gap-2 text-text-primary-light">
                                     <Clock className="size-4 text-primary" />
                                     <span className="text-sm font-bold">{user.lastLogin}</span>
+                                    {user.isActiveSession && (
+                                      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+                                        <span className="size-1.5 rounded-full bg-emerald-500" />
+                                        Online
+                                      </span>
+                                    )}
                                   </div>
+                                  {!user.isActiveSession && user.inactiveLabel && (
+                                    <div className="flex items-center gap-2 text-text-secondary-light">
+                                      <span className="text-xs font-semibold">{user.inactiveLabel}</span>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex flex-col gap-2">
                                   <p className="text-[10px] font-black text-text-secondary-light uppercase tracking-widest">Assigned Role</p>

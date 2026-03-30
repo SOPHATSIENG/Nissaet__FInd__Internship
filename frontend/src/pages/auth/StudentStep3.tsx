@@ -153,13 +153,32 @@ export function StudentStep3() {
     try {
       setIsLoading(true);
       setError('');
-      await register({
-        ...step1,
-        ...step2,
-        role: 'student',
-        skills: selectedSkills,
-      });
-      navigate('/');
+      if (step1.is_social) {
+        await api.updatePersonalSettings({
+          full_name: step1.full_name,
+          phone: step2.phone,
+          dob: step2.dob,
+          address: step2.address,
+          bio: step2.bio,
+        });
+        await api.updateEducationSettings({
+          education: step2.education,
+          university: step2.university,
+          graduation_year: step2.graduation_year,
+          resume_url: step2.cv_url,
+        });
+        await api.updateSkillSettings({ skills: selectedSkills });
+        registrationStorage.clearAll();
+        navigate('/');
+      } else {
+        await register({
+          ...step1,
+          ...step2,
+          role: 'student',
+          skills: selectedSkills,
+        });
+        navigate('/');
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Registration failed.');
     } finally {

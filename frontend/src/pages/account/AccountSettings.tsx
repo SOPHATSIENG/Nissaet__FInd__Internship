@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useState, type ReactElement} from 'react';
+import {useSearchParams} from 'react-router-dom';
 import api from '../../api/axios';
 import {type ProfileSettingsPayload, type TabType} from '../../components/settings/types';
 import {SettingsSidebar} from '../../components/settings/layout/SettingsSidebar';
@@ -64,6 +65,7 @@ const EMPTY_SETTINGS: ProfileSettingsPayload = {
 export default function AccountSettings() {
   // FIX MARK: all settings tabs now load from API + DB and save dynamically.
   const [activeTab, setActiveTab] = useState<TabType>('personal');
+  const [searchParams] = useSearchParams();
   const [settings, setSettings] = useState<ProfileSettingsPayload>(EMPTY_SETTINGS);
   const [savedInternships, setSavedInternships] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
@@ -99,9 +101,49 @@ export default function AccountSettings() {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const refreshApplications = async () => {
+      try {
+        const applicationsResponse = await api.getMyApplications({ limit: 100 });
+        if (mounted && applicationsResponse?.applications) {
+          setApplications(applicationsResponse.applications);
+        }
+      } catch (error) {
+        console.error('Failed to refresh applications:', error);
+      }
+    };
+
+    const interval = setInterval(refreshApplications, 30000);
+    const handleFocus = () => refreshApplications();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshApplications();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    const rawTab = searchParams.get('tab');
+    if (!rawTab) return;
+    const tab = rawTab.toLowerCase() as TabType;
+    if (TAB_DESCRIPTION[tab]) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
   const tabContent = useMemo<Record<TabType, ReactElement>>(
     () => ({
-      personal: <PersonalTab data={settings.personal} onSaved={setSettings} />,
+      personal: <PersonalTab data={settings.personal} onSaved={setSettings} isAvailable={settings.education?.is_available} />,
       education: <EducationTab data={settings.education} onSaved={setSettings} />,
       skills: <SkillsTab data={settings.skills} onSaved={setSettings} />,
       security: <SecurityTab data={settings.security} onSaved={setSettings} />,

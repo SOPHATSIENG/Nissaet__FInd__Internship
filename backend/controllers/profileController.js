@@ -1005,14 +1005,122 @@ const getPublicStudentProfile = async (req, res) => {
         // Get student skills
         const skills = await getUserSkills(student.user_id);
 
+        const ratingSummaryRows = await db.query(
+            'SELECT ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count FROM student_ratings WHERE student_id = ?',
+            [studentId]
+        );
+        const summary = ratingSummaryRows[0] || { rating: 0, rating_count: 0 };
+
         return res.json({
             profile: {
                 ...student,
-                skills
+                skills,
+                rating: Number(summary.rating) || 0,
+                rating_count: Number(summary.rating_count) || 0
             }
         });
     } catch (error) {
         console.error('Get public student profile error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const getStudentRatings = async (req, res) => {
+    try {
+        const studentId = Number.parseInt(req.params.id, 10);
+        if (Number.isNaN(studentId)) {
+            return res.status(400).json({ message: 'Invalid student ID' });
+        }
+
+        const rows = await db.query(
+            `SELECT
+                sr.id,
+                sr.rating,
+                sr.review_text,
+                sr.created_at,
+                c.id AS company_id,
+                c.name AS company_name,
+                c.logo AS company_logo
+             FROM student_ratings sr
+             JOIN companies c ON c.id = sr.company_id
+             WHERE sr.student_id = ?
+             ORDER BY sr.created_at DESC`,
+            [studentId]
+        );
+
+        return res.json({ ratings: rows || [] });
+    } catch (error) {
+        console.error('Get student ratings error:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+const rateStudent = async (req, res) => {
+    try {
+        const studentId = Number.parseInt(req.params.id, 10);
+        if (Number.isNaN(studentId)) {
+            return res.status(400).json({ message: 'Invalid student ID' });
+        }
+
+        const ratingValue = Number.parseInt(req.body?.rating, 10);
+        if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+            return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+        }
+
+        const userId = req.user?.userId || req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const companyRows = await db.query('SELECT id FROM companies WHERE user_id = ? LIMIT 1', [userId]);
+        if (companyRows.length === 0) {
+            return res.status(404).json({ message: 'Company profile not found' });
+        }
+        const companyId = companyRows[0].id;
+
+        const eligibility = await db.query(
+            `SELECT 1
+             FROM applications a
+             JOIN internships i ON i.id = a.internship_id
+             WHERE a.student_id = ? AND i.company_id = ? AND a.status IN ('accepted','shortlisted')
+             LIMIT 1`,
+            [studentId, companyId]
+        );
+        if (eligibility.length === 0) {
+            return res.status(403).json({ message: 'You can rate a student only after accepting their internship application.' });
+        }
+
+        const existingRows = await db.query(
+            'SELECT id FROM student_ratings WHERE student_id = ? AND company_id = ? LIMIT 1',
+            [studentId, companyId]
+        );
+
+        if (existingRows.length > 0) {
+            await db.query(
+                'UPDATE student_ratings SET rating = ?, review_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [ratingValue, req.body?.review_text || null, existingRows[0].id]
+            );
+        } else {
+            await db.query(
+                'INSERT INTO student_ratings (student_id, company_id, rating, review_text) VALUES (?, ?, ?, ?)',
+                [studentId, companyId, ratingValue, req.body?.review_text || null]
+            );
+        }
+
+        const summaryRows = await db.query(
+            'SELECT ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count FROM student_ratings WHERE student_id = ?',
+            [studentId]
+        );
+        const summary = summaryRows[0] || { rating: 0, rating_count: 0 };
+
+        return res.json({
+            message: existingRows.length > 0 ? 'Rating updated' : 'Rating submitted',
+            rating: Number(summary.rating) || 0,
+            rating_count: Number(summary.rating_count) || 0,
+            user_rating: ratingValue
+        });
+    } catch (error) {
+        console.error('Rate student error:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 };
@@ -1032,5 +1140,7 @@ module.exports = {
     updateTwoFactorSettings,
     updatePassword,
     getPublicStudentProfile,
+    getStudentRatings,
+    rateStudent,
     getProfileSettingsByUserId
 };

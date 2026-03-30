@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const profileController = require('../controllers/profileController');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 
 router.get('/settings', authenticate, profileController.getSettings);
 router.get('/student/:id', profileController.getPublicStudentProfile);
+router.get('/student/:id/ratings', profileController.getStudentRatings);
+router.post('/student/:id/ratings', authenticate, authorize('company'), profileController.rateStudent);
 router.get('/notifications/card', authenticate, profileController.getNotificationCard);
 router.get('/billing', authenticate, profileController.getCompanyBilling);
 router.put('/notifications/read', authenticate, profileController.markNotificationsRead);

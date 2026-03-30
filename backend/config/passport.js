@@ -104,7 +104,7 @@ passport.use(
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL:
         process.env.GOOGLE_CALLBACK_URL ||
-        "http://localhost:5000/api/auth/google/callback"
+        "http://localhost:5001/api/auth/google/callback"
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -124,6 +124,7 @@ passport.use(
 const githubStrategyOptions = {
   clientID: process.env.GITHUB_CLIENT_ID,
   clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  callbackURL: process.env.GITHUB_CALLBACK_URL || "http://localhost:5001/api/auth/github/callback",
   scope: ["user:email"]
 };
 
@@ -150,13 +151,23 @@ passport.use(
 );
 
 passport.serializeUser((user, done) => {
+  if (!user || user.id === undefined || user.id === null) {
+    return done(new Error("Cannot serialize user without id"), null);
+  }
   done(null, user.id);
 });
 
 passport.deserializeUser(async (id, done) => {
-    // Use queryRaw to get [rows, fields] format
-    const [rows] = await db.queryRaw("SELECT * FROM users WHERE id = ?", [id]);
-    done(null, rows[0]);
+    try {
+      // Use queryRaw to get [rows, fields] format
+      const [rows] = await db.queryRaw("SELECT * FROM users WHERE id = ?", [id]);
+      if (!rows || rows.length === 0) {
+        return done(null, false);
+      }
+      return done(null, rows[0]);
+    } catch (error) {
+      return done(error, null);
+    }
 });
 
 module.exports = passport;

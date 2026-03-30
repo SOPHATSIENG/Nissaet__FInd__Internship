@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowRight, User, Mail, Lock, Building2, MapPin } from 'lucide-react';
+import { ArrowRight, User, Mail, Lock, Building2, MapPin, Eye, EyeOff } from 'lucide-react';
 import { SplitLayout } from '../../components/SplitLayout';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -10,13 +10,15 @@ import { registrationStorage } from '../../utils/registrationStorage';
 
 export function Register() {
   const [role, setRole] = useState<Role>('student');
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyLocation, setCompanyLocation] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
 
@@ -25,8 +27,9 @@ export function Register() {
   const location = useLocation();
 
   const inferredName = useMemo(() => {
-    if (fullName.trim()) {
-      return fullName.trim();
+    const combined = `${firstName} ${lastName}`.trim();
+    if (combined) {
+      return combined;
     }
     const prefix = email.split('@')[0] || '';
     if (!prefix) return 'Social User';
@@ -36,17 +39,23 @@ export function Register() {
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
-  }, [email, fullName]);
+  }, [email, firstName, lastName]);
 
   const validateForm = () => {
-    if (!fullName.trim()) {
-      return 'Full name is required.';
+    if (!firstName.trim()) {
+      return 'First name is required.';
+    }
+    if (!lastName.trim()) {
+      return 'Last name is required.';
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return 'Please enter a valid email address.';
     }
     if (password.length < 8) {
       return 'Password must be at least 8 characters.';
+    }
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[!@#$%]/.test(password)) {
+      return 'Password must include letters, numbers, and one of ! @ # $ %.';
     }
     if (role === 'company' && !companyName.trim()) {
       return 'Company name is required.';
@@ -66,7 +75,7 @@ export function Register() {
     }
 
     const step1Payload = {
-      full_name: fullName.trim(),
+      full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
       email: email.trim(),
       password,
       role,
@@ -82,84 +91,26 @@ export function Register() {
     navigate(role === 'company' ? '/register/company/step-2' : '/register/student/step-2');
   };
 
-  const handleGoogleRegister = async () => {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError('Enter your email first to continue with Google.');
-      return;
+  const handleGoogleRegister = () => {
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const params = new URLSearchParams();
+    params.append('role', role);
+    if (role === 'company' && companyName) {
+      params.append('company_name', companyName);
+      if (companyLocation) params.append('location', companyLocation);
     }
-    if (role === 'company' && !companyName.trim()) {
-      setError('Enter company name first for company social registration.');
-      return;
-    }
-
-    try {
-      setError('');
-      setIsGoogleLoading(true);
-      const session = await loginWithGoogle({
-        email: email.trim(),
-        fullName: inferredName,
-        role,
-        companyName: role === 'company' ? companyName.trim() : undefined,
-        location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
-      });
-
-      const target = typeof location.state?.from === 'string' ? location.state.from : '';
-      const resolvedRole = session?.user?.role;
-      if (target.startsWith('/company') && resolvedRole !== 'company') {
-        setError('This account is not a company account.');
-        navigate('/', { replace: true });
-        return;
-      }
-      if (target) {
-        navigate(target);
-        return;
-      }
-      navigate(resolvedRole === 'company' ? '/company' : '/');
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Google registration failed.');
-    } finally {
-      setIsGoogleLoading(false);
-    }
+    window.location.href = `${backendUrl}/auth/google?${params.toString()}`;
   };
 
-  const handleGithubRegister = async () => {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError('Enter your email first to continue with GitHub.');
-      return;
+  const handleGithubRegister = () => {
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const params = new URLSearchParams();
+    params.append('role', role);
+    if (role === 'company' && companyName) {
+      params.append('company_name', companyName);
+      if (companyLocation) params.append('location', companyLocation);
     }
-    if (role === 'company' && !companyName.trim()) {
-      setError('Enter company name first for company social registration.');
-      return;
-    }
-
-    try {
-      setError('');
-      setIsGithubLoading(true);
-      const session = await loginWithGithub({
-        email: email.trim(),
-        fullName: inferredName,
-        role,
-        companyName: role === 'company' ? companyName.trim() : undefined,
-        location: role === 'company' ? (companyLocation.trim() || 'Unknown') : undefined,
-      });
-
-      const target = typeof location.state?.from === 'string' ? location.state.from : '';
-      const resolvedRole = session?.user?.role;
-      if (target.startsWith('/company') && resolvedRole !== 'company') {
-        setError('This account is not a company account.');
-        navigate('/', { replace: true });
-        return;
-      }
-      if (target) {
-        navigate(target);
-        return;
-      }
-      navigate(resolvedRole === 'company' ? '/company' : '/');
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'GitHub registration failed.');
-    } finally {
-      setIsGithubLoading(false);
-    }
+    window.location.href = `${backendUrl}/auth/github?${params.toString()}`;
   };
 
   return (
@@ -206,14 +157,23 @@ export function Register() {
           </>
         ) : null}
 
-        <Input
-          label={role === 'company' ? 'Contact Person Name' : 'Full Name'}
-          placeholder="John Doe"
-          required
-          icon={User}
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-        />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label={role === 'company' ? 'Contact Person First Name' : 'First Name'}
+              placeholder="John"
+              required
+              icon={User}
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+            />
+            <Input
+              label={role === 'company' ? 'Contact Person Last Name' : 'Last Name'}
+              placeholder="Doe"
+              required
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+            />
+          </div>
 
         <Input
           label="Email Address"
@@ -225,16 +185,31 @@ export function Register() {
           onChange={(event) => setEmail(event.target.value)}
         />
 
-        <Input
-          label="Password"
-          type="password"
-          placeholder="********"
-          required
-          icon={Lock}
-          helperText="Must be at least 8 characters"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-slate-700">Password</label>
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <Lock className="h-5 w-5" />
+            </div>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              className="block w-full rounded-lg border-0 bg-white py-3 pl-10 pr-10 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#137fec] sm:text-sm sm:leading-6 transition-all"
+              placeholder="********"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              className="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-3 text-slate-400 hover:text-slate-600"
+            >
+              {showPassword ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">Must be at least 8 characters</p>
+        </div>
 
         <div className="flex items-start">
           <div className="flex h-6 items-center">

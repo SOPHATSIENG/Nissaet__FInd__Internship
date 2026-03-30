@@ -26,6 +26,9 @@ export default function StudentProfile() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [ratings, setRatings] = useState<any[]>([]);
+  const [ratingSummary, setRatingSummary] = useState<{ rating: number; rating_count: number }>({ rating: 0, rating_count: 0 });
+  const [ratingError, setRatingError] = useState('');
   
   const [userRating, setUserRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -55,12 +58,45 @@ export default function StudentProfile() {
     }
   }, [id]);
 
-  const handleRatingSubmit = (e: React.FormEvent) => {
+  const handleRatingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (userRating === 0) return;
-    setIsSubmitted(true);
-    // In a real app, this would be an API call
+    try {
+      setRatingError('');
+      await api.rateStudent(id, userRating, comment);
+      const refreshed = await api.getStudentProfile(id);
+      if (refreshed?.profile) {
+        setProfile(refreshed.profile);
+      }
+      setIsSubmitted(true);
+    } catch (err) {
+      console.error('Failed to submit rating:', err);
+      setRatingError(err?.message || 'Failed to submit rating.');
+    }
   };
+
+  useEffect(() => {
+    if (!id) return;
+    const loadRatings = async () => {
+      try {
+        const response = await api.getStudentRatings(id);
+        const items = Array.isArray(response?.ratings) ? response.ratings : [];
+        setRatings(items);
+      } catch {
+        setRatings([]);
+      }
+    };
+    loadRatings();
+  }, [id, isSubmitted]);
+
+  useEffect(() => {
+    if (profile?.rating !== undefined) {
+      setRatingSummary({
+        rating: Number(profile.rating || 0),
+        rating_count: Number(profile.rating_count || 0),
+      });
+    }
+  }, [profile]);
 
   if (loading) {
     return (
@@ -112,16 +148,24 @@ export default function StudentProfile() {
                 {profile.is_available && (
                   <>
                     <div className="absolute inset-0 rounded-3xl border-4 border-emerald-500/50 pointer-events-none"></div>
-                    <div className="absolute -bottom-1 inset-x-0 mx-auto w-[90%] bg-emerald-500 text-white text-[10px] font-black py-1 px-2 rounded-lg shadow-lg flex items-center justify-center gap-1 border border-white uppercase tracking-tighter">
-                      <CheckCircle2 size={10} strokeWidth={3} />
-                      <span>Available</span>
-                    </div>
+                    <span
+                      className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-white shadow-sm"
+                      aria-label="Online"
+                      title="Online"
+                    />
                   </>
                 )}
               </div>
               <div className="text-center md:text-left pb-2">
                 <div className="flex flex-col md:flex-row md:items-center gap-3">
                   <h1 className="text-3xl font-bold text-slate-900">{profile.full_name}</h1>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">
+                    <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                    <span>{Number(ratingSummary.rating || 0).toFixed(1)}</span>
+                    <span className="text-[10px] font-semibold text-amber-600/70">
+                      ({Number(ratingSummary.rating_count || 0)})
+                    </span>
+                  </span>
                   {profile.is_available ? (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
                       Open to work
@@ -250,7 +294,57 @@ export default function StudentProfile() {
                   <Send size={18} />
                   Submit Rating
                 </button>
+                {ratingError ? (
+                  <p className="text-xs font-semibold text-red-600">{ratingError}</p>
+                ) : null}
               </form>
+            )}
+          </section>
+
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Student Reviews</h3>
+            {ratings.length === 0 ? (
+              <p className="text-sm text-slate-500">No reviews yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {ratings.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center">
+                        {item.company_logo ? (
+                          <img src={item.company_logo} alt={item.company_name || 'Company'} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-500">
+                            {(item.company_name || 'Company')
+                              .split(/\s+/)
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .map((token: string) => token[0]?.toUpperCase())
+                              .join('')}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{item.company_name || 'Company'}</p>
+                        <div className="flex items-center gap-1 text-amber-600">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={`h-4 w-4 ${item.rating >= star ? 'text-amber-500 fill-amber-500' : 'text-slate-200'}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <span className="ml-auto text-xs text-slate-400">
+                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                      </span>
+                    </div>
+                    {item.review_text ? (
+                      <p className="mt-3 text-sm text-slate-600">{item.review_text}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             )}
           </section>
 

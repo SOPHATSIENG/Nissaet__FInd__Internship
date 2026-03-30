@@ -1,4 +1,4 @@
-import { Search, MapPin, Building2, Map, Loader2, AlertCircle, ChevronLeft, ChevronRight, Check, X } from "lucide-react";
+import { Search, MapPin, Building2, Map, Loader2, AlertCircle, ChevronLeft, ChevronRight, Check, X, Star } from "lucide-react";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
@@ -13,6 +13,8 @@ interface Company {
   is_verified: boolean;
   company_size: string | null;
   open_positions: number;
+  rating?: number | null;
+  rating_count?: number | null;
 };
 
 export default function Companies() {
@@ -515,11 +517,20 @@ export default function Companies() {
                           Verified
                         </div>
                       )}
-                      <img
-                        src={company.logo || `https://picsum.photos/seed/cp-${company.id}/48/48`}
-                        alt={company.company_name}
-                        className="w-12 h-12 rounded-xl object-cover mb-4"
-                      />
+                      <div className="flex items-start justify-between mb-4">
+                        <img
+                          src={company.logo || `https://picsum.photos/seed/cp-${company.id}/48/48`}
+                          alt={company.company_name}
+                          className="w-12 h-12 rounded-xl object-cover"
+                        />
+                        <div className="flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">
+                          <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                          <span>{Number(company.rating || 0).toFixed(1)}</span>
+                          <span className="text-[10px] font-semibold text-amber-600/70">
+                            ({Number(company.rating_count || 0)})
+                          </span>
+                        </div>
+                      </div>
                       <h3 className="font-bold text-xl mb-1">{company.company_name}</h3>
                       <div className="flex items-center gap-3 text-sm text-gray-500 mb-4">
                         <span className="flex items-center gap-1">
@@ -584,6 +595,13 @@ export default function Companies() {
                               VERIFIED
                             </div>
                           )}
+                        </div>
+                        <div className="flex items-center gap-1 text-sm font-semibold text-amber-600 mb-2">
+                          <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+                          <span>{Number(company.rating || 0).toFixed(1)}</span>
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            ({Number(company.rating_count || 0)})
+                          </span>
                         </div>
                         <h3 className="font-bold text-lg mb-1">{company.company_name}</h3>
                         <p className="text-xs text-gray-400 font-bold tracking-wider mb-2 uppercase">

@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ArrowRight,
   Loader2,
+  Star,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -19,6 +20,7 @@ interface FeaturedCompany {
   description: string | null;
   open_positions: number;
   rating: number | null;
+  rating_count: number | null;
   logo: string | null;
 }
 
@@ -213,6 +215,8 @@ export default function Home() {
     return "Paid";
   };
 
+  // Rating submission intentionally removed from Home page per request.
+
   return (
     <div className="flex flex-col">
       <section className="bg-white py-20 px-4 sm:px-6 lg:px-8 border-b border-gray-100">
@@ -337,8 +341,12 @@ export default function Home() {
                       alt={company.company_name}
                       className="w-12 h-12 rounded-lg object-cover"
                     />
-                    <div className="flex items-center bg-white px-2 py-1 rounded text-sm font-bold text-yellow-600 shadow-sm">
-                      Rating: {company.rating || 0}
+                    <div className="flex items-center gap-1 bg-white px-2 py-1 rounded text-sm font-bold text-yellow-600 shadow-sm">
+                      <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                      <span>{Number(company.rating || 0).toFixed(1)}</span>
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        ({Number(company.rating_count || 0)})
+                      </span>
                     </div>
                   </div>
                   <h3 className="font-bold text-lg mb-1">{company.company_name}</h3>
@@ -348,6 +356,8 @@ export default function Home() {
                   <div className="inline-block bg-[#3b82f6]/10 text-[#2563eb] text-xs font-bold px-3 py-1.5 rounded-full">
                     {company.open_positions} Open Internships
                   </div>
+
+                  {/* Rating input removed on Home page */}
                 </Link>
               ))}
             </div>

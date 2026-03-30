@@ -113,6 +113,15 @@ export const AuthProvider = ({ children }) => {
     return { user: normalizedUser, token: data.token };
   };
 
+  const loginWithToken = async (token) => {
+    authStorage.setToken(token);
+    localStorage.setItem('token', token);
+    const data = await api.getCurrentUser();
+    const normalizedUser = storeSession(token, data.user || data);
+    setUser(normalizedUser);
+    return { user: normalizedUser, token };
+  };
+
   const register = async (userData, navigate) => {
     console.log('Starting registration with data:', userData);
     try {
@@ -229,6 +238,7 @@ export const AuthProvider = ({ children }) => {
     () => ({
       user,
       login,
+      loginWithToken,
       register,
       loginWithGoogle,
       loginWithGithub,

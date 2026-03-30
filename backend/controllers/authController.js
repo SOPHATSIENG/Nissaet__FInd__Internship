@@ -26,6 +26,17 @@ const normalizeSkillLevel = (skillLevel) => {
     return VALID_SKILL_LEVELS.has(skillLevel) ? skillLevel : 'intermediate';
 };
 
+const validatePasswordStrength = (value) => {
+    const raw = String(value || '');
+    if (raw.length < 8) {
+        return 'Password must be at least 8 characters.';
+    }
+    if (!/[A-Za-z]/.test(raw) || !/\d/.test(raw) || !/[!@#$%]/.test(raw)) {
+        return 'Password must include letters, numbers, and one of ! @ # $ %.';
+    }
+    return '';
+};
+
 const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
 
 const touchUserActivity = async (userId) => {
@@ -66,6 +77,71 @@ const normalizeUserRecord = (rawUser) => {
         full_name: rawUser.full_name || rawUser.name || 'User',
         role: normalizeRole(rawUser.role || DEFAULT_ROLE)
     };
+};
+
+const getTrimmed = (value) => String(value || '').trim();
+
+const getTableColumns = async (conn, tableName) => {
+    try {
+        const [rows] = await conn.execute(`SHOW COLUMNS FROM ${tableName}`);
+        return new Set(rows.map((row) => row.Field));
+    } catch (error) {
+        return new Set();
+    }
+};
+
+const updateUserProfileExtras = async (conn, userId, payload = {}) => {
+    const columns = await getTableColumns(conn, 'users');
+    if (columns.size === 0) return;
+
+    const updates = {};
+    const assignIfColumn = (column, value) => {
+        if (columns.has(column) && value !== undefined) {
+            updates[column] = value;
+        }
+    };
+
+    const dobValue = getTrimmed(payload.dob || payload.date_of_birth);
+    assignIfColumn('phone', getTrimmed(payload.phone) || null);
+    assignIfColumn('dob', dobValue || null);
+    assignIfColumn('date_of_birth', dobValue || null);
+    assignIfColumn('address', getTrimmed(payload.address) || null);
+    assignIfColumn('bio', getTrimmed(payload.bio) || null);
+    assignIfColumn('education', getTrimmed(payload.education) || null);
+    assignIfColumn('university', getTrimmed(payload.university) || null);
+    assignIfColumn('graduation_year', payload.graduation_year || null);
+    assignIfColumn('cv_url', getTrimmed(payload.cv_url || payload.resume_url) || null);
+
+    const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) return;
+
+    const sql = `UPDATE users SET ${entries.map(([column]) => `${column} = ?`).join(', ')} WHERE id = ?`;
+    await conn.execute(sql, [...entries.map(([, value]) => value), userId]);
+};
+
+const validateStudentRegistration = (payload = {}, options = {}) => {
+    const requireSkills = Boolean(options.requireSkills);
+
+    if (!getTrimmed(payload.phone)) return 'Phone number is required.';
+    const dobValue = getTrimmed(payload.dob || payload.date_of_birth);
+    if (!dobValue) return 'Date of birth is required.';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dobValue)) return 'Date of birth must be a valid date.';
+    if (!getTrimmed(payload.address)) return 'Address is required.';
+    if (!getTrimmed(payload.education)) return 'Education level is required.';
+    const gradYearValue = getTrimmed(payload.graduation_year);
+    if (!gradYearValue) return 'Graduation year is required.';
+    if (!/^\d{4}$/.test(gradYearValue)) return 'Graduation year must be a 4-digit year.';
+    if (!getTrimmed(payload.university)) return 'University / institution name is required.';
+    if (!getTrimmed(payload.bio)) return 'Bio is required.';
+    if (!getTrimmed(payload.cv_url || payload.resume_url)) return 'Resume / CV is required.';
+
+    if (requireSkills) {
+        if (!Array.isArray(payload.skills) || payload.skills.length === 0) {
+            return 'Please add at least one skill.';
+        }
+    }
+
+    return '';
 };
 
 const createToken = (payload) => {
@@ -533,6 +609,10 @@ const register = async (req, res) => {
         if (!email || !password || !full_name) {
             return res.status(400).json({ message: 'All fields are required' });
         }
+        const passwordMessage = validatePasswordStrength(password);
+        if (passwordMessage) {
+            return res.status(400).json({ message: passwordMessage });
+        }
 
         const existingUser = await getUserByEmail(email);
         if (existingUser) {
@@ -555,6 +635,12 @@ const register = async (req, res) => {
         const userId = userResult.insertId;
 
         if (normalizedRole === 'student') {
+            const validationMessage = validateStudentRegistration(req.body, { requireSkills: false });
+            if (validationMessage) {
+                await conn.rollback();
+                return res.status(400).json({ message: validationMessage });
+            }
+            await updateUserProfileExtras(conn, userId, req.body);
             await createStudentProfile(conn, userId, req.body);
             await createStudentVerificationRequest(conn, userId, req.body);
         } else if (normalizedRole === 'company') {
@@ -596,6 +682,15 @@ const registerStudentComplete = async (req, res) => {
         if (!email || !password || !full_name) {
             return res.status(400).json({ message: 'Required fields are missing' });
         }
+        const passwordMessage = validatePasswordStrength(password);
+        if (passwordMessage) {
+            return res.status(400).json({ message: passwordMessage });
+        }
+
+        const validationMessage = validateStudentRegistration(req.body, { requireSkills: true });
+        if (validationMessage) {
+            return res.status(400).json({ message: validationMessage });
+        }
 
         const existingUser = await getUserByEmail(email);
         if (existingUser) {
@@ -615,6 +710,7 @@ const registerStudentComplete = async (req, res) => {
         });
 
         const userId = userResult.insertId;
+        await updateUserProfileExtras(conn, userId, req.body);
         await createStudentProfile(conn, userId, req.body);
         await createStudentVerificationRequest(conn, userId, req.body);
 
@@ -678,6 +774,10 @@ const registerCompanyComplete = async (req, res) => {
         if (!email || !password || !full_name || !company_name) {
             return res.status(400).json({ message: 'Required fields are missing' });
         }
+        const passwordMessage = validatePasswordStrength(password);
+        if (passwordMessage) {
+            return res.status(400).json({ message: passwordMessage });
+        }
 
         const existingUser = await getUserByEmail(email);
         if (existingUser) {
@@ -734,6 +834,10 @@ const registerAdmin = async (req, res) => {
         if (!email || !password || !full_name || !admin_code) {
             return res.status(400).json({ message: 'All fields are required' });
         }
+        const passwordMessage = validatePasswordStrength(password);
+        if (passwordMessage) {
+            return res.status(400).json({ message: passwordMessage });
+        }
 
         if (!process.env.ADMIN_REGISTRATION_CODE) {
             return res.status(500).json({ message: 'Admin registration is not configured' });
@@ -780,16 +884,16 @@ const login = async (req, res) => {
 
         const user = await getUserByEmail(email);
         if (!user) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: "We couldn't find an account with that email." });
         }
 
         if (!user.password) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: 'Incorrect password. Please try again.' });
         }
 
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: 'Incorrect password. Please try again.' });
         }
 
         try {
@@ -1117,6 +1221,72 @@ const getSkills = async (req, res) => {
     }
 };
 
+const oauthCallback = async (req, res) => {
+    try {
+        const user = req.user;
+        let role = user.role || DEFAULT_ROLE;
+        let extraInfo = {};
+
+        if (req.query.state) {
+            try {
+                extraInfo = JSON.parse(req.query.state);
+                if (extraInfo.role) {
+                    role = normalizeRole(extraInfo.role);
+                }
+            } catch (e) {
+                console.error('Error parsing state in OAuth callback:', e);
+            }
+        }
+
+        // Update user role if it was explicitly provided during registration and user doesn't have a specific role yet
+        if (extraInfo.role && (!user.role || user.role === DEFAULT_ROLE)) {
+            try {
+                await db.query('UPDATE users SET role = ? WHERE id = ?', [role, user.id]);
+                user.role = role;
+            } catch (err) {
+                console.error('Error updating user role in OAuth callback:', err);
+            }
+        }
+
+        // Ensure the profile exists
+        try {
+            await ensureRoleProfile(role, user.id, {
+                ...extraInfo,
+                full_name: user.full_name || user.name || 'Social User'
+            });
+        } catch (err) {
+            console.error('Error ensuring role profile in OAuth callback:', err);
+        }
+
+        await recordUserLogin(user.id);
+
+        const token = createToken({ userId: user.id, email: user.email, role: user.role || role });
+        
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const redirectParams = new URLSearchParams({ token });
+
+        if (extraInfo?.role) {
+            redirectParams.set('register', '1');
+            redirectParams.set('role', role);
+            if (extraInfo.provider) {
+                redirectParams.set('provider', String(extraInfo.provider));
+            }
+            if (extraInfo.company_name) {
+                redirectParams.set('company_name', String(extraInfo.company_name));
+            }
+            if (extraInfo.location) {
+                redirectParams.set('location', String(extraInfo.location));
+            }
+        }
+
+        res.redirect(`${frontendUrl}/login?${redirectParams.toString()}`);
+    } catch (error) {
+        console.error('OAuth callback error:', error);
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        res.redirect(`${frontendUrl}/login?error=auth_failed`);
+    }
+};
+
 module.exports = {
     register,
     registerStudentComplete,
@@ -1124,6 +1294,7 @@ module.exports = {
     registerAdmin,
     login,
     socialLogin,
+    oauthCallback,
     forgotPassword,
     resetPassword,
     getCurrentUser,

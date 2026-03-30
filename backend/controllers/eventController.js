@@ -256,6 +256,7 @@ const getEventById = async (req, res) => {
                 COALESCE(c.name, u.company_name) AS company_name,
                 c.id AS company_profile_id,
                 c.logo AS company_logo,
+                COALESCE(c.description, u.bio, '') AS company_description,
                 COALESCE(c.industry, u.industry) AS industry,
                 COALESCE(c.headquarters, u.location) AS company_location,
                 COALESCE(c.website, u.website) AS website
@@ -270,6 +271,7 @@ const getEventById = async (req, res) => {
                 ${eventSelectFields(false)},
                 COALESCE(u.company_name, '') AS company_name,
                 NULL AS company_logo,
+                COALESCE(u.bio, '') AS company_description,
                 COALESCE(u.industry, '') AS industry,
                 COALESCE(u.location, '') AS company_location,
                 COALESCE(u.website, '') AS website

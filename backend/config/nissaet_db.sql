@@ -220,6 +220,38 @@ CREATE TABLE `reviews` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `company_ratings`
+--
+
+CREATE TABLE `company_ratings` (
+  `id` int(11) NOT NULL,
+  `company_id` int(11) NOT NULL,
+  `student_id` int(11) NOT NULL,
+  `rating` int(11) NOT NULL CHECK (`rating` >= 1 and `rating` <= 5),
+  `review_text` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `student_ratings`
+--
+
+CREATE TABLE `student_ratings` (
+  `id` int(11) NOT NULL,
+  `student_id` int(11) NOT NULL,
+  `company_id` int(11) NOT NULL,
+  `rating` int(11) NOT NULL CHECK (`rating` >= 1 and `rating` <= 5),
+  `review_text` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `saved_internships`
 --
 
@@ -476,6 +508,28 @@ ALTER TABLE `reviews`
   ADD KEY `idx_created_at` (`created_at`);
 
 --
+-- Indexes for table `company_ratings`
+--
+ALTER TABLE `company_ratings`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_company_rating` (`company_id`,`student_id`),
+  ADD KEY `idx_company_id` (`company_id`),
+  ADD KEY `idx_student_id` (`student_id`),
+  ADD KEY `idx_rating` (`rating`),
+  ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- Indexes for table `student_ratings`
+--
+ALTER TABLE `student_ratings`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_student_rating` (`student_id`,`company_id`),
+  ADD KEY `idx_student_id` (`student_id`),
+  ADD KEY `idx_company_id` (`company_id`),
+  ADD KEY `idx_rating` (`rating`),
+  ADD KEY `idx_created_at` (`created_at`);
+
+--
 -- Indexes for table `saved_internships`
 --
 ALTER TABLE `saved_internships`
@@ -623,6 +677,18 @@ ALTER TABLE `reviews`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `company_ratings`
+--
+ALTER TABLE `company_ratings`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `student_ratings`
+--
+ALTER TABLE `student_ratings`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `saved_internships`
 --
 ALTER TABLE `saved_internships`
@@ -719,6 +785,20 @@ ALTER TABLE `reviews`
   ADD CONSTRAINT `reviews_ibfk_1` FOREIGN KEY (`internship_id`) REFERENCES `internships` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `reviews_ibfk_2` FOREIGN KEY (`student_id`) REFERENCES `students` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `reviews_ibfk_3` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `company_ratings`
+--
+ALTER TABLE `company_ratings`
+  ADD CONSTRAINT `company_ratings_ibfk_1` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `company_ratings_ibfk_2` FOREIGN KEY (`student_id`) REFERENCES `students` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `student_ratings`
+--
+ALTER TABLE `student_ratings`
+  ADD CONSTRAINT `student_ratings_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `students` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `student_ratings_ibfk_2` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `saved_internships`

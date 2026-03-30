@@ -1,8 +1,9 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Menu, Bell } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import logoAsset from '../../image/1.png';
 
 interface HeaderNotificationItem {
   id: number;
@@ -22,14 +23,18 @@ const replaceFlaggedText = (value?: string | null) => {
 export default function Layout() {
   const location = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
-  const notificationCardRef = useRef<HTMLDivElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const [headerProfileImage, setHeaderProfileImage] = useState('');
   const [headerFullName, setHeaderFullName] = useState('');
   const [headerIsAvailable, setHeaderIsAvailable] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [loadingNotificationCard, setLoadingNotificationCard] = useState(false);
   const [notifications, setNotifications] = useState<HeaderNotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [brandLogo, setBrandLogo] = useState('');
+  const [brandName, setBrandName] = useState('Nissaet');
+  const [logoError, setLogoError] = useState(false);
   const derivedUnreadCount = Math.max(
     unreadCount,
     notifications.filter((item) => !item.is_read).length
@@ -47,6 +52,18 @@ export default function Layout() {
     ? [...baseLinks, { name: 'Dashboard', path: '/dashboard' }]
     : baseLinks;
 
+  const toAbsoluteUrl = (value: string) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
+      return raw;
+    }
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const base = apiBase.replace(/\/api\/?$/, '');
+    if (raw.startsWith('/')) return `${base}${raw}`;
+    return `${base}/${raw}`;
+  };
+
   const isActiveLink = (path: string) => {
     if (path === '/') {
       return location.pathname === '/';
@@ -54,6 +71,8 @@ export default function Layout() {
 
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
+
+  const activeLink = navLinks.find((link) => isActiveLink(link.path)) || navLinks[0];
 
   const profileName = useMemo(
     () => headerFullName || user?.full_name || user?.name || 'Student',
@@ -70,6 +89,35 @@ export default function Layout() {
   }, [profileName]);
 
   const displayProfileImage = headerProfileImage || user?.profile_image || '';
+
+  const resolvedBrandLogo = toAbsoluteUrl(brandLogo);
+  const navbarLogo = logoError || !resolvedBrandLogo ? logoAsset : resolvedBrandLogo;
+
+  useEffect(() => {
+    let mounted = true;
+    const loadBranding = async () => {
+      try {
+        const response = await api.getBranding();
+        const branding = response?.branding || response?.settings || response || {};
+        if (!mounted) return;
+        setBrandName(String(branding.platformName || 'Nissaet'));
+        setBrandLogo(String(branding.brandLogo || ''));
+      } catch {
+        if (!mounted) return;
+        setBrandName('Nissaet');
+        setBrandLogo('');
+      }
+    };
+
+    loadBranding();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [brandLogo]);
 
   const formatNotificationTime = (createdAt: string) => {
     const date = new Date(createdAt);
@@ -204,11 +252,10 @@ export default function Layout() {
   }, []);
 
   useEffect(() => {
-    if (!notificationOpen) return undefined;
-
     const handleClickOutside = (event: MouseEvent) => {
-      if (notificationCardRef.current && !notificationCardRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setNotificationOpen(false);
+        setProfileOpen(false);
       }
     };
 
@@ -216,16 +263,18 @@ export default function Layout() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [notificationOpen]);
+  }, []);
 
   useEffect(() => {
     setNotificationOpen(false);
+    setProfileOpen(false);
   }, [location.pathname]);
 
   const handleNotificationClick = () => {
     setNotificationOpen((previous) => {
       const next = !previous;
       if (next) {
+        setProfileOpen(false);
         loadNotificationCard();
         // Mark as read when the dropdown is opened so unread count updates.
         if (unreadCount > 0) {
@@ -256,173 +305,229 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-[#f6f8f7] text-[#111816]">
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="size-8 text-[#3b82f6]">
-                <svg className="w-full h-full" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M42.4379 44C42.4379 44 36.0744 33.9038 41.1692 24C46.8624 12.9336 42.2078 4 42.2078 4L7.01134 4C7.01134 4 11.6577 12.932 5.96912 23.9969C0.876273 33.9029 7.27094 44 7.27094 44L42.4379 44Z"
-                    fill="currentColor"
+      <header className="sticky top-0 z-50 w-full bg-white/95 px-4 py-4 backdrop-blur">
+        <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3 md:gap-4">
+              <Link
+                to="/"
+                className="group flex min-w-0 items-center gap-4 rounded-2xl border border-transparent px-2 py-1.5 transition-all duration-200 hover:border-slate-200 md:px-3"
+              >
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-3xl md:h-23 md:w-23">
+                  <img
+                    src={navbarLogo}
+                    alt={brandName}
+                    className="h-full w-full object-contain"
+                    onError={() => setLogoError(true)}
                   />
-                </svg>
-              </div>
-              <span className="text-xl font-bold tracking-tight">NSI</span>
-            </Link>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate font-display text-xl font-extrabold tracking-tight text-slate-900 md:text-[1.6rem]">
+                      {brandName}
+                    </p>
+                    <span className="hidden rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white sm:inline-flex">
+                      Student Hope
+                    </span>
+                  </div>
+                  <p className="hidden text-xs font-medium text-slate-500 sm:block">
+                    Discover internships, events, and career paths in one place
+                  </p>
+                </div>
+              </Link>
 
-            <nav className="hidden md:flex items-center gap-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  to={link.path}
-                  className={`px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 hover:bg-slate-50 hover:text-[#3b82f6] relative group ${
-                    isActiveLink(link.path) ? 'text-[#3b82f6] bg-blue-50/50' : 'text-slate-600'
-                  }`}
-                >
-                  {link.name}
-                  <span className={`absolute bottom-1.5 left-4 right-4 h-0.5 bg-[#3b82f6] rounded-full transition-all duration-300 transform origin-left ${
-                    isActiveLink(link.path) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                  }`} />
-                </Link>
-              ))}
-            </nav>
-
-            <div className="hidden md:flex items-center gap-4">
-              {isAuthenticated ? (
-                <>
-                  <div className="flex items-center gap-3 pl-6 border-l border-slate-200 text-sm text-gray-600 relative">
-                    {/* FIX MARK: bell icon now opens notification dropdown card with DB-backed notification list. */}
-                    <div className="relative" ref={notificationCardRef}>
-                      <button
-                        type="button"
-                        onClick={handleNotificationClick}
-                        className={`relative p-2 hover:text-slate-600 ${unreadCount > 0 ? 'text-red-500' : 'text-slate-400'}`}
-                        aria-label="Open notifications"
-                      >
-                        <Bell size={20} />
-                        {derivedUnreadCount > 0 && (
-                          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] leading-[18px] text-center px-1">
-                            {derivedUnreadCount > 99 ? '99+' : derivedUnreadCount}
-                          </span>
-                        )}
-                      </button>
-
-      {notificationOpen && (
-        <div className="absolute right-0 mt-3 w-[360px] rounded-2xl border border-slate-200 bg-white shadow-xl z-50 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
-            <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500">{derivedUnreadCount} unread</span>
-              {derivedUnreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={markAllNotificationsRead}
-                  className="text-xs font-semibold text-[#3b82f6] hover:underline"
-                >
-                  Mark all read
-                </button>
-              )}
+              {/*
+                "Open to work" status chip removed from header per request.
+                We still keep availability in state for other features.
+              */}
             </div>
-          </div>
 
-                          <div className="max-h-[360px] overflow-y-auto">
-                            {loadingNotificationCard ? (
-                              <p className="px-4 py-5 text-sm text-slate-500">Loading notifications...</p>
-                            ) : notifications.length === 0 ? (
-                              <p className="px-4 py-5 text-sm text-slate-500">No notifications yet.</p>
-                            ) : (
-                              notifications.map((item) => (
-                                <div
-                                  key={item.id}
-                                  className={`px-4 py-3 border-b border-slate-100 last:border-b-0 ${
-                                    item.is_read ? 'bg-white' : 'bg-blue-50/40'
-                                  }`}
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="hidden rounded-[20px] border border-slate-200/70 bg-white/75 px-3 py-2 shadow-sm lg:block">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Current View
+                </p>
+                <p className="font-display text-sm font-bold text-slate-900">{activeLink.name}</p>
+              </div>
+
+              <div className="relative flex items-center gap-2 border-l border-slate-200/80 pl-3 md:pl-4" ref={dropdownRef}>
+                {isAuthenticated ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleNotificationClick}
+                      className="relative rounded-2xl border border-slate-200/70 bg-white/85 p-2.5 text-slate-500 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 hover:shadow-md"
+                      aria-label="Open notifications"
+                    >
+                      <Bell size={20} />
+                      {derivedUnreadCount > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-gradient-to-r from-rose-500 to-orange-400 px-1 text-[10px] font-bold text-white shadow-sm">
+                          {derivedUnreadCount > 99 ? '99+' : derivedUnreadCount}
+                        </span>
+                      )}
+                    </button>
+
+                    {notificationOpen && (
+                      <div className="absolute right-0 top-full z-[60] mt-3 w-[360px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl">
+                        <div className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(240,253,250,0.8))] px-4 py-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500">{derivedUnreadCount} unread</span>
+                              {derivedUnreadCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={markAllNotificationsRead}
+                                  className="text-xs font-semibold text-blue-600 hover:underline"
                                 >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <p className="text-sm font-semibold text-slate-800">{replaceFlaggedText(item.title)}</p>
-                                      <p className="text-xs text-slate-600 mt-1">{replaceFlaggedText(item.message)}</p>
-                                      <p className="text-[11px] text-slate-400 mt-1">
-                                        {formatNotificationTime(item.created_at)}
-                                      </p>
-                                    </div>
-                                    {!item.is_read && <span className="mt-1 h-2 w-2 rounded-full bg-blue-500" />}
-                                  </div>
-                                  {item.action_url && (
-                                    <Link
-                                      to={item.action_url}
-                                      className="inline-block mt-2 text-xs font-semibold text-[#3b82f6] hover:underline"
-                                      onClick={() => {
-                                        markNotificationRead(item.id);
-                                        setNotificationOpen(false);
-                                      }}
-                                    >
-                                      Open
-                                    </Link>
-                                  )}
-                                </div>
-                              ))
-                            )}
+                                  Mark all read
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </div>
-                    {/* FIX MARK: added profile text link to open student settings page. */}
-                    <Link
-                      to="/account-settings"
-                      className="text-sm font-medium text-slate-600 hover:text-[#3b82f6]"
+
+                        <div className="max-h-[360px] overflow-y-auto">
+                          {loadingNotificationCard ? (
+                            <p className="px-4 py-5 text-sm text-slate-500">Loading notifications...</p>
+                          ) : notifications.length === 0 ? (
+                            <p className="px-4 py-5 text-sm text-slate-500">No notifications yet.</p>
+                          ) : (
+                            notifications.map((item) => (
+                              <div
+                                key={item.id}
+                                className={`border-b border-slate-100 px-4 py-3 last:border-b-0 ${
+                                  item.is_read ? 'bg-white' : 'bg-blue-50/40'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-800">{replaceFlaggedText(item.title)}</p>
+                                    <p className="mt-1 text-xs text-slate-600">{replaceFlaggedText(item.message)}</p>
+                                    <p className="mt-1 text-[11px] text-slate-400">
+                                      {formatNotificationTime(item.created_at)}
+                                    </p>
+                                  </div>
+                                  {!item.is_read && <span className="mt-1 h-2 w-2 rounded-full bg-blue-500" />}
+                                </div>
+                                {item.action_url && (
+                                  <Link
+                                    to={item.action_url}
+                                    className="mt-2 inline-block text-xs font-semibold text-blue-600 hover:underline"
+                                    onClick={() => {
+                                      markNotificationRead(item.id);
+                                      setNotificationOpen(false);
+                                    }}
+                                  >
+                                    Open
+                                  </Link>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen((prev) => !prev);
+                        setNotificationOpen(false);
+                      }}
+                      className="flex items-center gap-2 rounded-[22px] border border-slate-200/70 bg-white/85 p-1.5 pr-2 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
                     >
-                      Profile
-                    </Link>
-                    {/* FIX MARK: clicking profile avatar now opens account settings page. */}
-                    <Link to="/account-settings" aria-label="Open account settings">
-                      {/* FIX MARK: top profile avatar now uses uploaded image from database. */}
-                      <div className={`relative h-10 w-10 rounded-full border-2 border-white shadow-sm cursor-pointer overflow-hidden bg-slate-200 flex items-center justify-center ${headerIsAvailable ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-white' : ''}`}>
+                      <div className={`relative h-10 w-10 rounded-2xl border border-white bg-slate-200 shadow-sm`}>
                         {displayProfileImage ? (
                           <img
                             src={displayProfileImage}
                             alt="Profile avatar"
-                            className="w-full h-full object-cover"
+                            className="h-full w-full rounded-2xl object-cover"
                           />
                         ) : (
-                          <span className="text-xs font-semibold text-slate-600">{profileInitials || 'ST'}</span>
+                          <span className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-600">
+                            {profileInitials || 'ST'}
+                          </span>
                         )}
-                        {headerIsAvailable && (
-                          <span
-                            className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white"
-                            aria-label="Open to work"
-                          />
-                        )}
+                        {/*
+                          Availability dot removed from header avatar per request.
+                        */}
                       </div>
+                      <div className="hidden text-left md:block">
+                        <p className="max-w-32 truncate text-sm font-semibold text-slate-900">{profileName}</p>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Student</p>
+                      </div>
+                      <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${profileOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {profileOpen && (
+                      <div className="absolute right-0 top-full z-[60] mt-3 w-64 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl">
+                        <div className="border-b border-slate-100 bg-[linear-gradient(135deg,rgba(248,250,252,1),rgba(239,246,255,0.92))] p-4">
+                          <p className="text-sm font-semibold text-slate-900">{profileName}</p>
+                          <p className="truncate text-xs text-slate-500">{user?.email || ''}</p>
+                        </div>
+                        <div className="p-2">
+                          <Link
+                            to="/account-settings"
+                            className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-primary/5 hover:text-primary"
+                            onClick={() => setProfileOpen(false)}
+                          >
+                            <User size={18} />
+                            Account Settings
+                          </Link>
+                        </div>
+                        <div className="border-t border-slate-100 p-2">
+                          <button
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+                            onClick={() => {
+                              setProfileOpen(false);
+                              logout();
+                            }}
+                          >
+                            <LogOut size={18} />
+                            Log out
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-blue-600">
+                      Log In
+                    </Link>
+                    <Link
+                      to="/register"
+                      className="rounded-full bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+                    >
+                      Sign Up
                     </Link>
                   </div>
-                  <button
-                    type="button"
-                    onClick={logout}
-                    className="bg-gray-100 hover:bg-gray-200 text-[#111816] text-sm font-bold px-5 py-2.5 rounded-full transition-colors"
-                  >
-                    Log Out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link to="/login" className="text-sm font-medium hover:text-[#3b82f6] transition-colors">
-                    Log In
-                  </Link>
-                  <Link
-                    to="/register"
-                    className="bg-[#3b82f6] hover:bg-[#2563eb] text-[#111816] text-sm font-bold px-5 py-2.5 rounded-full transition-colors"
-                  >
-                    Sign Up
-                  </Link>
-                </>
-              )}
-            </div>
+                )}
+              </div>
 
-            <button className="md:hidden p-2 text-gray-500">
-              <Menu className="w-6 h-6" />
-            </button>
+              <button className="md:hidden rounded-2xl border border-slate-200/70 bg-white/80 p-2 text-slate-500 shadow-sm">
+                <Menu className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <nav className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1 py-1">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.name}
+                  to={link.path}
+                  className={`group relative flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium transition-all duration-300 ${
+                    isActiveLink(link.path)
+                      ? 'border-blue-200 bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(236,254,255,0.95))] text-blue-700 shadow-[0_12px_30px_-22px_rgba(37,99,235,0.65)]'
+                      : 'border-slate-200/80 bg-white/78 text-slate-600 hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-900 hover:shadow-sm'
+                  }`}
+                >
+                  <span>{link.name}</span>
+                </Link>
+              ))}
+            </nav>
           </div>
         </div>
       </header>

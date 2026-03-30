@@ -366,25 +366,6 @@ export function Login() {
           Register now
         </Link>
       </p>
-      <p className="mt-8 text-center text-sm text-slate-500">
-        Login as a Admin account?{' '}
-        <Link to="/admin/login" className="font-semibold text-[#137fec] transition-colors hover:text-[#137fec]/80 hover:underline">
-          Admin
-        </Link>
-      </p>
-
-      <div className="mt-6 flex flex-col gap-3">
-        <button
-          type="button"
-          onClick={handleDirectAdminLogin}
-          disabled={isLoading}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-2.5 text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-100 transition-all disabled:opacity-50"
-        >
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px]">A</span>
-          Quick Demo Admin Login
-        </button>
-      </div>
-
       <div className="mt-12 flex items-center justify-center gap-6 text-xs text-slate-400">
         <a href="#" className="hover:text-slate-600">Privacy Policy</a>
         <a href="#" className="hover:text-slate-600">Terms of Service</a>

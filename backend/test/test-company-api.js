@@ -1,8 +1,8 @@
-const db = require('./config/db');
+const db = require('../config/db');
 
-async function getAllApplications() {
+async function testCompanyAPI() {
   try {
-    // Get ALL applications from database without company filter
+    // Test what company ID 13 (Ah Pov Cutie) should see
     const applications = await db.query(`
       SELECT
         a.id,
@@ -27,26 +27,22 @@ async function getAllApplications() {
       JOIN users u ON s.user_id = u.id
       JOIN internships i ON a.internship_id = i.id
       JOIN companies c ON i.company_id = c.id
+      WHERE i.company_id = 13
       ORDER BY a.applied_at DESC
+      LIMIT 10
     `);
     
-    console.log('All applications from database:');
-    console.log('Total:', applications.length);
+    console.log('Applications for company ID 13:');
+    console.log('Total applications:', applications.length);
     applications.forEach((app, index) => {
-      console.log(`${index + 1}. ${app.full_name} - ${app.internship_title} (${app.company_name})`);
+      console.log(`${index + 1}. ${app.full_name} - ${app.internship_title} - ${app.status}`);
     });
     
-    return applications;
-  } catch (error) {
-    console.error('Error:', error);
-    return [];
+    process.exit(0);
+  } catch (err) {
+    console.error('Error:', err);
+    process.exit(1);
   }
 }
 
-getAllApplications().then(applications => {
-  console.log('\nFinal result:', applications.length, 'applications');
-  process.exit(0);
-}).catch(err => {
-  console.error('Failed:', err);
-  process.exit(1);
-});
+testCompanyAPI();

@@ -1,0 +1,64 @@
+services:
+  # Backend Service
+  - type: web
+    name: nissaet-backend
+    env: node
+    repo: https://github.com/SOPHATSIENG/Nissaet__FInd__Internship.git
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_TYPE
+        value: postgres
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        fromDatabase:
+          name: nissaet-db
+          property: host
+      - key: DB_USER
+        fromDatabase:
+          name: nissaet-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: nissaet-db
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: nissaet-db
+          property: database
+      - key: DB_PORT
+        fromDatabase:
+          name: nissaet-db
+          property: port
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_REGISTRATION_CODE
+        generateValue: true
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: S3_FORCE_PATH_STYLE
+        value: false
+      - key: MAX_UPLOAD_MB
+        value: 15
+
+databases:
+  # PostgreSQL Database (Render provides PostgreSQL)
+  - name: nissaet-db
+    databaseName: nissaet_db
+    user: nissaet_user
+    plan: free

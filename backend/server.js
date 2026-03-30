@@ -6,8 +6,10 @@ const dotenv = require('dotenv');
 // Load env vars
 dotenv.config();
 
-// Import database config
-const db = require('./config/db');
+// Import database config (PostgreSQL for production, MySQL for local)
+const db = process.env.NODE_ENV === 'production' 
+    ? require('./config/db-postgres') 
+    : require('./config/db');
 
 // Set JWT_SECRET if not loaded from .env
 if (!process.env.JWT_SECRET) {

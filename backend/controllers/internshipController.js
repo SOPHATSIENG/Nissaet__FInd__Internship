@@ -544,10 +544,10 @@ const getFeaturedCompanies = async (req, res) => {
                 const legacySql = `
                     SELECT
                         c.id,
-                        c.company_name,
+                        c.name AS company_name,
                         c.description,
                         c.logo,
-                        c.location,
+                        c.headquarters AS location,
                         COALESCE(op.open_positions, 0) AS open_positions,
                         0 AS rating,
                         0 AS rating_count
@@ -626,7 +626,7 @@ const getInternshipById = async (req, res) => {
             if (!isBadFieldError(error)) throw error;
             
             results = await db.query(`
-                SELECT i.*, c.company_name, c.logo AS company_logo 
+                SELECT i.*, c.name AS company_name, c.logo AS company_logo 
                 FROM internships i 
                 JOIN companies c ON i.company_id = c.id 
                 WHERE i.id = ?
@@ -1968,7 +1968,7 @@ const getCompanyInternshipById = async (req, res) => {
         } catch (error) {
             if (!isBadFieldError(error)) throw error;
             results = await db.query(
-                `SELECT i.*, c.company_name, c.logo AS company_logo 
+                `SELECT i.*, c.name AS company_name, c.logo AS company_logo 
                  FROM internships i 
                  JOIN companies c ON i.company_id = c.id 
                  WHERE i.id = ? AND i.company_id = ?`,

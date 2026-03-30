@@ -376,8 +376,8 @@ export const Reports = () => {
       ref={reportRef} 
       id="report-export-root"
       className={cn(
-        "flex flex-1 flex-col gap-8 p-8 no-scrollbar w-full",
-        isExportMode ? "overflow-visible max-w-none" : "overflow-y-auto max-w-none"
+        "admin-page",
+        isExportMode ? "overflow-visible" : ""
       )}
     >
       {/* Header Section */}

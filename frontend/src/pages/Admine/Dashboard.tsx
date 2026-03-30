@@ -150,7 +150,7 @@ export const Dashboard = () => {
   });
 
   return (
-    <div className="flex flex-col gap-6 p-8 overflow-y-auto no-scrollbar">
+    <div className="admin-page">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-black text-text-primary tracking-tight">Platform Overview</h1>
         <p className="text-text-secondary text-base">Analytics and metrics for the Cambodian internship market.</p>

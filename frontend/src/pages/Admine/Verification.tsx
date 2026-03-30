@@ -319,7 +319,7 @@ export const Verification = () => {
   }, [safePage, totalPages]);
 
   return (
-    <div className="flex flex-col h-full max-w-7xl mx-auto w-full p-8 gap-8 overflow-y-auto no-scrollbar">
+    <div className="admin-page">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex flex-col gap-1">

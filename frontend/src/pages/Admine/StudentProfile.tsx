@@ -106,7 +106,7 @@ export const StudentProfile = () => {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
+    <div className="admin-page">
       <div className="flex items-center">
         <button
           onClick={() => navigate(-1)}

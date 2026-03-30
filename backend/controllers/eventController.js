@@ -7,6 +7,17 @@ const isSchemaError = (error) =>
     error && (error.code === 'ER_BAD_FIELD_ERROR' || error.code === 'ER_NO_SUCH_TABLE');
 const isDuplicateEntry = (error) => error && error.code === 'ER_DUP_ENTRY';
 
+const companyPostImageSubquery = `
+    SELECT p.image_url
+    FROM posts p
+    WHERE p.company_id = c.id
+      AND p.status = 'published'
+      AND p.image_url IS NOT NULL
+      AND p.image_url != ''
+    ORDER BY p.created_at DESC
+    LIMIT 1
+`;
+
 const eventSelectFields = (includeRegistrationUrl = true) => `
     e.id,
     e.company_id,
@@ -25,7 +36,7 @@ const eventSelectFields = (includeRegistrationUrl = true) => `
     e.registration_deadline,
     e.requirements,
     e.tags,
-    e.image_url,
+    COALESCE(e.image_url, (${companyPostImageSubquery})) AS image_url,
     e.status,
     e.created_at
 `;
@@ -89,7 +100,7 @@ const getAllEvents = async (req, res) => {
                 e.registration_deadline,
                 e.requirements,
                 e.tags,
-                e.image_url,
+                COALESCE(e.image_url, (${companyPostImageSubquery})) AS image_url,
                 e.status,
                 e.created_at,
                 COALESCE(c.name, u.company_name) AS company_name,
@@ -161,7 +172,7 @@ const getFeaturedEvents = async (req, res) => {
                 e.registration_deadline,
                 e.requirements,
                 e.tags,
-                e.image_url,
+                COALESCE(e.image_url, (${companyPostImageSubquery})) AS image_url,
                 e.status,
                 e.created_at,
                 COALESCE(c.name, u.company_name) AS company_name,
@@ -209,7 +220,7 @@ const getUpcomingEvents = async (req, res) => {
                 e.registration_deadline,
                 e.requirements,
                 e.tags,
-                e.image_url,
+                COALESCE(e.image_url, (${companyPostImageSubquery})) AS image_url,
                 e.status,
                 e.created_at,
                 COALESCE(c.name, u.company_name) AS company_name,
@@ -385,7 +396,7 @@ const getStudentRegisteredEvents = async (req, res) => {
                 e.registration_deadline,
                 e.requirements,
                 e.tags,
-                e.image_url,
+                COALESCE(e.image_url, (${companyPostImageSubquery})) AS image_url,
                 e.status,
                 e.created_at,
                 er.registration_date,
@@ -450,7 +461,7 @@ const getRecommendedEvents = async (req, res) => {
                 e.registration_deadline,
                 e.requirements,
                 e.tags,
-                e.image_url,
+                COALESCE(e.image_url, (${companyPostImageSubquery})) AS image_url,
                 e.status,
                 e.created_at,
                 COALESCE(c.name, u.company_name) AS company_name,

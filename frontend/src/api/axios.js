@@ -302,11 +302,11 @@ export const api = {
         .map(([key, value]) => [key, String(value)])
     ).toString();
 
-    return request(`/posts${query ? `?${query}` : ''}`, { auth: true });
+    return request(`/posts${query ? `?${query}` : ''}`, { auth: false });
   },
 
   getPostById(id) {
-    return request(`/posts/${id}`, { auth: true });
+    return request(`/posts/${id}`, { auth: false });
   },
 
   unsaveInternship(internshipId) {

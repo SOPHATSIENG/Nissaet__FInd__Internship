@@ -70,8 +70,10 @@ export default function Applicants() {
     if (!status) return 'Pending Review';
     const value = status.toLowerCase();
     if (value === 'accepted') return 'Shortlisted';
+    if (value === 'shortlisted') return 'Shortlisted';
     if (value === 'reviewing') return 'Pending Review';
     if (value === 'pending') return 'Pending Review';
+    if (value === 'unshortlisted') return 'Unshortlisted';
     if (value === 'rejected') return 'Unshortlisted';
     if (value === 'withdrawn') return 'Withdrawn';
     return status;
@@ -80,7 +82,7 @@ export default function Applicants() {
   const toApiStatus = (status: string) => {
     if (status === 'Shortlisted') return 'accepted';
     if (status === 'Pending Review') return 'pending';
-    if (status === 'Unshortlisted') return 'rejected';
+    if (status === 'Unshortlisted') return 'unshortlisted';
     if (status === 'Rejected') return 'rejected';
     return status.toLowerCase();
   };
@@ -372,6 +374,7 @@ export default function Applicants() {
   };
 
   const handleUpdateStatus = async (id: number, newStatus: string) => {
+    const previousApplicants = applicants;
     try {
       console.log(`[UPDATE] Updating application ${id} to status: ${newStatus}`);
 
@@ -386,21 +389,15 @@ export default function Applicants() {
       // Convert status for database
       const apiStatus = toApiStatus(newStatus);
 
-      // Try to save to database
-      try {
-        await api.updateApplicationStatus(id, apiStatus);
-        console.log('[OK] Saved to database successfully');
-        showNotification(`Applicant status updated to ${newStatus}`, 'success');
-      } catch (dbError) {
-        console.log('[WARN] Database error, but UI updated:', dbError);
-        showNotification(`Applicant status updated to ${newStatus} (Local only)`, 'warning');
-      }
-
-      console.log(`[OK] Applicant ${id} status changed to ${newStatus}`);
-
+      // Save to database
+      await api.updateApplicationStatus(id, apiStatus);
+      console.log('[OK] Saved to database successfully');
+      await fetchApplicants();
+      showNotification(`Applicant status updated to ${newStatus}`, 'success');
     } catch (error) {
-      console.error('[ERROR] Error:', error);
-      showNotification('Failed to update status', 'error');
+      console.error('[ERROR] Error updating status:', error);
+      setApplicants(previousApplicants);
+      showNotification('Failed to update status in database. Please run migrations and check server logs.', 'error');
     }
   };
 
@@ -1276,6 +1273,9 @@ export default function Applicants() {
     </div>
   );
 }
+
+
+
 
 
 

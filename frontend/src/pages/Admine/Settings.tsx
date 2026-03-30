@@ -779,7 +779,7 @@ export const SettingsPage = () => {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
+    <div className="admin-page">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-black text-text-primary-light tracking-tight">System Settings</h1>
         <p className="text-text-secondary-light text-base">Configure global platform parameters and security protocols.</p>

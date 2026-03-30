@@ -58,6 +58,8 @@ interface Event {
 }
 
 export default function EventDetails() {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+  const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -198,6 +200,15 @@ export default function EventDetails() {
     return max && current >= max;
   };
 
+  const resolveImageUrl = (value?: string) => {
+    if (!value) return '';
+    const trimmed = String(value).trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('data:')) return trimmed;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    return `${API_ORIGIN}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -249,10 +260,10 @@ export default function EventDetails() {
         <div className="lg:col-span-2 space-y-6">
           {/* Header */}
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            {event.image_url && (
+            {resolveImageUrl(event.image_url || event.company_logo) && (
               <div className="relative h-64 overflow-hidden">
                 <img 
-                  src={event.image_url} 
+                  src={resolveImageUrl(event.image_url || event.company_logo)} 
                   alt={event.title}
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -506,9 +517,9 @@ export default function EventDetails() {
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">About the Organizer</h3>
             <div className="text-center mb-4">
-              {event.company_logo ? (
+              {resolveImageUrl(event.company_logo) ? (
                 <img 
-                  src={event.company_logo} 
+                  src={resolveImageUrl(event.company_logo)} 
                   alt={event.company_name}
                   className="w-20 h-20 rounded-full mx-auto mb-3 object-cover"
                   onError={(e) => {

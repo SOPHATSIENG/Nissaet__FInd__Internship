@@ -194,7 +194,7 @@ export const TeamManagement = () => {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto no-scrollbar">
+    <div className="admin-page">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-black text-text-primary-light tracking-tight">Manage Admin Team</h1>

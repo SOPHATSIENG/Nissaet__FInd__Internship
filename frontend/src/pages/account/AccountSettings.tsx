@@ -102,6 +102,37 @@ export default function AccountSettings() {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
+    const refreshApplications = async () => {
+      try {
+        const applicationsResponse = await api.getMyApplications({ limit: 100 });
+        if (mounted && applicationsResponse?.applications) {
+          setApplications(applicationsResponse.applications);
+        }
+      } catch (error) {
+        console.error('Failed to refresh applications:', error);
+      }
+    };
+
+    const interval = setInterval(refreshApplications, 30000);
+    const handleFocus = () => refreshApplications();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshApplications();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
     const rawTab = searchParams.get('tab');
     if (!rawTab) return;
     const tab = rawTab.toLowerCase() as TabType;

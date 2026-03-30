@@ -324,7 +324,7 @@ export const CategoryManagement = () => {
   const SelectedIcon = AVAILABLE_ICONS.find(i => i.name === selectedIconName)?.icon || LayoutGrid;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-8 overflow-y-auto no-scrollbar max-w-6xl mx-auto w-full">
+    <div className="admin-page">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-2">

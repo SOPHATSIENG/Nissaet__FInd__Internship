@@ -92,7 +92,7 @@ export function Register() {
   };
 
   const handleGoogleRegister = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
     const params = new URLSearchParams();
     params.append('role', role);
     if (role === 'company' && companyName) {
@@ -103,7 +103,7 @@ export function Register() {
   };
 
   const handleGithubRegister = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
     const params = new URLSearchParams();
     params.append('role', role);
     if (role === 'company' && companyName) {
@@ -281,3 +281,4 @@ export function Register() {
     </SplitLayout>
   );
 }
+

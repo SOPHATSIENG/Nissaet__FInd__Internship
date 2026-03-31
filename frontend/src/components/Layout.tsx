@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import api from '../api/axios';
@@ -58,7 +58,7 @@ export default function Layout() {
     if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
       return raw;
     }
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
     const base = apiBase.replace(/\/api\/?$/, '');
     if (raw.startsWith('/')) return `${base}${raw}`;
     return `${base}/${raw}`;
@@ -628,3 +628,4 @@ export default function Layout() {
     </div>
   );
 }
+

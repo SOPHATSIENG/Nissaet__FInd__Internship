@@ -35,7 +35,7 @@ export default function Navbar() {
     if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
       return raw;
     }
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
     const base = apiBase.replace(/\/api\/?$/, '');
     if (raw.startsWith('/')) return `${base}${raw}`;
     return `${base}/${raw}`;
@@ -364,3 +364,4 @@ export default function Navbar() {
     </header>
   );
 }
+

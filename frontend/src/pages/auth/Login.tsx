@@ -193,12 +193,12 @@ export function Login() {
   };
 
   const handleGoogleLogin = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
     window.location.href = `${backendUrl}/auth/google`;
   };
 
   const handleGithubLogin = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
     window.location.href = `${backendUrl}/auth/github`;
   };
 
@@ -374,3 +374,4 @@ export function Login() {
     </SplitLayout>
   );
 }
+

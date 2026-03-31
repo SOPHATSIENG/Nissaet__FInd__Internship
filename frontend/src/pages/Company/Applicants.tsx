@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Download, 
@@ -133,7 +133,7 @@ export default function Applicants() {
           const degreeParts = [app.major, app.current_education_level].filter(Boolean);
           education.push({
             school: app.university || '',
-            degree: degreeParts.join(' · '),
+            degree: degreeParts.join(' � '),
             period: ''
           });
         }
@@ -215,7 +215,7 @@ export default function Applicants() {
     }
 
     const apiOrigin = (() => {
-      const raw = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+      const raw = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
       try {
         return new URL(raw).origin;
       } catch {
@@ -1275,6 +1275,7 @@ export default function Applicants() {
     </div>
   );
 }
+
 
 
 

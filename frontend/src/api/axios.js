@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://nissaet-find-internship-trhj.onrender.com';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {

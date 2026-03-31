@@ -85,7 +85,7 @@ app.use('/api/branding', brandingRoutes);
 app.get('/api/companies/:id/ratings', internshipController.getCompanyRatings);
 app.post('/api/companies/:id/ratings', authenticate, authorize('student'), internshipController.rateCompany);
 
-const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 5001;
+const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 3000;
 const PORT_RETRY_COUNT = Number.parseInt(process.env.PORT_RETRY_COUNT, 10) || 10;
 
 // FIX MARK: Test database connection on startup
@@ -107,7 +107,7 @@ const startServer = async (port, attempt = 0) => {
     }
     await testDbConnection();
     const server = app.listen(port, '0.0.0.0', () => {
-        console.log(`Server running on port ${port} (all interfaces)`);
+        console.log('Server running');
     });
 
     server.on('error', (error) => {

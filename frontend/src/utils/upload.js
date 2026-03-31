@@ -1,6 +1,6 @@
 import { authStorage } from '../api/axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://35.172.230.210:5001/api';
 
 const requestPresign = async ({ filename, contentType, size, purpose = 'verification', auth = false }) => {
   const headers = { 'Content-Type': 'application/json' };

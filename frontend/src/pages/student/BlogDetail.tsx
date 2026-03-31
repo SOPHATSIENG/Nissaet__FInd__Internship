@@ -8,7 +8,7 @@ import api from '../../api/axios';
 import { Post } from '../../components/student-components/PostCard';
 
 const BlogDetail: React.FC = () => {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://3.237.45.120:5001/api';
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://35.172.230.210:5001/api';
     const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();

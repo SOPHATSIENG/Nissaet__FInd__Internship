@@ -543,7 +543,13 @@ const getAllInternships = async (req, res) => {
  */
 const getFeaturedCompanies = async (req, res) => {
     try {
-        const limit = Number.parseInt(req.query.limit, 10) || 8;
+        const rawLimit = req.query.limit;
+        let limit = Number.parseInt(rawLimit, 10);
+        if (!Number.isFinite(limit) || limit <= 0) {
+            limit = 8;
+        }
+        // avoid overly large limits that can stress the DB
+        limit = Math.min(limit, 100);
 
         let sql = `
             SELECT

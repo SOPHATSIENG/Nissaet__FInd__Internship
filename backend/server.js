@@ -54,6 +54,15 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
+app.get('/api/users', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM users');
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database query failed' });
+  }
+});
 app.get('/api/skills', async (req, res) => {
   const { search } = req.query;
   // filter skills

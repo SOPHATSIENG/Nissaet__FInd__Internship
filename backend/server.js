@@ -54,6 +54,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
+app.get('/api/skills', async (req, res) => {
+  const { search } = req.query;
+  // filter skills
+});
 app.get('/api/test', (req, res) => {
   res.json({ message: 'API works!' });
 });

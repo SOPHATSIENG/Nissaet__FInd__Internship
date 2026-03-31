@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import api, { authStorage } from '../api/axios';
+import api, { authStorage } from '..https://3.236.242.186.nip.io/api/axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
 
 const AuthContext = createContext();
 const USER_STORAGE_KEY = 'nissaet_auth_user';

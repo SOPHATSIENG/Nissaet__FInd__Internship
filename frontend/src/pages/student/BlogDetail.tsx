@@ -4,12 +4,12 @@ import {
     Calendar, MapPin, Building2, Clock, ArrowLeft, 
     Share2, Bookmark, Loader2, User, ChevronRight 
 } from 'lucide-react';
-import api from '../../api/axios';
+import api from '../..https://3.236.242.186.nip.io/api/axios';
 import { Post } from '../../components/student-components/PostCard';
 
 const BlogDetail: React.FC = () => {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-    const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
+    const API_ORIGIN = API_BASE_URL.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [post, setPost] = useState<(Post & { related_posts: any[], company_description?: string }) | null>(null);

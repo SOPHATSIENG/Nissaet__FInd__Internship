@@ -21,8 +21,8 @@ interface PostCardProps {
 }
 
 const PostCard: React.FC<PostCardProps> = ({ post }) => {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-    const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
+    const API_ORIGIN = API_BASE_URL.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
 
     const resolveImageUrl = (value?: string) => {
         if (!value) return '';

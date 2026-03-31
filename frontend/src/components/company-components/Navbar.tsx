@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Briefcase, LayoutDashboard, Send, Users, Settings as SettingsIcon, LogOut, User, ChevronDown, Calendar, History, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../api/axios';
+import api from '../..https://3.236.242.186.nip.io/api/axios';
 
 export default function Navbar() {
   const location = useLocation();
@@ -35,8 +35,8 @@ export default function Navbar() {
     if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
       return raw;
     }
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
-    const base = apiBase.replace(/\/api\/?$/, '');
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
+    const base = apiBase.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
     if (raw.startsWith('/')) return `${base}${raw}`;
     return `${base}/${raw}`;
   };

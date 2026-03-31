@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
-import api from '../api/axios';
+import api from '..https://3.236.242.186.nip.io/api/axios';
 import { useAuth } from '../context/AuthContext';
 import logoAsset from '../../image/1.png';
 
@@ -58,8 +58,8 @@ export default function Layout() {
     if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
       return raw;
     }
-    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
-    const base = apiBase.replace(/\/api\/?$/, '');
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
+    const base = apiBase.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
     if (raw.startsWith('/')) return `${base}${raw}`;
     return `${base}/${raw}`;
   };

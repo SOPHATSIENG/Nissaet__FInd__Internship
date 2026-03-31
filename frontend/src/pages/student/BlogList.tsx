@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Loader2, Calendar, MapPin, Building2, ArrowRight, Clock } from 'lucide-react';
-import api from '../../api/axios';
+import api from '../..https://3.236.242.186.nip.io/api/axios';
 import BlogFilter from '../../components/student-components/BlogFilter';
 import { Input } from '../../components/Input';
 import { Link } from 'react-router-dom';
@@ -71,8 +71,8 @@ const BlogList: React.FC = () => {
         if (!trimmed) return '';
         if (trimmed.startsWith('data:')) return trimmed;
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-        const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
+        const API_ORIGIN = API_BASE_URL.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
         return `${API_ORIGIN}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
     };
 

@@ -21,7 +21,7 @@ import {
   Globe as WebsiteIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../api/axios';
+import api from '../..https://3.236.242.186.nip.io/api/axios';
 
 interface Event {
   id: number;
@@ -59,8 +59,8 @@ interface Event {
 }
 
 export default function EventDetails() {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-  const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
+  const API_ORIGIN = API_BASE_URL.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -526,7 +526,7 @@ export default function EventDetails() {
                   alt={event.company_name}
                   className="w-20 h-20 rounded-full mx-auto mb-3 object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(event.company_name) + '&background=137fec&color=fff&size=80';
+                    e.currentTarget.src = 'https://ui-avatars.comhttps://3.236.242.186.nip.io/api/?name=' + encodeURIComponent(event.company_name) + '&background=137fec&color=fff&size=80';
                   }}
                 />
               ) : (

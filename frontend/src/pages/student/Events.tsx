@@ -21,7 +21,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
-import api from '../../api/axios';
+import api from '../..https://3.236.242.186.nip.io/api/axios';
 
 interface Event {
   id: number;
@@ -56,8 +56,8 @@ interface Event {
 }
 
 export default function Events() {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-  const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
+  const API_ORIGIN = API_BASE_URL.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);

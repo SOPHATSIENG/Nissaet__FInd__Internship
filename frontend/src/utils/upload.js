@@ -1,6 +1,6 @@
-import { authStorage } from '../api/axios';
+import { authStorage } from '..https://3.236.242.186.nip.io/api/axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
 
 const requestPresign = async ({ filename, contentType, size, purpose = 'verification', auth = false }) => {
   const headers = { 'Content-Type': 'application/json' };

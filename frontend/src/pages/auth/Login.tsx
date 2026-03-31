@@ -193,12 +193,12 @@ export function Login() {
   };
 
   const handleGoogleLogin = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
     window.location.href = `${backendUrl}/auth/google`;
   };
 
   const handleGithubLogin = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
     window.location.href = `${backendUrl}/auth/github`;
   };
 

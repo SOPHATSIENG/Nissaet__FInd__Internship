@@ -31,7 +31,7 @@ import {
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
-import api from '../../api/axios';
+import api from '../..https://3.236.242.186.nip.io/api/axios';
 import * as XLSX from 'xlsx';
 
 export default function Applicants() {
@@ -63,7 +63,7 @@ export default function Applicants() {
   const getAvatarUrl = (profileImage?: string, name?: string, size = 40) => {
     if (profileImage) return profileImage;
     const fallbackName = encodeURIComponent(name || 'User');
-    return `https://ui-avatars.com/api/?name=${fallbackName}&size=${size}&background=0D8ABC&color=fff`;
+    return `https://ui-avatars.comhttps://3.236.242.186.nip.io/api/?name=${fallbackName}&size=${size}&background=0D8ABC&color=fff`;
   };
 
   const normalizeStatus = (status?: string) => {
@@ -215,7 +215,7 @@ export default function Applicants() {
     }
 
     const apiOrigin = (() => {
-      const raw = import.meta.env.VITE_API_BASE_URL || '/api';
+      const raw = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
       try {
         return new URL(raw).origin;
       } catch {

@@ -85,8 +85,7 @@ app.use('/api/branding', brandingRoutes);
 app.get('/api/companies/:id/ratings', internshipController.getCompanyRatings);
 app.post('/api/companies/:id/ratings', authenticate, authorize('student'), internshipController.rateCompany);
 
-const BASE_PORT = Number.parseInt(process.env.PORT, 10) || 3000;
-const PORT_RETRY_COUNT = Number.parseInt(process.env.PORT_RETRY_COUNT, 10) || 10;
+const PORT = process.env.PORT || 5002;
 
 // FIX MARK: Test database connection on startup
 const testDbConnection = async () => {
@@ -99,28 +98,16 @@ const testDbConnection = async () => {
     }
 };
 
-const startServer = async (port, attempt = 0) => {
+const startServer = async () => {
     try {
         await db.initDatabase();
     } catch (err) {
         console.error('Failed to ensure database exists:', err.message);
     }
     await testDbConnection();
-    const server = app.listen(port, '0.0.0.0', () => {
-        console.log('Server running');
-    });
-
-    server.on('error', (error) => {
-        if (error.code === 'EADDRINUSE' && attempt < PORT_RETRY_COUNT) {
-            const nextPort = port + 1;
-            console.warn(`Port ${port} is in use. Retrying on port ${nextPort}...`);
-            startServer(nextPort, attempt + 1);
-            return;
-        }
-
-        console.error('Failed to start server:', error.message);
-        process.exit(1);
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on port ${PORT}`);
     });
 };
 
-startServer(BASE_PORT);
+startServer();

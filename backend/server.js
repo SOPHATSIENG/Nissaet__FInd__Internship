@@ -72,8 +72,25 @@ app.get('/api/users', async (req, res) => {
   }
 });
 app.get('/api/skills', async (req, res) => {
-  const { search } = req.query;
-  // filter skills
+  try {
+    const rawSearch = req.query?.search;
+    const search = typeof rawSearch === 'string' ? rawSearch.trim() : '';
+    let sql = 'SELECT id, name, category FROM skills';
+    const params = [];
+
+    if (search) {
+      sql += ' WHERE name LIKE ? OR category LIKE ?';
+      const pattern = `%${search}%`;
+      params.push(pattern, pattern);
+    }
+
+    sql += ' ORDER BY name ASC LIMIT 100';
+    const skills = await db.query(sql, params);
+    return res.json({ success: true, skills });
+  } catch (err) {
+    console.error('Error fetching skills:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Server error' });
+  }
 });
 app.get('/api/test', (req, res) => {
   res.json({ message: 'API works!' });

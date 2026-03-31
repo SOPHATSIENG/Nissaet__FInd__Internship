@@ -50,6 +50,14 @@ app.use(passport.session());
 app.use(express.json({ limit: '10mb' })); // Body parser
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Normalize accidental double /api prefixes from clients (e.g. /api//api/auth/register)
+app.use((req, _res, next) => {
+    if (req.url.startsWith('/api//api/')) {
+        req.url = req.url.replace('/api//api/', '/api/');
+    }
+    next();
+});
+
 // Basic Route
 app.get('/', (req, res) => {
     res.send('API is running...');

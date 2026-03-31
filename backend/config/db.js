@@ -73,7 +73,8 @@ module.exports = {
     },
     query: async (sql, params) => {
         try {
-            const [results] = await pool.execute(sql, params);
+            const safeParams = Array.isArray(params) ? params : [];
+            const [results] = await pool.execute(sql, safeParams);
             return results;
         } catch (error) {
             console.error('Query failed:', error);
@@ -82,7 +83,8 @@ module.exports = {
     },
     queryRaw: async (sql, params) => {
         try {
-            const result = await pool.execute(sql, params);
+            const safeParams = Array.isArray(params) ? params : [];
+            const result = await pool.execute(sql, safeParams);
             return result;
         } catch (error) {
             console.error('Query failed:', error);

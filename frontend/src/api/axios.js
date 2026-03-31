@@ -36,7 +36,23 @@ async function request(path, options = {}) {
     }
   }
 
-  const fullUrl = `${API_BASE_URL}${path}`;
+  const normalizePath = (rawPath) => {
+    if (!rawPath) return '';
+    const raw = String(rawPath);
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return raw;
+    }
+    let nextPath = raw.startsWith('/') ? raw : `/${raw}`;
+    if (nextPath.startsWith('/api/')) {
+      nextPath = nextPath.replace(/^\/api\/+/, '/');
+    }
+    return nextPath;
+  };
+
+  const normalizedPath = normalizePath(path);
+  const fullUrl = normalizedPath.startsWith('http')
+    ? normalizedPath
+    : `${API_BASE_URL}${normalizedPath}`;
   console.log('Full request URL:', fullUrl);
 
   let response;

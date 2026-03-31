@@ -54,7 +54,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
-
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'API works!' });
+});
 const authRoutes = require('./routes/authRoutes');
 const internshipRoutes = require('./routes/internshipRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');

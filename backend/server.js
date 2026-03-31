@@ -85,7 +85,7 @@ app.use('/api/branding', brandingRoutes);
 app.get('/api/companies/:id/ratings', internshipController.getCompanyRatings);
 app.post('/api/companies/:id/ratings', authenticate, authorize('student'), internshipController.rateCompany);
 
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5001;
 
 // FIX MARK: Test database connection on startup
 const testDbConnection = async () => {

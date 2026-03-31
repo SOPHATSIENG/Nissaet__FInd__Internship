@@ -6,6 +6,7 @@ import { Button } from '../../components/Button';
 import { useAuth } from '../../context/AuthContext';
 import { registrationStorage } from '../../utils/registrationStorage';
 import api from '../../api/axios';
+import { API_URL } from '../../config/api';
 
 type SkillOption = {
   id?: number;
@@ -46,8 +47,14 @@ export function StudentStep3() {
       try {
         setIsLoadingSkills(true);
         setSkillsError('');
-        // FIXED: Step 3 now pulls skills dynamically from DB.
-        const data = await api.getSkills({ search: searchTerm, limit: 80 });
+        // Pull skills dynamically from DB.
+        const response = await fetch(
+          `${API_URL}/auth/skills?search=${encodeURIComponent(searchTerm)}&limit=80`
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
         if (!cancelled) {
           setAvailableSkills(Array.isArray(data?.skills) ? data.skills : []);
         }

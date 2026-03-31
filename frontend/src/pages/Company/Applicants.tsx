@@ -215,7 +215,7 @@ export default function Applicants() {
     }
 
     const apiOrigin = (() => {
-      const raw = import.meta.env.VITE_API_BASE_URL || 'http://35.172.230.210:5001/api';
+      const raw = import.meta.env.VITE_API_BASE_URL || '/api';
       try {
         return new URL(raw).origin;
       } catch {

@@ -59,7 +59,7 @@ interface Event {
 }
 
 export default function EventDetails() {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://35.172.230.210:5001/api';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
   const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();

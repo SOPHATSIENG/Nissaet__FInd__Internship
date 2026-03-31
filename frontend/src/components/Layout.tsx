@@ -58,7 +58,7 @@ export default function Layout() {
     if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
       return raw;
     }
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://35.172.230.210:5001/api';
+    const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
     const base = apiBase.replace(/\/api\/?$/, '');
     if (raw.startsWith('/')) return `${base}${raw}`;
     return `${base}/${raw}`;

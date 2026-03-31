@@ -193,12 +193,12 @@ export function Login() {
   };
 
   const handleGoogleLogin = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://35.172.230.210:5001/api';
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || '/api';
     window.location.href = `${backendUrl}/auth/google`;
   };
 
   const handleGithubLogin = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://35.172.230.210:5001/api';
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || '/api';
     window.location.href = `${backendUrl}/auth/github`;
   };
 

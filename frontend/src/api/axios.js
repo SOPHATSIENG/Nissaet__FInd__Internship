@@ -4,7 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || API_URL;
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {
-  return localStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem('token');
+  return localStorage.getItem(AUTH_STORAGE_KEY);
 }
  
 function setStoredToken(token) {

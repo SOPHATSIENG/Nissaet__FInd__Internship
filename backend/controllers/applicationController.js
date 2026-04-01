@@ -45,9 +45,20 @@ const getMyApplications = async (req, res) => {
             return res.status(403).json({ message: 'Only students can view their applications' });
         }
 
-        const studentId = await getStudentIdByUserId(userId);
+        let studentId = await getStudentIdByUserId(userId);
         const { page, limit, offset } = parsePagination(req.query);
         
+        if (!studentId) {
+            try {
+                const insertResult = await db.query(
+                    'INSERT INTO students (user_id) VALUES (?)',
+                    [userId]
+                );
+                studentId = insertResult?.insertId || null;
+            } catch (createError) {
+                console.error('Failed to create student profile:', createError);
+            }
+        }
         if (!studentId) {
             return res.json({
                 applications: [],
@@ -93,10 +104,10 @@ const getMyApplications = async (req, res) => {
              WHERE a.student_id = ?
              ${hasInternshipFilter ? 'AND a.internship_id = ?' : ''}
              ORDER BY a.applied_at DESC
-             LIMIT ? OFFSET ?`,
+             LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
             hasInternshipFilter
-                ? [studentId, internshipFilter, limit, offset]
-                : [studentId, limit, offset]
+                ? [studentId, internshipFilter]
+                : [studentId]
         );
 
         const countRows = await db.query(
@@ -126,14 +137,94 @@ const getMyApplications = async (req, res) => {
     }
 };
 
+// Debug endpoint for current student's applications
+const getMyApplicationsDebug = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+        if (req.user?.role !== 'student') {
+            return res.status(403).json({ message: 'Only students can view their applications' });
+        }
+
+        let studentId = await getStudentIdByUserId(userId);
+        if (!studentId) {
+            try {
+                const insertResult = await db.query(
+                    'INSERT INTO students (user_id) VALUES (?)',
+                    [userId]
+                );
+                studentId = insertResult?.insertId || null;
+            } catch (createError) {
+                console.error('Failed to create student profile (debug):', createError);
+            }
+        }
+
+        if (!studentId) {
+            return res.json({
+                userId,
+                studentId: null,
+                applications: [],
+                total: 0
+            });
+        }
+
+        const applications = await db.query(
+            `SELECT
+                a.id,
+                a.internship_id,
+                a.status,
+                a.applied_at
+             FROM applications a
+             WHERE a.student_id = ?
+             ORDER BY a.applied_at DESC
+             LIMIT 5`,
+            [studentId]
+        );
+
+        const countRows = await db.query(
+            'SELECT COUNT(*) AS total FROM applications WHERE student_id = ?',
+            [studentId]
+        );
+        const total = Number(countRows[0]?.total || 0);
+
+        return res.json({
+            userId,
+            studentId,
+            total,
+            applications
+        });
+    } catch (error) {
+        console.error('Error fetching my applications debug:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 const applyForInternship = async (req, res) => {
     try {
         const { internship_id, cover_letter, resume_url } = req.body;
         const userId = req.user?.role === 'student' ? req.user.userId : null;
-        const studentId = userId ? await getStudentIdByUserId(userId) : null;
+        let studentId = userId ? await getStudentIdByUserId(userId) : null;
 
-        if (!studentId || !internship_id) {
-            return res.status(400).json({ message: 'Authenticated student and internship ID are required' });
+        if (!internship_id) {
+            return res.status(400).json({ message: 'Internship ID is required' });
+        }
+
+        if (!studentId && userId) {
+            try {
+                const insertResult = await db.query(
+                    'INSERT INTO students (user_id) VALUES (?)',
+                    [userId]
+                );
+                studentId = insertResult?.insertId || null;
+            } catch (createError) {
+                console.error('Failed to create student profile:', createError);
+            }
+        }
+
+        if (!studentId) {
+            return res.status(400).json({ message: 'Student profile is required before applying' });
         }
 
         const existingApplication = await db.query(
@@ -244,8 +335,8 @@ const getStudentApplications = async (req, res) => {
              JOIN companies c ON i.company_id = c.id
              WHERE a.student_id = ?
              ORDER BY a.applied_at DESC
-             LIMIT ? OFFSET ?`,
-            [targetStudentId, limit, offset]
+             LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+            [targetStudentId]
         );
 
         const countRows = await db.query(
@@ -309,8 +400,8 @@ const getInternshipApplications = async (req, res) => {
              JOIN users u ON s.user_id = u.id
              WHERE a.internship_id = ?
              ORDER BY a.applied_at DESC
-             LIMIT ? OFFSET ?`,
-            [internshipId, limit, offset]
+             LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+            [internshipId]
         );
 
         const countRows = await db.query(
@@ -640,8 +731,8 @@ const getCompanyApplications = async (req, res) => {
              WHERE i.company_id = ?
              GROUP BY a.id
              ORDER BY a.applied_at DESC
-             LIMIT ? OFFSET ?`,
-            [targetCompanyId, limit, offset]
+             LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+            [targetCompanyId]
         );
 
         const countRows = await db.query(

@@ -1,6 +1,18 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 
+const isBadFieldError = (error) => error && error.code === 'ER_BAD_FIELD_ERROR';
+let usersColumnsPromise;
+const getUsersColumns = async () => {
+    if (!usersColumnsPromise) {
+        usersColumnsPromise = db
+            .query('SHOW COLUMNS FROM users')
+            .then((rows) => new Set(rows.map((row) => row.Field)))
+            .catch(() => new Set());
+    }
+    return usersColumnsPromise;
+};
+
 const getJwtSecret = () => {
     if (!process.env.JWT_SECRET) {
         throw new Error('JWT_SECRET is not configured');
@@ -23,7 +35,18 @@ const authenticate = async (req, res, next) => {
             return res.status(401).json({ message: 'Invalid or expired token' });
         }
 
-        const users = await db.query('SELECT id, role, status FROM users WHERE id = ? LIMIT 1', [userId]);
+        let users;
+        try {
+            users = await db.query('SELECT id, role, status FROM users WHERE id = ? LIMIT 1', [userId]);
+        } catch (error) {
+            if (!isBadFieldError(error)) throw error;
+            const columns = await getUsersColumns();
+            const hasStatus = columns.has('status');
+            const fallbackSql = hasStatus
+                ? 'SELECT id, role, status FROM users WHERE id = ? LIMIT 1'
+                : 'SELECT id, role FROM users WHERE id = ? LIMIT 1';
+            users = await db.query(fallbackSql, [userId]);
+        }
         if (!users || users.length === 0) {
             return res.status(401).json({ message: 'Account no longer exists' });
         }

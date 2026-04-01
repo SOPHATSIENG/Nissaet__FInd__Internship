@@ -25,6 +25,13 @@ const getTableColumns = async (tableName) => {
     const rows = await db.query(`SHOW COLUMNS FROM ${tableName}`);
     return new Set(rows.map((row) => row.Field));
 };
+const getTableColumnsSafe = async (tableName) => {
+    try {
+        return await getTableColumns(tableName);
+    } catch (error) {
+        return null;
+    }
+};
 const getPostsColumns = async () => getTableColumns('posts');
 const runExecutor = async (executor, sql, params = []) => {
     if (executor && typeof executor.execute === 'function') {
@@ -1193,22 +1200,55 @@ const getAllCompanies = async (req, res) => {
         const parsedOffset = Number.parseInt(queryOffset, 10);
         const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
 
+        const companiesColumns = await getTableColumnsSafe('companies') || new Set();
+        const internshipsColumns = await getTableColumnsSafe('internships') || new Set();
+        const ratingsColumns = await getTableColumnsSafe('company_ratings');
+        const hasRatings = Boolean(
+            ratingsColumns &&
+            ratingsColumns.has('company_id') &&
+            ratingsColumns.has('rating')
+        );
+
+        const nameExpr = companiesColumns.has('name')
+            ? 'c.name'
+            : (companiesColumns.has('company_name') ? 'c.company_name' : "''");
+        const descriptionExpr = companiesColumns.has('description') ? 'c.description' : 'NULL';
+        const logoExpr = companiesColumns.has('logo') ? 'c.logo' : 'NULL';
+        const industryExpr = companiesColumns.has('industry') ? 'c.industry' : 'NULL';
+        const locationExpr = companiesColumns.has('headquarters')
+            ? 'c.headquarters'
+            : (companiesColumns.has('location') ? 'c.location' : 'NULL');
+        const isVerifiedExpr = companiesColumns.has('is_verified') ? 'c.is_verified' : '0';
+        const sizeExpr = companiesColumns.has('company_size') ? 'c.company_size' : 'NULL';
+
         let whereClause = "WHERE 1=1";
         const params = [];
 
         if (search) {
-            whereClause += ` AND (c.name LIKE ? OR c.description LIKE ? OR c.industry LIKE ?)`;
             const searchVal = `%${search}%`;
-            params.push(searchVal, searchVal, searchVal);
+            const searchFields = [];
+            if (companiesColumns.has('name')) searchFields.push('c.name');
+            if (companiesColumns.has('company_name')) searchFields.push('c.company_name');
+            if (companiesColumns.has('description')) searchFields.push('c.description');
+            if (companiesColumns.has('industry')) searchFields.push('c.industry');
+            if (searchFields.length > 0) {
+                whereClause += ` AND (${searchFields.map((field) => `${field} LIKE ?`).join(' OR ')})`;
+                params.push(...searchFields.map(() => searchVal));
+            }
         }
 
         if (location && location !== 'All Locations') {
-            whereClause += ` AND c.headquarters LIKE ?`;
-            params.push(`%${location}%`);
+            const locationColumn = companiesColumns.has('headquarters')
+                ? 'c.headquarters'
+                : (companiesColumns.has('location') ? 'c.location' : null);
+            if (locationColumn) {
+                whereClause += ` AND ${locationColumn} LIKE ?`;
+                params.push(`%${location}%`);
+            }
         }
 
         const industryParam = industry || req.query.industries;
-        if (industryParam && industryParam !== 'all') {
+        if (industryParam && industryParam !== 'all' && companiesColumns.has('industry')) {
             const industryList = industryParam.split(',').filter(Boolean);
             if (industryList.length > 0) {
                 const placeholders = industryList.map(() => '?').join(',');
@@ -1222,38 +1262,47 @@ const getAllCompanies = async (req, res) => {
         const countResult = await db.query(countSql, params);
         const total = countResult[0]?.total || 0;
 
+        const internshipWhereParts = [];
+        if (internshipsColumns.has('status')) internshipWhereParts.push("status = 'active'");
+        if (internshipsColumns.has('is_flagged')) internshipWhereParts.push('is_flagged = 0');
+        const internshipWhereClause = internshipWhereParts.length
+            ? `WHERE ${internshipWhereParts.join(' AND ')}`
+            : '';
+
         const sql = `
             SELECT
                 c.id,
                 c.user_id,
-                c.name AS company_name,
-                c.description,
-                c.logo,
-                c.industry,
-                c.headquarters AS location,
-                c.is_verified,
-                c.company_size,
+                ${nameExpr} AS company_name,
+                ${descriptionExpr} AS description,
+                ${logoExpr} AS logo,
+                ${industryExpr} AS industry,
+                ${locationExpr} AS location,
+                ${isVerifiedExpr} AS is_verified,
+                ${sizeExpr} AS company_size,
                 COALESCE(op.open_positions, 0) AS open_positions,
-                COALESCE(cr.rating, 0) AS rating,
-                COALESCE(cr.rating_count, 0) AS rating_count
+                ${hasRatings ? 'COALESCE(cr.rating, 0)' : '0'} AS rating,
+                ${hasRatings ? 'COALESCE(cr.rating_count, 0)' : '0'} AS rating_count
             FROM companies c
             LEFT JOIN (
                 SELECT company_id, COUNT(*) AS open_positions
                 FROM internships
-                WHERE status = 'active' AND is_flagged = 0
+                ${internshipWhereClause}
                 GROUP BY company_id
             ) op ON op.company_id = c.id
-            LEFT JOIN (
+            ${hasRatings ? `LEFT JOIN (
                 SELECT company_id, ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count
                 FROM company_ratings
                 GROUP BY company_id
-            ) cr ON cr.company_id = c.id
+            ) cr ON cr.company_id = c.id` : ''}
             ${whereClause}
-            ORDER BY c.is_verified DESC, c.name ASC 
+            ORDER BY ${companiesColumns.has('is_verified') ? 'c.is_verified DESC,' : ''} ${companiesColumns.has('name')
+                ? 'c.name'
+                : (companiesColumns.has('company_name') ? 'c.company_name' : 'c.id')} ASC
             LIMIT ? OFFSET ?
         `;
         
-        const queryParams = [...params, limit, offset];
+        const queryParams = [...params, Number(limit), Number(offset)];
         const companies = await db.query(sql, queryParams);
 
         return res.json({ 

@@ -57,7 +57,7 @@ interface Event {
 
 export default function Events() {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
-  const API_ORIGIN = API_BASE_URL.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
+  const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
@@ -528,4 +528,5 @@ export default function Events() {
     </div>
   );
 }
+
 

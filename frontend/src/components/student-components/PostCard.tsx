@@ -22,7 +22,7 @@ interface PostCardProps {
 
 const PostCard: React.FC<PostCardProps> = ({ post }) => {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
-    const API_ORIGIN = API_BASE_URL.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
+    const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
     const resolveImageUrl = (value?: string) => {
         if (!value) return '';
@@ -129,4 +129,5 @@ const PostCard: React.FC<PostCardProps> = ({ post }) => {
 };
 
 export default PostCard;
+
 

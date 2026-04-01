@@ -36,7 +36,7 @@ export default function Navbar() {
       return raw;
     }
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
-    const base = apiBase.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
+    const base = apiBase.replace(/\/api\/?$/, '');
     if (raw.startsWith('/')) return `${base}${raw}`;
     return `${base}/${raw}`;
   };
@@ -364,4 +364,5 @@ export default function Navbar() {
     </header>
   );
 }
+
 

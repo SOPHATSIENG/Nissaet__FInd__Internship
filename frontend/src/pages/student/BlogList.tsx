@@ -72,7 +72,7 @@ const BlogList: React.FC = () => {
         if (trimmed.startsWith('data:')) return trimmed;
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
         const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
-        const API_ORIGIN = API_BASE_URL.replace(/\https://3.236.242.186.nip.io/api\/?$/, '');
+        const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
         return `${API_ORIGIN}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
     };
 
@@ -214,4 +214,5 @@ const BlogList: React.FC = () => {
 };
 
 export default BlogList;
+
 

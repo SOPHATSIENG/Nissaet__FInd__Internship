@@ -583,55 +583,45 @@ const getFeaturedCompanies = async (req, res) => {
         } catch (error) {
             if (!isSchemaMismatchError(error)) throw error;
 
-            try {
-                // Fallback when ratings table/columns are missing (keep modern company schema)
-                const noRatingsSql = `
-                    SELECT
-                        c.id,
-                        c.name AS company_name,
-                        c.description,
-                        c.logo,
-                        c.headquarters AS location,
-                        COALESCE(op.open_positions, 0) AS open_positions,
-                        0 AS rating,
-                        0 AS rating_count
-                    FROM companies c
-                    LEFT JOIN (
-                        SELECT company_id, COUNT(*) AS open_positions
-                        FROM internships
-                        WHERE status = 'active' AND is_flagged = 0
-                        GROUP BY company_id
-                    ) op ON op.company_id = c.id
-                    ORDER BY op.open_positions DESC, c.name ASC
-                    LIMIT ?
-                `;
-                companies = await db.query(noRatingsSql, [limit]);
-            } catch (fallbackError) {
-                if (!isSchemaMismatchError(fallbackError)) throw fallbackError;
+            // Dynamic fallback for mixed/legacy schemas (handles missing columns safely)
+            const companiesColumns = await getTableColumns('companies').catch(() => new Set());
+            const internshipsColumns = await getTableColumns('internships').catch(() => new Set());
 
-                // Legacy schema fallback (company_name/location columns) without ratings
-                const legacySql = `
-                    SELECT
-                        c.id,
-                        c.company_name,
-                        c.description,
-                        c.logo,
-                        c.location,
-                        COALESCE(op.open_positions, 0) AS open_positions,
-                        0 AS rating,
-                        0 AS rating_count
-                    FROM companies c
-                    LEFT JOIN (
-                        SELECT company_id, COUNT(*) AS open_positions
-                        FROM internships
-                        WHERE status = 'active'
-                        GROUP BY company_id
-                    ) op ON op.company_id = c.id
-                    ORDER BY open_positions DESC
-                    LIMIT ?
-                `;
-                companies = await db.query(legacySql, [limit]);
-            }
+            const companyNameExpr = companiesColumns.has('name')
+                ? 'c.name'
+                : (companiesColumns.has('company_name') ? 'c.company_name' : 'c.id');
+            const companyDescriptionExpr = companiesColumns.has('description') ? 'c.description' : 'NULL';
+            const companyLogoExpr = companiesColumns.has('logo') ? 'c.logo' : 'NULL';
+            const companyLocationExpr = companiesColumns.has('headquarters')
+                ? 'c.headquarters'
+                : (companiesColumns.has('location') ? 'c.location' : 'NULL');
+
+            const whereParts = [];
+            if (internshipsColumns.has('status')) whereParts.push("status = 'active'");
+            if (internshipsColumns.has('is_flagged')) whereParts.push('is_flagged = 0');
+            const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+
+            const fallbackSql = `
+                SELECT
+                    c.id,
+                    ${companyNameExpr} AS company_name,
+                    ${companyDescriptionExpr} AS description,
+                    ${companyLogoExpr} AS logo,
+                    ${companyLocationExpr} AS location,
+                    COALESCE(op.open_positions, 0) AS open_positions,
+                    0 AS rating,
+                    0 AS rating_count
+                FROM companies c
+                LEFT JOIN (
+                    SELECT company_id, COUNT(*) AS open_positions
+                    FROM internships
+                    ${whereClause}
+                    GROUP BY company_id
+                ) op ON op.company_id = c.id
+                ORDER BY open_positions DESC, company_name ASC
+                LIMIT ?
+            `;
+            companies = await db.query(fallbackSql, [limit]);
         }
 
         return res.json({ success: true, companies });

@@ -7,6 +7,27 @@ const isSchemaError = (error) =>
     error && (error.code === 'ER_BAD_FIELD_ERROR' || error.code === 'ER_NO_SUCH_TABLE');
 const isDuplicateEntry = (error) => error && error.code === 'ER_DUP_ENTRY';
 
+const normalizeDateInput = (value) => {
+    if (value === undefined || value === null || value === '') return null;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().slice(0, 10);
+    }
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().slice(0, 10);
+    }
+    return trimmed;
+};
+const normalizeDateOnly = (value) => {
+    const normalized = normalizeDateInput(value);
+    if (!normalized) return null;
+    return String(normalized).split('T')[0];
+};
+
 const companyPostImageSubquery = `
     SELECT p.image_url
     FROM posts p
@@ -532,7 +553,7 @@ const createEvent = async (req, res) => {
             title,
             description,
             type: toNull(type) || 'workshop',
-            event_date,
+            event_date: normalizeDateOnly(event_date),
             start_time,
             end_time,
             location: toNull(location),
@@ -540,7 +561,7 @@ const createEvent = async (req, res) => {
             meeting_url: toNull(meeting_url),
             registration_url: toNull(registration_url),
             max_participants: parsedMaxParticipants,
-            registration_deadline: toNull(registration_deadline),
+            registration_deadline: normalizeDateOnly(registration_deadline),
             requirements: toNull(requirements),
             tags: toNull(tags),
             image_url: toNull(image_url),
@@ -611,7 +632,7 @@ const updateEvent = async (req, res) => {
             title,
             description,
             type,
-            event_date,
+            event_date: rawEventDate,
             start_time,
             end_time,
             location,
@@ -619,12 +640,14 @@ const updateEvent = async (req, res) => {
             meeting_url,
             registration_url,
             max_participants,
-            registration_deadline,
+            registration_deadline: rawRegistrationDeadline,
             requirements,
             tags,
             image_url,
             status
         } = req.body;
+        const event_date = normalizeDateOnly(rawEventDate);
+        const registration_deadline = normalizeDateOnly(rawRegistrationDeadline);
 
         if (!title || !description || !event_date || !start_time || !end_time) {
             return res.status(400).json({ error: 'Missing required event fields' });
@@ -662,7 +685,7 @@ const updateEvent = async (req, res) => {
             toNull(meeting_url),
             toNull(registration_url),
             parsedMaxParticipants,
-            toNull(registration_deadline),
+            registration_deadline,
             toNull(requirements),
             toNull(tags),
             toNull(image_url),

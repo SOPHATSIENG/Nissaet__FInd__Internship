@@ -21,7 +21,6 @@ export default function Companies() {
   const [searchParams, setSearchParams] = useSearchParams();
   const pageSize = 12;
   const [currentPage, setCurrentPage] = useState(1);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,7 +36,7 @@ export default function Companies() {
   const [isLocationOpen, setIsLocationOpen] = useState(false);
   
   const page = parseInt(searchParams.get("page") || "1");
-  const totalFound = companies.length;
+  const totalFound = allCompanies.length;
   const featuredCompanies: Company[] = []; // Placeholder
 
   const loadCompanies = useCallback(async () => {
@@ -46,17 +45,10 @@ export default function Companies() {
       setLoading(true);
       setError("");
       
-      const params = {
-        search: searchQuery,
-        location: selectedLocation === "All Locations" ? locationQuery : selectedLocation,
-        industries: selectedIndustries.length > 0 ? selectedIndustries.join(',') : undefined,
-      };
-      
-      const res = await api.getCompanies(params);
+      const res = await api.getCompanies({ limit: 200 });
       if (mounted) {
         const items = Array.isArray(res?.companies) ? res.companies : [];
         setAllCompanies(items);
-        setCompanies(items);
       }
     } catch (err) {
       if (mounted) setError("Failed to load companies");
@@ -71,8 +63,35 @@ export default function Companies() {
   }, [loadCompanies]);
 
   const filteredCompanies = useMemo(() => {
-    return allCompanies;
-  }, [allCompanies]);
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const normalizedLocation = (selectedLocation === "All Locations" ? locationQuery : selectedLocation).trim().toLowerCase();
+    const normalizedIndustries = selectedIndustries.map((industryItem) => industryItem.trim().toLowerCase());
+
+    return allCompanies.filter((company) => {
+      const companyName = String(company.company_name || "").toLowerCase();
+      const companyDescription = String(company.description || "").toLowerCase();
+      const companyIndustry = String(company.industry || "").toLowerCase();
+      const companyLocation = String(company.location || "").toLowerCase();
+
+      const matchesSearch = !normalizedSearch
+        || companyName.includes(normalizedSearch)
+        || companyDescription.includes(normalizedSearch)
+        || companyIndustry.includes(normalizedSearch);
+
+      const matchesLocation = !normalizedLocation
+        || companyLocation.includes(normalizedLocation);
+
+      const matchesIndustry = normalizedIndustries.length === 0
+        || normalizedIndustries.includes(companyIndustry);
+
+      return matchesSearch && matchesLocation && matchesIndustry;
+    });
+  }, [allCompanies, locationQuery, searchQuery, selectedIndustries, selectedLocation]);
+
+  const paginatedCompanies = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredCompanies.slice(start, start + pageSize);
+  }, [filteredCompanies, page, pageSize]);
 
   const updateFilters = (updates: Record<string, string | number | null>) => {
     const newParams = new URLSearchParams(searchParams);
@@ -93,8 +112,8 @@ export default function Companies() {
 
   const featuredCompaniesForDisplay = useMemo(() => {
     if (featuredCompanies.length > 0) return featuredCompanies;
-    return companies.slice(0, 2); // Show first 2 as featured if no explicit featured ones
-  }, [featuredCompanies, companies]);
+    return allCompanies.slice(0, 2); // Show first 2 as featured if no explicit featured ones
+  }, [featuredCompanies, allCompanies]);
 
   const industries = [
     "Technology",
@@ -560,7 +579,7 @@ export default function Companies() {
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
-                   {loading ? "Searching..." : `${totalFound} Companies found`}
+                   {loading ? "Searching..." : `${filteredCompanies.length} Companies found`}
                 </h2>
               </div>
 
@@ -579,7 +598,7 @@ export default function Companies() {
               ) : (
                 <>
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {companies.map((company) => (
+                    {paginatedCompanies.map((company) => (
                       <div
                         key={company.id}
                         className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full"
@@ -639,7 +658,7 @@ export default function Companies() {
                   </div>
 
                   {/* Pagination */}
-                  {totalFound > 12 && (
+                  {filteredCompanies.length > pageSize && (
                     <div className="flex justify-center items-center gap-2 mt-12">
                       <button 
                         disabled={page === 1}
@@ -649,10 +668,10 @@ export default function Companies() {
                         <ChevronLeft className="w-5 h-5" />
                       </button>
                       <span className="text-gray-600 font-medium px-4">
-                        Page {page} of {Math.ceil(totalFound / 12)}
+                        Page {page} of {Math.ceil(filteredCompanies.length / pageSize)}
                       </span>
                       <button 
-                        disabled={page >= Math.ceil(totalFound / 12)}
+                        disabled={page >= Math.ceil(filteredCompanies.length / pageSize)}
                         onClick={() => updateFilters({ page: page + 1 })}
                         className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30"
                       >
@@ -663,7 +682,7 @@ export default function Companies() {
                 </>
               )}
 
-              {!loading && !companies.length && (
+              {!loading && !paginatedCompanies.length && (
                 <div className="bg-white p-12 rounded-2xl border border-dashed border-gray-200 text-center">
                   <p className="text-gray-500">No companies found matching your criteria.</p>
                   <button 

@@ -1225,14 +1225,14 @@ const getAllCompanies = async (req, res) => {
         const params = [];
 
         if (search) {
-            const searchVal = `%${search}%`;
+            const searchVal = `%${String(search).toLowerCase()}%`;
             const searchFields = [];
             if (companiesColumns.has('name')) searchFields.push('c.name');
             if (companiesColumns.has('company_name')) searchFields.push('c.company_name');
             if (companiesColumns.has('description')) searchFields.push('c.description');
             if (companiesColumns.has('industry')) searchFields.push('c.industry');
             if (searchFields.length > 0) {
-                whereClause += ` AND (${searchFields.map((field) => `${field} LIKE ?`).join(' OR ')})`;
+                whereClause += ` AND (${searchFields.map((field) => `LOWER(${field}) LIKE ?`).join(' OR ')})`;
                 params.push(...searchFields.map(() => searchVal));
             }
         }
@@ -1242,17 +1242,21 @@ const getAllCompanies = async (req, res) => {
                 ? 'c.headquarters'
                 : (companiesColumns.has('location') ? 'c.location' : null);
             if (locationColumn) {
-                whereClause += ` AND ${locationColumn} LIKE ?`;
-                params.push(`%${location}%`);
+                const normalizedLocation = String(location).trim().toLowerCase();
+                whereClause += ` AND LOWER(${locationColumn}) LIKE ?`;
+                params.push(`%${normalizedLocation}%`);
             }
         }
 
         const industryParam = industry || req.query.industries;
         if (industryParam && industryParam !== 'all' && companiesColumns.has('industry')) {
-            const industryList = industryParam.split(',').filter(Boolean);
+            const industryList = industryParam
+                .split(',')
+                .map((value) => String(value).trim().toLowerCase())
+                .filter(Boolean);
             if (industryList.length > 0) {
                 const placeholders = industryList.map(() => '?').join(',');
-                whereClause += ` AND c.industry IN (${placeholders})`;
+                whereClause += ` AND LOWER(c.industry) IN (${placeholders})`;
                 params.push(...industryList);
             }
         }

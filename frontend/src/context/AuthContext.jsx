@@ -48,6 +48,21 @@ const clearSession = () => {
   localStorage.removeItem('user');
 };
 
+const resolveAuthToken = (data) => (
+  data?.token ||
+  data?.access_token ||
+  data?.data?.token ||
+  data?.data?.access_token ||
+  null
+);
+
+const resolveAuthUser = (data) => (
+  data?.user ||
+  data?.data?.user ||
+  data?.data ||
+  null
+);
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -107,10 +122,15 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const data = await api.login({ email, password });
-    const normalizedUser = storeSession(data.token, data.user);
+    const token = resolveAuthToken(data);
+    const user = resolveAuthUser(data);
+    if (!token) {
+      throw new Error('Login response did not include an auth token.');
+    }
+    const normalizedUser = storeSession(token, user);
     setUser(normalizedUser);
     await syncUserFromApi();
-    return { user: normalizedUser, token: data.token };
+    return { user: normalizedUser, token };
   };
 
   const loginWithToken = async (token) => {
@@ -128,7 +148,12 @@ export const AuthProvider = ({ children }) => {
       const data = await api.register(userData);
       console.log('Registration response:', data);
       
-      const normalizedUser = storeSession(data.token, data.user);
+      const token = resolveAuthToken(data);
+      const user = resolveAuthUser(data);
+      if (!token) {
+        throw new Error('Registration response did not include an auth token.');
+      }
+      const normalizedUser = storeSession(token, user);
       setUser(normalizedUser);
       await syncUserFromApi();
       
@@ -136,7 +161,7 @@ export const AuthProvider = ({ children }) => {
         navigate('/login');
       }
       
-      return { user: normalizedUser, token: data.token };
+      return { user: normalizedUser, token };
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
@@ -145,10 +170,15 @@ export const AuthProvider = ({ children }) => {
 
   const socialLogin = async (provider, payload) => {
     const data = await api.socialLogin({ provider, ...payload });
-    const normalizedUser = storeSession(data.token, data.user);
+    const token = resolveAuthToken(data);
+    const user = resolveAuthUser(data);
+    if (!token) {
+      throw new Error('Social login response did not include an auth token.');
+    }
+    const normalizedUser = storeSession(token, user);
     setUser(normalizedUser);
     await syncUserFromApi();
-    return { user: normalizedUser, token: data.token };
+    return { user: normalizedUser, token };
   };
 
   const loginWithGoogle = async (payload) => socialLogin('google', payload);

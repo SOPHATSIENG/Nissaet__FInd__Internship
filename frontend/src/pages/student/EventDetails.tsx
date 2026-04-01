@@ -21,7 +21,7 @@ import {
   Globe as WebsiteIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import api from '../..https://3.236.242.186.nip.io/api/axios';
+import api from '../../api/axios';
 
 interface Event {
   id: number;

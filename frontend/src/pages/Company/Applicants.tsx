@@ -31,7 +31,7 @@ import {
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmationModal from '../../components/company-components/ConfirmationModal';
-import api from '../..https://3.236.242.186.nip.io/api/axios';
+import api from '../../api/axios';
 import * as XLSX from 'xlsx';
 
 export default function Applicants() {

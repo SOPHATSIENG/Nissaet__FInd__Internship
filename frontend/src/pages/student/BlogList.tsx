@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Loader2, Calendar, MapPin, Building2, ArrowRight, Clock } from 'lucide-react';
-import api from '../..https://3.236.242.186.nip.io/api/axios';
+import api from '../../api/axios';
 import BlogFilter from '../../components/student-components/BlogFilter';
 import { Input } from '../../components/Input';
 import { Link } from 'react-router-dom';

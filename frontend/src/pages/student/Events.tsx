@@ -21,7 +21,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
-import api from '../..https://3.236.242.186.nip.io/api/axios';
+import api from '../../api/axios';
 
 interface Event {
   id: number;

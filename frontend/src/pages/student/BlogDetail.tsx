@@ -4,7 +4,7 @@ import {
     Calendar, MapPin, Building2, Clock, ArrowLeft, 
     Share2, Bookmark, Loader2, User, ChevronRight 
 } from 'lucide-react';
-import api from '../..https://3.236.242.186.nip.io/api/axios';
+import api from '../../api/axios';
 import { Post } from '../../components/student-components/PostCard';
 
 const BlogDetail: React.FC = () => {

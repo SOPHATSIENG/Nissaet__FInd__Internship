@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
-import api from '..https://3.236.242.186.nip.io/api/axios';
+import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import logoAsset from '../../image/1.png';
 

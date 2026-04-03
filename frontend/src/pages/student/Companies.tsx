@@ -56,9 +56,34 @@ export default function Companies() {
       
       const res = await api.getCompanies(params);
       if (mounted) {
-        const items = Array.isArray(res?.companies) ? res.companies : [];
+        if (res && res.success === false) {
+          const message = res?.message || res?.error || "Failed to load companies";
+          setCompanies([]);
+          setTotalCount(0);
+          setError(String(message));
+          return;
+        }
+
+        const items = Array.isArray(res?.companies)
+          ? res.companies
+          : Array.isArray(res?.data?.companies)
+            ? res.data.companies
+            : Array.isArray(res?.items)
+              ? res.items
+              : Array.isArray(res?.data)
+                ? res.data
+                : Array.isArray(res)
+                  ? res
+                  : [];
+
         setCompanies(items);
-        const total = Number(res?.total);
+        const total = Number(
+          res?.total ??
+          res?.data?.total ??
+          res?.meta?.total ??
+          res?.count ??
+          items.length
+        );
         setTotalCount(Number.isFinite(total) ? total : items.length);
       }
     } catch (err) {

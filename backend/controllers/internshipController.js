@@ -1191,14 +1191,18 @@ const getAllCompanies = async (req, res) => {
             location,
             industry,
             limit: queryLimit,
-            offset: queryOffset
+            offset: queryOffset,
+            page: queryPage
         } = req.query;
 
         const parsedLimit = Number.parseInt(queryLimit, 10);
         const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 12;
-        
+
+        const parsedPage = Number.parseInt(queryPage, 10);
+        const hasPage = Number.isFinite(parsedPage) && parsedPage > 0;
+
         const parsedOffset = Number.parseInt(queryOffset, 10);
-        const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
+        const rawOffset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
 
         const companiesColumns = await getTableColumnsSafe('companies') || new Set();
         const internshipsColumns = await getTableColumnsSafe('internships') || new Set();
@@ -1265,6 +1269,17 @@ const getAllCompanies = async (req, res) => {
         const countSql = `SELECT COUNT(*) as total FROM companies c ${whereClause}`;
         const countResult = await db.query(countSql, params);
         const total = countResult[0]?.total || 0;
+        const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+        let page = hasPage ? parsedPage : Math.floor(rawOffset / limit) + 1;
+        if (totalPages > 0) {
+            page = Math.min(Math.max(page, 1), totalPages);
+        } else {
+            page = 1;
+        }
+        const offset = hasPage
+            ? (page - 1) * limit
+            : Math.min(rawOffset, Math.max(totalPages - 1, 0) * limit);
 
         const internshipWhereParts = [];
         if (internshipsColumns.has('status')) internshipWhereParts.push("status = 'active'");
@@ -1312,6 +1327,9 @@ const getAllCompanies = async (req, res) => {
         return res.json({ 
             success: true, 
             total,
+            totalPages,
+            page,
+            limit,
             count: companies.length,
             companies 
         });

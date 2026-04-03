@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://100.55.151.180.nip.io/api/:path*" }
+    { "source": "/api/:path*", "destination": "https://100.54.8.187.nip.io/api/:path*" }
   ]
 }

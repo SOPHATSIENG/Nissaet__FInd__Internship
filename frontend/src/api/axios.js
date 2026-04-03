@@ -1,6 +1,6 @@
 import { API_URL } from '../config/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || API_URL;
+const API_BASE_URL = API_URL;
 const AUTH_STORAGE_KEY = 'nissaet_auth_token';
 
 function getStoredToken() {

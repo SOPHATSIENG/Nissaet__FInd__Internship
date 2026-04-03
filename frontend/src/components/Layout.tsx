@@ -59,7 +59,8 @@ export default function Layout() {
     if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
       return raw;
     }
-    const base = API_URL.replace(/\/api\/?$/, '');
+    const backendBase = (import.meta.env.VITE_BACKEND_URL || '').trim();
+    const base = (backendBase || API_URL).replace(/\/api\/?$/, '');
     if (raw.startsWith('/')) return `${base}${raw}`;
     return `${base}/${raw}`;
   };

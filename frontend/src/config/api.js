@@ -11,7 +11,8 @@ const resolveApiBase = () => {
       return rawApiBase.replace(/\/+$/, '');
     }
     if (rawApiBase.startsWith('/')) {
-      return `${backendUrl.replace(/\/+$/, '')}${rawApiBase}`;
+      // Use same-origin for relative API paths so Vercel rewrites work over HTTPS
+      return `${fallbackBase.replace(/\/+$/, '')}${rawApiBase}`;
     }
     return `${backendUrl.replace(/\/+$/, '')}/${rawApiBase}`;
   }

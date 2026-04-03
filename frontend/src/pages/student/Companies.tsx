@@ -20,9 +20,8 @@ interface Company {
 export default function Companies() {
   const [searchParams, setSearchParams] = useSearchParams();
   const pageSize = 12;
-  const [currentPage, setCurrentPage] = useState(1);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
@@ -36,8 +35,9 @@ export default function Companies() {
   const [locationQueryFilter, setLocationQueryFilter] = useState("");
   const [isLocationOpen, setIsLocationOpen] = useState(false);
   
-  const page = parseInt(searchParams.get("page") || "1");
-  const totalFound = companies.length;
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const totalFound = totalCount;
+  const totalPages = totalFound > 0 ? Math.ceil(totalFound / pageSize) : 0;
   const featuredCompanies: Company[] = []; // Placeholder
 
   const loadCompanies = useCallback(async () => {
@@ -50,13 +50,16 @@ export default function Companies() {
         search: searchQuery,
         location: selectedLocation === "All Locations" ? locationQuery : selectedLocation,
         industries: selectedIndustries.length > 0 ? selectedIndustries.join(',') : undefined,
+        page,
+        limit: pageSize,
       };
       
       const res = await api.getCompanies(params);
       if (mounted) {
         const items = Array.isArray(res?.companies) ? res.companies : [];
-        setAllCompanies(items);
         setCompanies(items);
+        const total = Number(res?.total);
+        setTotalCount(Number.isFinite(total) ? total : items.length);
       }
     } catch (err) {
       if (mounted) setError("Failed to load companies");
@@ -64,15 +67,11 @@ export default function Companies() {
       if (mounted) setLoading(false);
     }
     return () => { mounted = false; };
-  }, [searchQuery, locationQuery, selectedLocation, selectedIndustries]);
+  }, [searchQuery, locationQuery, selectedLocation, selectedIndustries, page]);
 
   useEffect(() => {
     loadCompanies();
   }, [loadCompanies]);
-
-  const filteredCompanies = useMemo(() => {
-    return allCompanies;
-  }, [allCompanies]);
 
   const updateFilters = (updates: Record<string, string | number | null>) => {
     const newParams = new URLSearchParams(searchParams);
@@ -88,7 +87,7 @@ export default function Companies() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setCurrentPage(1);
+    updateFilters({ page: 1 });
   };
 
   const featuredCompaniesForDisplay = useMemo(() => {
@@ -219,7 +218,7 @@ export default function Companies() {
                 placeholder="Search by company name..."
                 className="w-full outline-none text-gray-700 bg-transparent"
                 value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSearchQuery(e.target.value); updateFilters({ page: 1 }); }}
               />
             </div>
             <div className="hidden md:block w-px bg-gray-200 my-2"></div>
@@ -230,7 +229,7 @@ export default function Companies() {
                 placeholder="Location"
                 className="w-full outline-none text-gray-700 bg-transparent"
                 value={locationQuery}
-                onChange={(e) => { setLocationQuery(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setLocationQuery(e.target.value); updateFilters({ page: 1 }); }}
               />
             </div>
             <button type="submit" className="bg-[#111816] hover:bg-gray-800 text-white font-bold px-8 py-3 rounded-lg transition-colors w-full md:w-auto">
@@ -254,7 +253,7 @@ export default function Companies() {
                     } else {
                       setSelectedIndustries([ind]);
                     }
-                    setCurrentPage(1);
+                    updateFilters({ page: 1 });
                   }}
                   className={`px-4 py-1.5 border rounded-full text-gray-600 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6] ${
                     isActive
@@ -268,7 +267,7 @@ export default function Companies() {
               );
             })}
             {hasIndustryFilter && (
-               <button onClick={() => { setSelectedIndustries([]); setCurrentPage(1); }} className="text-[#3b82f6] text-xs font-bold ml-2 underline">Clear Filter</button>
+               <button onClick={() => { setSelectedIndustries([]); updateFilters({ page: 1 }); }} className="text-[#3b82f6] text-xs font-bold ml-2 underline">Clear Filter</button>
             )}
           </div>
         </div>
@@ -303,7 +302,7 @@ export default function Companies() {
                       type="button"
                       onClick={() => {
                         setSelectedIndustries([]);
-                        setCurrentPage(1);
+                        updateFilters({ page: 1 });
                       }}
                       className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-[#2563eb] hover:bg-blue-100"
                     >
@@ -330,7 +329,7 @@ export default function Companies() {
                             type="button"
                             onClick={() => {
                               setSelectedIndustries([]);
-                              setCurrentPage(1);
+                              updateFilters({ page: 1 });
                             }}
                             className="font-semibold text-[#3b82f6] hover:underline"
                           >
@@ -345,7 +344,7 @@ export default function Companies() {
                         type="button"
                         onClick={() => {
                           setSelectedIndustries([]);
-                          setCurrentPage(1);
+                          updateFilters({ page: 1 });
                         }}
                         className="w-full px-4 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
                       >
@@ -368,7 +367,7 @@ export default function Companies() {
                               } else {
                                 setSelectedIndustries([...selectedIndustries, industry]);
                               }
-                              setCurrentPage(1);
+                              updateFilters({ page: 1 });
                             }}
                             className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
                               isSelected ? "text-[#2563eb] font-semibold" : "text-gray-700"
@@ -411,7 +410,7 @@ export default function Companies() {
                       onClick={() => {
                         setSelectedLocation("All Locations");
                         setLocationQuery("");
-                        setCurrentPage(1);
+                        updateFilters({ page: 1 });
                       }}
                       className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-[#2563eb] hover:bg-blue-100"
                     >
@@ -439,7 +438,7 @@ export default function Companies() {
                             onClick={() => {
                               setSelectedLocation("All Locations");
                               setLocationQuery("");
-                              setCurrentPage(1);
+                              updateFilters({ page: 1 });
                             }}
                             className="font-semibold text-[#3b82f6] hover:underline"
                           >
@@ -455,7 +454,7 @@ export default function Companies() {
                         onClick={() => {
                           setSelectedLocation("All Locations");
                           setLocationQuery("");
-                          setCurrentPage(1);
+                          updateFilters({ page: 1 });
                           setIsLocationOpen(false);
                         }}
                         className="w-full px-4 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
@@ -476,7 +475,7 @@ export default function Companies() {
                             onClick={() => {
                               setSelectedLocation(province);
                               setLocationQuery(province);
-                              setCurrentPage(1);
+                              updateFilters({ page: 1 });
                               setIsLocationOpen(false);
                             }}
                             className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
@@ -639,7 +638,7 @@ export default function Companies() {
                   </div>
 
                   {/* Pagination */}
-                  {totalFound > 12 && (
+                  {totalPages > 1 && (
                     <div className="flex justify-center items-center gap-2 mt-12">
                       <button 
                         disabled={page === 1}
@@ -649,10 +648,10 @@ export default function Companies() {
                         <ChevronLeft className="w-5 h-5" />
                       </button>
                       <span className="text-gray-600 font-medium px-4">
-                        Page {page} of {Math.ceil(totalFound / 12)}
+                        Page {page} of {totalPages}
                       </span>
                       <button 
-                        disabled={page >= Math.ceil(totalFound / 12)}
+                        disabled={page >= totalPages}
                         onClick={() => updateFilters({ page: page + 1 })}
                         className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30"
                       >

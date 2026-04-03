@@ -4,6 +4,7 @@ import {
   DollarSign,
   Bookmark,
   Building2,
+  ChevronLeft,
   ChevronRight,
   Filter,
   Check,
@@ -82,6 +83,7 @@ export default function Internships() {
   const [pagination, setPagination] = useState<PaginationState>({
     page: 1,
   });
+  const totalPages = totalInternships > 0 ? Math.ceil(totalInternships / ITEMS_PER_PAGE) : 0;
   const industryDropdownRef = useRef<HTMLDivElement | null>(null);
   const locationDropdownRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
@@ -743,6 +745,30 @@ export default function Internships() {
                   ))
                 )}
               </div>
+
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-12">
+                  <button
+                    disabled={currentPage <= 1}
+                    onClick={() => updatePage(currentPage - 1)}
+                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="text-gray-600 font-medium px-4">
+                    Page {Math.min(Math.max(pagination.page || currentPage, 1), totalPages)} of {totalPages}
+                  </span>
+                  <button
+                    disabled={currentPage >= totalPages}
+                    onClick={() => updatePage(currentPage + 1)}
+                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

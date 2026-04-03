@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import api from '../api/axios';
+import { API_URL } from '../config/api';
 import { useAuth } from '../context/AuthContext';
 import logoAsset from '../../image/1.png';
 
@@ -58,8 +59,7 @@ export default function Layout() {
     if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
       return raw;
     }
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://3.236.242.186.nip.io/api';
-    const base = apiBase.replace(/\/api\/?$/, '');
+    const base = API_URL.replace(/\/api\/?$/, '');
     if (raw.startsWith('/')) return `${base}${raw}`;
     return `${base}/${raw}`;
   };
@@ -92,6 +92,8 @@ export default function Layout() {
 
   const resolvedBrandLogo = toAbsoluteUrl(brandLogo);
   const navbarLogo = logoError || !resolvedBrandLogo ? logoAsset : resolvedBrandLogo;
+  const showApiDebug =
+    import.meta.env.DEV || String(import.meta.env.VITE_SHOW_API_URL || '').toLowerCase() === 'true';
 
   useEffect(() => {
     let mounted = true;
@@ -535,6 +537,12 @@ export default function Layout() {
       <main className="flex-grow">
         <Outlet />
       </main>
+
+      {showApiDebug && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 shadow-lg">
+          API: {API_URL}
+        </div>
+      )}
 
       <footer className="bg-white border-t border-gray-100 py-12 px-4 sm:px-6 lg:px-8 mt-auto">
         <div className="max-w-[1440px] mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">

@@ -1252,23 +1252,46 @@ const getAllCompanies = async (req, res) => {
             }
         }
 
-        const industryParam = industry || req.query.industries;
-        if (industryParam && industryParam !== 'all' && companiesColumns.has('industry')) {
-            const industryList = industryParam
+        const industryParamRaw = industry || req.query.industries;
+        const industryParamValue = Array.isArray(industryParamRaw)
+            ? industryParamRaw.join(',')
+            : industryParamRaw;
+        let industryParamCount = 0;
+        if (industryParamValue && industryParamValue !== 'all' && companiesColumns.has('industry')) {
+            const industryList = String(industryParamValue)
                 .split(',')
                 .map((value) => String(value).trim().toLowerCase())
                 .filter(Boolean);
             if (industryList.length > 0) {
-                const placeholders = industryList.map(() => '?').join(',');
-                whereClause += ` AND LOWER(c.industry) IN (${placeholders})`;
-                params.push(...industryList);
+                // Use OR + LIKE for broader matching and to avoid SQL errors from unexpected values
+                const likeParts = industryList.map(() => 'LOWER(c.industry) LIKE ?').join(' OR ');
+                whereClause += ` AND (${likeParts})`;
+                const industryParams = industryList.map((val) => `%${val}%`);
+                industryParamCount = industryParams.length;
+                params.push(...industryParams);
             }
         }
 
         // Get total count
-        const countSql = `SELECT COUNT(*) as total FROM companies c ${whereClause}`;
-        const countResult = await db.query(countSql, params);
-        const total = countResult[0]?.total || 0;
+        let total = 0;
+        try {
+            const countSql = `SELECT COUNT(*) as total FROM companies c ${whereClause}`;
+            const countResult = await db.query(countSql, params);
+            total = countResult[0]?.total || 0;
+        } catch (error) {
+            console.error('Company count query failed, retrying without industry filter:', error);
+            // Fallback: strip industry filter if query fails
+            const fallbackWhere = whereClause.replace(/\sAND\s\((?:LOWER\(c\.industry\)\s+LIKE\s+\?\s*(?:OR\s+LOWER\(c\.industry\)\s+LIKE\s+\?\s*)*)\)/, '');
+            const fallbackParams = industryParamCount > 0
+                ? params.slice(0, Math.max(0, params.length - industryParamCount))
+                : [...params];
+            const countSql = `SELECT COUNT(*) as total FROM companies c ${fallbackWhere}`;
+            const countResult = await db.query(countSql, fallbackParams);
+            total = countResult[0]?.total || 0;
+            whereClause = fallbackWhere;
+            params.length = 0;
+            params.push(...fallbackParams);
+        }
         const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 
         let page = hasPage ? parsedPage : Math.floor(rawOffset / limit) + 1;
@@ -1322,7 +1345,50 @@ const getAllCompanies = async (req, res) => {
         `;
         
         const queryParams = [...params, Number(limit), Number(offset)];
-        const companies = await db.query(sql, queryParams);
+        let companies;
+        try {
+            companies = await db.query(sql, queryParams);
+        } catch (error) {
+            console.error('Company list query failed, retrying without industry filter:', error);
+            const fallbackWhere = whereClause.replace(/\sAND\s\((?:LOWER\(c\.industry\)\s+LIKE\s+\?\s*(?:OR\s+LOWER\(c\.industry\)\s+LIKE\s+\?\s*)*)\)/, '');
+            const fallbackParams = industryParamCount > 0
+                ? params.slice(0, Math.max(0, params.length - industryParamCount))
+                : [...params];
+            const fallbackSql = `
+                SELECT
+                    c.id,
+                    c.user_id,
+                    ${nameExpr} AS company_name,
+                    ${descriptionExpr} AS description,
+                    ${logoExpr} AS logo,
+                    ${industryExpr} AS industry,
+                    ${locationExpr} AS location,
+                    ${isVerifiedExpr} AS is_verified,
+                    ${sizeExpr} AS company_size,
+                    COALESCE(op.open_positions, 0) AS open_positions,
+                    ${hasRatings ? 'COALESCE(cr.rating, 0)' : '0'} AS rating,
+                    ${hasRatings ? 'COALESCE(cr.rating_count, 0)' : '0'} AS rating_count
+                FROM companies c
+                LEFT JOIN (
+                    SELECT company_id, COUNT(*) AS open_positions
+                    FROM internships
+                    ${internshipWhereClause}
+                    GROUP BY company_id
+                ) op ON op.company_id = c.id
+                ${hasRatings ? `LEFT JOIN (
+                    SELECT company_id, ROUND(AVG(rating), 2) AS rating, COUNT(*) AS rating_count
+                    FROM company_ratings
+                    GROUP BY company_id
+                ) cr ON cr.company_id = c.id` : ''}
+                ${fallbackWhere}
+                ORDER BY ${companiesColumns.has('is_verified') ? 'c.is_verified DESC,' : ''} ${companiesColumns.has('name')
+                    ? 'c.name'
+                    : (companiesColumns.has('company_name') ? 'c.company_name' : 'c.id')} ASC
+                LIMIT ? OFFSET ?
+            `;
+            const fallbackQueryParams = [...fallbackParams, Number(limit), Number(offset)];
+            companies = await db.query(fallbackSql, fallbackQueryParams);
+        }
 
         return res.json({ 
             success: true, 
